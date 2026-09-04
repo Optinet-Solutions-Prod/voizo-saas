@@ -1,679 +1,229 @@
-// src/app/audience/page.tsx
-//
-// Audience CRM / Lead Recycling — list + detail panel (Slice 2 of 5).
-//   - Left rail: saved local segments (snapshot counts, source campaign chip)
-//   - Right panel: selected segment's phones + outcome badges
-//   - Top: 4 stat cards aggregating across all segments
-//
-// Polling: 30s + manual Refresh button (mirrors /activity).
-// Create + Launch-campaign buttons render disabled until Slice 3/4 land.
-
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import {
-  AlertCircle, AlertTriangle, Clock, ListPlus, Loader2, Megaphone, Phone,
-  Search, ShieldCheck, Trash2, Users,
-} from "lucide-react";
-import { RefreshCWIcon } from "@/components/icons/animated/refresh-cw";
-import { HoverIcon } from "@/components/icons/animated/HoverIcon";
-import WidgetCard from "../analytics/WidgetCard";
-import StatBand from "../analytics/StatBand";
+// src/app/audience/page.tsx
+//
+// Audience — the real tab, ported from the canonical mockup (2026-08-25 v4, VOZ-457) which until
+// now shipped only as the frozen snapshot at /audience/preview. Laid out in the mockup's order
+// (`render()`): the top row is the title, the market tabs and the member search; the scope below
+// opens with the range bar (presets, Export at the right), then the connect-rate hero, then the
+// player list. The Lead Recycling page that used to live here moved to /audience/lead-recycling,
+// unlinked (its `local_segments` table has never held a row in prod).
+//
+// WHAT IS DELIBERATELY NOT HERE YET, so nothing on this page is a stale number dressed as a live
+// one (the preview keeps the ribbon that lets it show frozen figures honestly):
+//   - Members / campaign-families counts, and the count on each market tab: distinct phones per
+//     lane has no aggregate in the DB. The roster RPC is per campaign and a phone sits in several,
+//     so summing double-counts. 2026-09-04_audience_lane_reach_rpc.sql is written, not applied.
+//   - The two deposit-lift tiles: the frozen 25 Aug study, not recomputable until live deposits
+//     cover a real window.
+//   - Channels, SMS fate, families, depositors: slices 2, 3 and 5.
+//
+// Connect rate is the DASHBOARD's definition (status completed/answered), not the mockup's
+// stricter "clean hangup with talk time". Measured over the last 7 days they differ by 19 calls
+// of 4,841 (85.1% vs 84.7%), all clean hangups at zero seconds. One definition across both tabs
+// beats two that disagree on the same lane by a rounding error.
+//
+// Data: /api/dashboard/analytics (hero) and /api/audience/players (list), both scoped by the
+// sidebar brand and the market tab. Read-only, no provider spend, nothing near the call or SMS path.
+
+import { useCallback, useEffect, useState } from "react";
+import { Search, X } from "lucide-react";
+import { loadSnapshot, saveSnapshot } from "@/lib/sessionSnapshot";
+import { useBrandScope } from "@/lib/brandScope";
+import { brandLabel } from "@/lib/campaignDisplay";
+import type { TrendPoint } from "@/lib/dashboardAnalytics";
+import type { DayCount } from "@/lib/connectRateHero";
+import type { RangeKey } from "@/lib/rangeWindow";
 import { SectionTick } from "../analytics/SectionIsland";
+import ConnectRateHero from "../analytics/ConnectRateHero";
+import GlobalExport from "../analytics/GlobalExport";
+import { CardGridSkeleton } from "../analytics/loadingSkeletons";
+import AudiencePlayers from "./AudiencePlayers";
+import type { AudiencePlayerRow } from "../api/audience/players/route";
 
-import CreateSegmentDrawer, { type CreateSegmentPrefill } from "./components/CreateSegmentDrawer";
-import SuggestedSegmentsPanel, { type Suggestion } from "./components/SuggestedSegmentsPanel";
-import { parseJsonBody } from "@/lib/jsonBody";
+// The mockup's market allowlist: "AU, CA, NZ. FR, PH and PL are test and trace lanes — excluded
+// from audience surfaces, still visible in the campaign views." Applied as an intersection with
+// what the API actually reports, so a market with no campaigns never becomes a dead tab, and the
+// "QA" pseudo-market the country parser derives from test campaign names cannot appear here.
+const AUDIENCE_MARKETS = ["Australia", "Canada", "New Zealand"] as const;
 
-interface SegmentRow {
-  id: string;
-  name: string;
-  source_campaign_id: string | null;
-  source_campaign_name: string | null;
-  outcomes_included: string[];
-  dnc_scrubbed: boolean;
-  recent_window_days: number;
-  total_count: number;
-  scrubbed_count: number;
-  created_at: string;
-  created_by: string | null;
+// The mockup's own range bar. 14d default: its hero is a 14-day series against the prior window.
+const RANGES: readonly RangeKey[] = ["7d", "14d", "30d"];
+const DEFAULT_RANGE: RangeKey = "14d";
+
+interface AudienceResponse {
+  rangeDays: number;
+  kpis: { connected: number; voicemailEvaluated: number };
+  trend: TrendPoint[];
+  baseline?: DayCount[] | null;
+  options: { countries: { value: string; label: string }[]; campaigns: { id: string }[] };
 }
-
-interface SegmentNumber {
-  id: string;
-  phone_e164: string;
-  source_outcome: string;
-  source_attempts: number | null;
-  created_at: string;
-}
-
-interface SegmentDetail {
-  segment: SegmentRow;
-  numbers: SegmentNumber[];
-  pagination: { limit: number; nextCursor: string | null; hasMore: boolean };
-}
-
-const POLL_MS = 30_000;
 
 export default function AudiencePage() {
-  const [segments, setSegments] = useState<SegmentRow[] | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [detail, setDetail] = useState<SegmentDetail | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
+  const brand = useBrandScope();
+  const [range, setRange] = useState<RangeKey>(DEFAULT_RANGE);
+  // "" = every market in the allowlist, the mockup's ALL tab: "the default question".
+  const [market, setMarket] = useState<string>("");
+  // The mockup's `#q`: phone or name, filtering the member list.
+  const [q, setQ] = useState("");
+  const [data, setData] = useState<AudienceResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [now, setNow] = useState(() => new Date());
-  const [createOpen, setCreateOpen] = useState(false);
-  const [createPrefill, setCreatePrefill] = useState<CreateSegmentPrefill | null>(null);
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [confirmDelete, setConfirmDelete] = useState<SegmentRow | null>(null);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const router = useRouter();
+  const [loading, setLoading] = useState(false);
 
-  // Suggestions load (audience-suggestions MVP). Fetches the operator-facing
-  // worklist from /api/audience/suggestions. Refreshes whenever segments
-  // change so freshly-committed segments cause their source to disappear
-  // from the panel (the RPC dedups on local_segments existence).
-  const loadSuggestions = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const r = await fetch("/api/audience/suggestions", { cache: "no-store", signal });
-      if (signal?.aborted) return;
-      if (!r.ok) {
-        console.warn(`[audience] suggestions fetch failed: HTTP ${r.status}`);
-        setSuggestions([]);
-        return;
-      }
-      const body = (await r.json()) as { suggestions: Suggestion[] };
-      if (signal?.aborted) return;
-      setSuggestions(body.suggestions ?? []);
-    } catch (err) {
-      if ((err as Error).name === "AbortError") return;
-      console.warn(`[audience] suggestions fetch error: ${(err as Error).message}`);
-      setSuggestions([]);
-    }
-  }, []);
-
-  // Carve handler — opens the drawer with the suggestion's defaults pre-filled.
-  // Operator can still tweak name + outcomes + scrub settings before saving.
-  // Drawer's onCreated callback will trigger a segments + suggestions refresh,
-  // and the carved source will disappear from the panel (dedup'd by the RPC).
-  const handleCarve = useCallback((s: Suggestion) => {
-    setCreatePrefill({
-      sourceCampaignId: s.source_campaign_id,
-      name: s.suggested_defaults.name,
-      outcomes: s.suggested_defaults.outcomes_included,
-    });
-    setCreateOpen(true);
-  }, []);
-
-  // 30s clock — enough precision for "5m ago" / "2h ago" labels. Cheaper
-  // than the 1s clock /activity uses (no "Xs ago" labels here).
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(new Date()), 30_000);
-    return () => clearInterval(id);
-  }, []);
-
-  // List load. Auto-selects the first segment iff nothing is selected yet —
-  // this avoids a "select a segment to inspect" placeholder on first load
-  // when at least one exists. Subsequent reloads preserve the selection.
-  const loadSegments = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const r = await fetch("/api/audience/segments", { cache: "no-store", signal });
-      if (signal?.aborted) return;
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const body = (await r.json()) as { segments: SegmentRow[] };
-      if (signal?.aborted) return;
-      const list = body.segments ?? [];
-      setSegments(list);
-      setSelectedId((prev) => prev ?? list[0]?.id ?? null);
-      setError(null);
-    } catch (err) {
-      if ((err as Error).name === "AbortError") return;
-      setError(err instanceof Error ? err.message : "Failed to load segments");
-    }
-  }, []);
-
-  // Initial + polling — both segments and suggestions are read-only fetches,
-  // batched on the same 30s tick so the operator-facing state is always
-  // consistent (no flicker of stale suggestions vs newly-committed segments).
-  //
-  // A2: Per-tick AbortController — each new tick aborts the previous tick's
-  // in-flight requests so a slow response from a ghost tick can't clobber
-  // fresh state. Cleanup on unmount aborts whatever's in flight.
-  //
-  // A7: visibilityState gate inside the interval body — skip polling work
-  // when the operator is in another tab. The initial load on mount still
-  // fires regardless (typical mount is in a visible tab).
-  useEffect(() => {
-    let currentCtrl: AbortController | null = null;
-    const pollOnce = () => {
-      if (currentCtrl) currentCtrl.abort();
-      currentCtrl = new AbortController();
-      const signal = currentCtrl.signal;
-      loadSegments(signal);
-      loadSuggestions(signal);
-    };
-    pollOnce();
-    const id = window.setInterval(() => {
-      if (document.visibilityState !== "visible") return;
-      pollOnce();
-    }, POLL_MS);
-    return () => {
-      clearInterval(id);
-      if (currentCtrl) currentCtrl.abort();
-    };
-  }, [loadSegments, loadSuggestions]);
-
-  // Detail fetch on selection change — AbortController prevents an in-flight
-  // detail load from clobbering a newer one when the operator clicks quickly.
-  useEffect(() => {
-    if (!selectedId) {
-      setDetail(null);
-      return;
-    }
-    const ctrl = new AbortController();
-    setDetailLoading(true);
-    fetch(`/api/audience/segments/${selectedId}`, { cache: "no-store", signal: ctrl.signal })
-      .then(async (r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return (await r.json()) as SegmentDetail;
-      })
-      .then((body) => setDetail(body))
-      .catch((err: unknown) => {
-        if (err instanceof DOMException && err.name === "AbortError") return;
-        console.error("Failed to load segment detail:", err);
-        setDetail(null);
-      })
-      .finally(() => setDetailLoading(false));
-    return () => ctrl.abort();
-  }, [selectedId]);
-
-  const refresh = useCallback(async () => {
-    setIsRefreshing(true);
-    try {
-      await loadSegments();
-    } finally {
-      setIsRefreshing(false);
-    }
-  }, [loadSegments]);
-
-  // Slice 5: Load more page of numbers for the currently-selected segment.
-  // Appends to detail.numbers + advances pagination cursor.
-  const loadMoreNumbers = useCallback(async () => {
-    if (!detail || !selectedId || !detail.pagination.nextCursor) return;
-    setLoadingMore(true);
-    try {
-      const qs = new URLSearchParams({ limit: "100", cursor: detail.pagination.nextCursor });
-      const r = await fetch(`/api/audience/segments/${selectedId}?${qs}`, { cache: "no-store" });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const body = (await r.json()) as SegmentDetail;
-      setDetail((prev) =>
-        prev ? { ...prev, numbers: [...prev.numbers, ...body.numbers], pagination: body.pagination } : null,
-      );
-    } catch (err) {
-      console.error("Failed to load more numbers:", err);
-    } finally {
-      setLoadingMore(false);
-    }
-  }, [detail, selectedId]);
-
-  // Slice 5: Delete a segment (after confirm). Cascades local_segment_numbers
-  // via the FK on the server. Removes from local state + advances selection.
-  const deleteSegment = useCallback(async () => {
-    if (!confirmDelete) return;
-    const id = confirmDelete.id;
-    try {
-      const r = await fetch(`/api/audience/segments/${id}`, { method: "DELETE" });
-      if (!r.ok) {
-        const body = await parseJsonBody(r);
-        throw new Error(body.error ?? `HTTP ${r.status}`);
-      }
-      setSegments((prev) => {
-        const remaining = prev?.filter((s) => s.id !== id) ?? null;
-        if (selectedId === id) setSelectedId(remaining?.[0]?.id ?? null);
-        return remaining;
-      });
-      setConfirmDelete(null);
-      // Delete un-soft-marks the source's rows (DELETE endpoint restores
-      // outcome='removed_from_segment' → 'pending'). That source may now
-      // re-appear in suggestions if it crosses the candidate threshold.
-      loadSuggestions();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete segment");
-      setConfirmDelete(null);
-    }
-  }, [confirmDelete, selectedId, loadSuggestions]);
-
-  const stats = useMemo(() => {
-    if (!segments) {
-      return {
-        totalSegments: 0, totalLeads: 0, totalScrubbed: 0,
-        mostRecent: null as string | null,
-      };
-    }
-    return {
-      totalSegments: segments.length,
-      totalLeads: segments.reduce((acc, s) => acc + s.total_count, 0),
-      totalScrubbed: segments.reduce((acc, s) => acc + s.scrubbed_count, 0),
-      mostRecent: segments[0]?.created_at ?? null,
-    };
-  }, [segments]);
-
-  return (
-    // Shell — SectionTick + 18px header (design-system rollout, Jasiel 2026-07-08).
-    // p-4/gap-4 console density; wide max-w kept for the master-detail 2-col layout.
-    <div className="p-4 max-w-[1600px] mx-auto w-full grid gap-4">
-      <div className="flex items-end justify-between gap-4 flex-wrap">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <SectionTick color="#fbbf24" />
-            <h1 className="text-lg font-semibold tracking-tight text-[var(--text-1)]">Audience</h1>
-          </div>
-          <p className="text-xs text-[var(--text-3)] mt-0.5">
-            Carve outcome-tagged contacts into reusable segments · DNC-scrubbed by default
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {error && (
-            <span className="text-[11px] text-amber-400 font-mono inline-flex items-center gap-1">
-              <AlertCircle size={11} /> {error}
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={() => setCreateOpen(true)}
-            className="inline-flex items-center gap-1.5 text-xs text-[var(--text-1)] bg-blue-600 hover:bg-blue-500 px-3 py-1.5 rounded-lg transition font-medium shadow-md shadow-blue-600/20"
-          >
-            <ListPlus size={12} /> Create segment
-          </button>
-          <button
-            type="button"
-            onClick={refresh}
-            disabled={isRefreshing}
-            title="Refresh now"
-            className="inline-flex items-center gap-1.5 text-xs text-[var(--text-2)] hover:text-[var(--text-1)] px-2.5 py-1.5 rounded-lg border border-[var(--border)] hover:border-[var(--border-2)] hover:bg-[var(--bg-hover)] transition disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <HoverIcon icon={RefreshCWIcon} size={12} className={isRefreshing ? "animate-spin" : ""} />
-            {isRefreshing ? "Refreshing…" : "Refresh"}
-          </button>
-          <span className="text-[10px] text-[var(--text-3)] font-mono">auto every 30s</span>
-        </div>
-      </div>
-
-      {/* Stats — shared StatBand KPI strip (design-system rollout). Numbers CountUp
-          (locale-formatted); "Most recent" is a relative string, rendered as-is. */}
-      <StatBand stats={[
-        { label: "Saved segments", value: stats.totalSegments },
-        { label: "Recycled leads", value: stats.totalLeads },
-        { label: "DNC + recent scrubbed", value: stats.totalScrubbed },
-        { label: "Most recent", value: stats.mostRecent ? formatRelative(stats.mostRecent, now) : "—" },
-      ]} />
-
-      {/* Suggested-segments panel (audience-suggestions MVP). Hidden when the
-          worklist is empty — see SuggestedSegmentsPanel for the early-return.
-          Suggestions are non-destructive; clicking "Carve segment" opens the
-          drawer with prefill, no DB writes until the operator commits. */}
-      <SuggestedSegmentsPanel suggestions={suggestions} onCarve={handleCarve} />
-
-      {/* Main 2-col */}
-      <div className="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-5">
-        {/* List — shared WidgetCard; header holds the count, body scrolls (design-system rollout) */}
-        <WidgetCard
-          title="Segments"
-          context={segments ? `${segments.length} segment${segments.length === 1 ? "" : "s"}` : "…"}
-          bodyClassName="p-4 max-h-[720px] overflow-y-auto"
-        >
-          {!segments ? (
-            <SkeletonRows count={4} />
-          ) : segments.length === 0 ? (
-            <EmptyState
-              icon={<Users size={18} />}
-              message="No recycled audiences yet."
-              detail="Create one from any finished campaign's outcomes."
-            />
-          ) : (
-            <ul className="flex flex-col gap-1">
-              {segments.map((s) => (
-                <li key={s.id}>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedId(s.id)}
-                    className={`w-full text-left rounded-lg p-3 border transition ${
-                      selectedId === s.id
-                        ? "bg-blue-500/10 border-blue-500/40 text-[var(--text-1)]"
-                        : "border-transparent hover:bg-[var(--bg-hover)] hover:border-[var(--border)] text-[var(--text-2)]"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-semibold truncate">{s.name}</span>
-                      <span className="font-mono text-xs tabular-nums text-[var(--text-1)] flex-shrink-0">
-                        {s.total_count.toLocaleString()}
-                      </span>
-                    </div>
-                    {s.source_campaign_name && (
-                      <p className="text-[11px] text-[var(--text-3)] mt-0.5 truncate inline-flex items-center gap-1">
-                        <Megaphone size={10} /> {s.source_campaign_name}
-                      </p>
-                    )}
-                    <div className="flex items-center justify-between mt-1.5">
-                      <span className="text-[10px] text-[var(--text-3)] font-mono">
-                        {formatRelative(s.created_at, now)}
-                      </span>
-                      {s.scrubbed_count > 0 && (
-                        <span className="text-[10px] text-emerald-400 font-mono inline-flex items-center gap-1">
-                          <ShieldCheck size={9} /> {s.scrubbed_count} scrubbed
-                        </span>
-                      )}
-                    </div>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </WidgetCard>
-
-        {/* Detail */}
-        <section className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl p-5 sm:p-6 min-w-0">
-          {!selectedId || !detail ? (
-            <div className="h-full min-h-[480px] flex flex-col items-center justify-center gap-3 text-center">
-              <div className="w-12 h-12 rounded-full bg-[var(--bg-elevated)] grid place-items-center text-[var(--text-3)]">
-                <Search size={20} />
-              </div>
-              <p className="text-sm text-[var(--text-2)]">
-                {detailLoading ? "Loading segment…" : "Select a segment to inspect"}
-              </p>
-              <p className="text-xs text-[var(--text-3)] max-w-[320px]">
-                Each segment is an immutable snapshot of contacts carved out of a finished campaign at a point in time.
-              </p>
-            </div>
-          ) : (
-            <SegmentDetailPanel
-              detail={detail}
-              loading={detailLoading}
-              now={now}
-              loadingMore={loadingMore}
-              onLaunch={(id) => router.push(`/campaigns/v2/new?source=local_segment&id=${id}`)}
-              onLoadMore={loadMoreNumbers}
-              onDelete={(seg) => setConfirmDelete(seg)}
-            />
-          )}
-        </section>
-      </div>
-
-      <CreateSegmentDrawer
-        open={createOpen}
-        prefill={createPrefill}
-        onClose={() => {
-          setCreateOpen(false);
-          // Clear prefill so a subsequent manual "Create segment" click starts empty.
-          setCreatePrefill(null);
-        }}
-        onCreated={(seg) => {
-          // Prepend (server returns rows ordered by created_at desc).
-          setSegments((prev) => (prev ? [seg, ...prev.filter((s) => s.id !== seg.id)] : [seg]));
-          setSelectedId(seg.id);
-          setCreateOpen(false);
-          setCreatePrefill(null);
-          // Refresh suggestions — the newly-committed source disappears from the panel.
-          loadSuggestions();
-        }}
-      />
-
-      {/* Slice 5: Delete confirmation modal */}
-      {confirmDelete && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="confirm-delete-title"
-          onClick={() => setConfirmDelete(null)}
-        >
-          <div
-            className="bg-[var(--bg-card)] border border-red-500/30 rounded-2xl shadow-2xl max-w-md w-full p-6"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-2xl bg-red-500/15 border border-red-500/30 flex items-center justify-center shrink-0">
-                <AlertTriangle size={18} className="text-red-400" />
-              </div>
-              <h3 id="confirm-delete-title" className="text-base font-semibold text-[var(--text-1)]">
-                Delete &quot;{confirmDelete.name}&quot;?
-              </h3>
-            </div>
-            <p className="text-sm text-[var(--text-2)] mb-2 leading-relaxed">
-              This will delete the segment and its{" "}
-              <span className="font-semibold text-red-400">
-                {confirmDelete.total_count.toLocaleString()} phone{confirmDelete.total_count === 1 ? "" : "s"}
-              </span>.
-            </p>
-            <p className="text-xs text-[var(--text-3)] mb-5 leading-relaxed">
-              Source campaign outcomes are not affected. You can always carve a new segment from the same campaign later.
-            </p>
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setConfirmDelete(null)}
-                className="px-4 py-2 rounded-xl border border-[var(--border)] bg-[var(--bg-app)] text-[var(--text-2)] hover:text-[var(--text-1)] text-sm font-medium transition"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={deleteSegment}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition"
-              >
-                <Trash2 size={14} /> Delete segment
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Sub-components ──────────────────────────────────────────────────────
-
-function SegmentDetailPanel({
-  detail, loading, now, loadingMore, onLaunch, onLoadMore, onDelete,
-}: {
-  detail: SegmentDetail;
-  loading: boolean;
-  now: Date;
-  loadingMore: boolean;
-  onLaunch: (id: string) => void;
-  onLoadMore: () => void;
-  onDelete: (segment: SegmentRow) => void;
-}) {
-  const { segment, numbers } = detail;
-  return (
-    <>
-      <div className="flex items-start justify-between gap-3 mb-4">
-        <div className="min-w-0">
-          <h2 className="text-lg font-bold tracking-tight truncate">{segment.name}</h2>
-          <p className="text-xs text-[var(--text-3)] mt-0.5 inline-flex items-center gap-1.5 flex-wrap">
-            <Megaphone size={10} />
-            <span className="truncate max-w-[280px]">
-              {segment.source_campaign_name ?? "Unknown campaign"}
-            </span>
-            <span>·</span>
-            <Clock size={10} />
-            <span>{formatRelative(segment.created_at, now)}</span>
-            {segment.dnc_scrubbed && (
-              <>
-                <span>·</span>
-                <span className="inline-flex items-center gap-1 text-emerald-400">
-                  <ShieldCheck size={10} /> DNC-scrubbed
-                </span>
-              </>
-            )}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <button
-            type="button"
-            onClick={() => onDelete(segment)}
-            title="Delete segment"
-            aria-label="Delete segment"
-            className="inline-flex items-center justify-center w-8 h-8 text-[var(--text-3)] hover:text-red-400 rounded-lg border border-[var(--border)] hover:border-red-500/30 hover:bg-red-500/[0.06] transition"
-          >
-            <Trash2 size={12} />
-          </button>
-          <button
-            type="button"
-            onClick={() => onLaunch(segment.id)}
-            disabled={segment.total_count === 0}
-            title={segment.total_count === 0 ? "Segment is empty" : "Open wizard with this segment prefilled"}
-            className="inline-flex items-center gap-1.5 text-xs text-white bg-blue-600 hover:bg-blue-500 disabled:bg-[var(--bg-elevated)] disabled:text-[var(--text-3)] disabled:cursor-not-allowed px-3 py-1.5 rounded-lg transition font-medium shadow-md shadow-blue-600/20 disabled:shadow-none"
-          >
-            <Phone size={11} /> Launch campaign
-          </button>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-1.5 flex-wrap mb-4">
-        {segment.outcomes_included.map((o) => (
-          <span
-            key={o}
-            className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-mono border ${outcomeBadgeClasses(o)}`}
-          >
-            {o.replace(/_/g, " ")}
-          </span>
-        ))}
-        <span className="text-[10px] text-[var(--text-3)] font-mono ml-1">
-          · {segment.recent_window_days}d recency cutoff
-        </span>
-      </div>
-
-      {loading && numbers.length === 0 ? (
-        <SkeletonRows count={6} />
-      ) : numbers.length === 0 ? (
-        <EmptyState icon={<Phone size={18} />} message="No numbers in this segment." />
-      ) : (
-        <div className="border border-[var(--border)] rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-[var(--bg-elevated)]">
-              <tr>
-                <Th>Phone</Th>
-                <Th>Source outcome</Th>
-                <Th alignRight>Attempts at carve</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {numbers.map((n) => (
-                <tr key={n.id} className="border-t border-[var(--border)]">
-                  <td className="py-2.5 px-3 font-mono text-xs text-[var(--text-1)]">{n.phone_e164}</td>
-                  <td className="py-2.5 px-3">
-                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-mono border ${outcomeBadgeClasses(n.source_outcome)}`}>
-                      {n.source_outcome.replace(/_/g, " ")}
-                    </span>
-                  </td>
-                  <td className="py-2.5 px-3 text-right font-mono text-xs text-[var(--text-2)] tabular-nums">
-                    {n.source_attempts ?? "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {detail.pagination.hasMore ? (
-            <div className="px-3 py-2.5 border-t border-[var(--border)] bg-[var(--bg-elevated)]/40 flex items-center justify-between">
-              <span className="text-[11px] text-[var(--text-3)]">
-                Showing {numbers.length.toLocaleString()} of {segment.total_count.toLocaleString()}
-              </span>
-              <button
-                type="button"
-                onClick={onLoadMore}
-                disabled={loadingMore}
-                className="inline-flex items-center gap-1.5 text-[11px] text-blue-400 hover:text-blue-300 disabled:opacity-50 transition font-medium"
-              >
-                {loadingMore && <Loader2 size={11} className="animate-spin" />}
-                {loadingMore
-                  ? "Loading…"
-                  : `Load ${Math.min(100, segment.total_count - numbers.length).toLocaleString()} more`}
-              </button>
-            </div>
-          ) : (
-            numbers.length > 0 && (
-              <div className="px-3 py-2 text-[10px] text-[var(--text-3)] border-t border-[var(--border)] bg-[var(--bg-elevated)]/40 text-center">
-                All {numbers.length.toLocaleString()} phone{numbers.length === 1 ? "" : "s"} shown
-              </div>
-            )
-          )}
-        </div>
-      )}
-    </>
-  );
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────────────
-
-function outcomeBadgeClasses(outcome: string): string {
-  switch (outcome) {
-    case "unreached":
-    case "pending_retry":
-      return "bg-amber-500/15 text-amber-400 border-amber-500/30";
-    case "recently_called_elsewhere":
-      return "bg-sky-500/15 text-sky-400 border-sky-500/30";
-    case "removed_from_segment":
-      return "bg-[var(--bg-elevated)] text-[var(--text-2)] border-[var(--border)]";
-    case "declined_offer":
-    case "not_interested":
-      return "bg-violet-500/15 text-violet-400 border-violet-500/30";
-    case "sent_sms":
-      return "bg-emerald-500/15 text-emerald-400 border-emerald-500/30";
-    case "sms_delivered":
-      return "bg-teal-500/15 text-teal-400 border-teal-500/30";
-    default:
-      return "bg-[var(--bg-elevated)] text-[var(--text-2)] border-[var(--border)]";
+  // A brand change invalidates the market: a market this brand does not dial would dead-end.
+  const [prevBrand, setPrevBrand] = useState(brand);
+  if (prevBrand !== brand) {
+    setPrevBrand(brand);
+    setMarket("");
   }
-}
 
-function Th({ children, alignRight }: { children: React.ReactNode; alignRight?: boolean }) {
-  return (
-    <th
-      className={`py-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-3)] ${
-        alignRight ? "text-right" : "text-left"
-      }`}
-    >
-      {children}
-    </th>
+  const query = new URLSearchParams({ range });
+  if (brand) query.set("brand", brand);
+  if (market) query.set("country", market);
+  const qs = query.toString();
+
+  const load = useCallback(async (s: string) => {
+    setLoading(true);
+    try {
+      const r = await fetch(`/api/dashboard/analytics?${s}`, { cache: "no-store" });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const json = (await r.json()) as AudienceResponse;
+      setData(json);
+      saveSnapshot(`audience.overview:${s}`, json);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    // Paint the last session's answer for this exact scope first, then replace it.
+    const snap = loadSnapshot<AudienceResponse>(`audience.overview:${qs}`);
+    if (snap) setData(snap);
+    load(qs);
+  }, [load, qs]);
+
+  // Player activity: the 100 most recently contacted players in the same scope. Its own request,
+  // so a slow list never holds the hero back, and its own error line.
+  const [players, setPlayers] = useState<AudiencePlayerRow[]>([]);
+  const [playersLoading, setPlayersLoading] = useState(false);
+  const [playersError, setPlayersError] = useState<string | null>(null);
+  const scopeQs = (() => { const p = new URLSearchParams(); if (brand) p.set("brand", brand); if (market) p.set("country", market); return p.toString(); })();
+  useEffect(() => {
+    const ctrl = new AbortController();
+    setPlayersLoading(true);
+    fetch(`/api/audience/players?${scopeQs}`, { cache: "no-store", signal: ctrl.signal })
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then((j: { rows: AudiencePlayerRow[] }) => { setPlayers(j.rows ?? []); setPlayersError(null); })
+      .catch((e: unknown) => { if (!(e instanceof Error && e.name === "AbortError")) setPlayersError(e instanceof Error ? e.message : "Failed to load players"); })
+      .finally(() => setPlayersLoading(false));
+    return () => ctrl.abort();
+  }, [scopeQs]);
+
+  // Reach is materially estimated when a big share of connects are not yet evaluated for
+  // voicemail (detection is forward-only), same rule and threshold as Global Performance.
+  const k = data?.kpis;
+  const estimated = !!k && k.connected > 0 && k.voicemailEvaluated / k.connected < 0.8;
+
+  const markets = (data?.options.countries ?? []).filter((c) =>
+    (AUDIENCE_MARKETS as readonly string[]).includes(c.value),
   );
-}
 
-function SkeletonRows({ count }: { count: number }) {
   return (
-    <div className="flex flex-col gap-2">
-      {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="flex items-center gap-3 p-2.5 rounded-lg">
-          <div className="flex-1 space-y-1.5">
-            <div className="h-3 w-3/5 rounded bg-[var(--bg-elevated)] animate-pulse" />
-            <div className="h-2.5 w-2/5 rounded bg-[var(--bg-elevated)] animate-pulse" />
-          </div>
+    <div className="px-[30px] pt-4 pb-16 w-full max-w-[1680px] mx-auto grid gap-4">
+      {/* The mockup's `.top`: title, market tabs, and the member search at the right. Markets stay
+          with the content they filter; brand is the sidebar switcher. */}
+      <div className="flex items-center gap-[13px] flex-wrap">
+        <div className="flex items-center gap-2.5">
+          <SectionTick color="#5b9bf0" />
+          <h1 className="text-lg font-semibold tracking-tight">Audience</h1>
         </div>
-      ))}
-    </div>
-  );
-}
-
-function EmptyState({
-  icon, message, detail,
-}: { icon: React.ReactNode; message: string; detail?: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
-      <div className="w-10 h-10 rounded-full bg-[var(--bg-elevated)] grid place-items-center text-[var(--text-3)]">
-        {icon}
+        <div role="tablist" aria-label="Markets" className="inline-flex items-center gap-0.5 p-0.5 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)]">
+          {[{ value: "", label: "All markets" }, ...markets].map((m) => {
+            const on = market === m.value;
+            return (
+              <button
+                key={m.value || "all"}
+                type="button"
+                role="tab"
+                aria-selected={on}
+                onClick={() => setMarket(m.value)}
+                className={`px-[11px] py-1 rounded-md text-[12px] transition-colors ${
+                  on ? "bg-[var(--bg-hover)] text-[var(--text-1)]" : "text-[var(--text-3)] hover:text-[var(--text-2)]"
+                }`}
+              >
+                {m.label}
+              </button>
+            );
+          })}
+        </div>
+        <label className="ml-auto relative">
+          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-4)] pointer-events-none" />
+          <input
+            type="search"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Phone or name"
+            aria-label="Search members"
+            className="pl-8 pr-7 py-1.5 w-[210px] text-[13px] rounded-[9px] bg-[var(--bg-elevated)] border border-[var(--border)] text-[var(--text-1)] placeholder:text-[var(--text-4)] focus:outline-none focus:border-primary transition"
+          />
+          {q && (
+            <button type="button" aria-label="Clear the search" onClick={() => setQ("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-3)] hover:text-[var(--text-1)]">
+              <X size={13} />
+            </button>
+          )}
+        </label>
       </div>
-      <p className="text-xs text-[var(--text-2)] font-medium">{message}</p>
-      {detail && <p className="text-[11px] text-[var(--text-3)] max-w-[280px]">{detail}</p>}
+
+      {/* The mockup's `rangebar()`: presets, then Export at the right. One control drives the hero
+          and the export; a page range and a card range that can disagree is a bug generator. */}
+      <div className="flex items-center gap-[5px] flex-wrap">
+        {RANGES.map((key) => (
+          <button
+            key={key}
+            type="button"
+            aria-pressed={range === key}
+            onClick={() => setRange(key)}
+            className={`px-[9px] py-1 rounded-md text-[12px] font-mono border transition ${
+              range === key
+                ? "border-primary text-[var(--text-1)] bg-[var(--bg-elevated)]"
+                : "border-[var(--border)] text-[var(--text-3)] bg-[var(--bg-elevated)] hover:border-[var(--border-2)] hover:text-[var(--text-2)]"
+            }`}
+          >
+            {key}
+          </button>
+        ))}
+        {loading && <span className="text-[11px] text-[var(--text-3)] ml-1">Updating…</span>}
+        {error && <span className="text-[11px] text-amber-400 font-mono ml-1">{error}</span>}
+        <div className="ml-auto">
+          {/* The records export engine, scoped like the dashboard's: the market as the country
+              filter and, under a brand, the brand's in-window campaign ids (the records routes
+              know no brand). It refuses past the routes' campaign cap rather than truncating. */}
+          <GlobalExport
+            filters={{ range, campaignIds: [], country: market, prompt: "", phone: "" }}
+            scopeIds={brand ? (data?.options.campaigns ?? []).map((c) => c.id) : null}
+            disabled={!data}
+          />
+        </div>
+      </div>
+
+      {data ? (
+        <ConnectRateHero
+          trend={data.trend}
+          baseline={data.baseline ?? null}
+          rangeDays={data.rangeDays}
+          todayIso={new Date().toISOString().slice(0, 10)}
+          estimated={estimated}
+          noBaselineWhy={data.baseline === undefined ? "This deployment's API does not return a baseline yet." : undefined}
+        />
+      ) : (
+        <CardGridSkeleton />
+      )}
+
+      {playersError && <p className="text-[11px] text-amber-400 font-mono px-1">{playersError}</p>}
+      <AudiencePlayers rows={players} loading={playersLoading} showMarket={!market} query={q} brandLabel={brand ? brandLabel(brand) : ""} />
     </div>
   );
-}
-
-function formatRelative(iso: string, now: Date): string {
-  const ageSec = Math.max(0, Math.floor((now.getTime() - new Date(iso).getTime()) / 1000));
-  if (ageSec < 60) return `${ageSec}s ago`;
-  if (ageSec < 3600) return `${Math.floor(ageSec / 60)}m ago`;
-  if (ageSec < 86400) return `${Math.floor(ageSec / 3600)}h ago`;
-  return `${Math.floor(ageSec / 86400)}d ago`;
 }

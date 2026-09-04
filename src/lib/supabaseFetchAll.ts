@@ -184,6 +184,11 @@ export interface ChunkFilterable {
   neq(column: string, value: unknown): ChunkFilterable;
   gt(column: string, value: unknown): ChunkFilterable;
   in(column: string, values: readonly unknown[]): ChunkFilterable;
+  // Added 2026-09-04 for the Audience players walk (newest N calls per chunk). Both exist on
+  // the underlying builder; a per-chunk limit is a CEILING per chunk, not a global one, so a
+  // caller that needs the global newest N must merge and re-sort the chunks itself.
+  order(column: string, opts?: { ascending?: boolean }): ChunkFilterable;
+  limit(count: number): ChunkFilterable;
 }
 
 /**
