@@ -34,7 +34,9 @@ describe("GET /audience/preview", () => {
   });
 
   it("carries the ported reporting surfaces", () => {
-    for (const s of ["Channel reach", "SMS delivery", "Depositors only", "When the money came"]) {
+    // "Deposits by day" replaced "When the money came" in the mockup on 2026-09-03 (VOZ-481); the
+    // preview regenerated on 2026-09-07 carries the current card.
+    for (const s of ["Channel reach", "SMS delivery", "Depositors only", "Deposits by day"]) {
       expect(PREVIEW_HTML).toContain(s);
     }
   });

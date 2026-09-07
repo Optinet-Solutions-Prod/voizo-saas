@@ -4,42 +4,48 @@
 //
 // Audience — the real tab, ported from the canonical mockup (2026-08-25 v4, VOZ-457) which until
 // now shipped only as the frozen snapshot at /audience/preview. Laid out in the mockup's order
-// (`render()`): the top row is the title, the market tabs and the member search; the scope below
-// opens with the range bar (presets, Export at the right), then the connect-rate hero, then the
-// player list. The Lead Recycling page that used to live here moved to /audience/lead-recycling,
-// unlinked (its `local_segments` table has never held a row in prod).
+// (`render()`): the top row is the title, the market tabs and the member search; the toolbar below
+// is the DASHBOARD's range control (Jasiel 2026-09-07: "re-use this"): Export, the presets 7d to 90d
+// and All, and the Pick-a-window calendar, the same control Campaign Performance carries. Then the
+// connect-rate hero with the Members tile flush at its top, Deposits by day, Reach, the player list,
+// and the campaign families last (Jasiel 2026-09-07). The Lead Recycling page that used to live here
+// moved to /audience/lead-recycling, unlinked (its `local_segments` table has never held a row).
 //
-// WHAT IS DELIBERATELY NOT HERE YET, so nothing on this page is a stale number dressed as a live
-// one (the preview keeps the ribbon that lets it show frozen figures honestly):
-//   - Members / campaign-families counts, and the count on each market tab: distinct phones per
-//     lane has no aggregate in the DB. The roster RPC is per campaign and a phone sits in several,
-//     so summing double-counts. 2026-09-04_audience_lane_reach_rpc.sql is written, not applied.
+// WHAT IS DELIBERATELY NOT HERE, so nothing on this page is a stale number dressed as a live one:
 //   - The two deposit-lift tiles: the frozen 25 Aug study, not recomputable until live deposits
-//     cover a real window.
-//   - Channels, SMS fate, families, depositors: slices 2, 3 and 5.
+//     cover a real window (Jasiel 2026-09-07: leave them off).
+//   - The count on each market tab: the mockup carried one; the tabs stay words until the lane
+//     counts have been reconciled.
 //
 // Connect rate is the DASHBOARD's definition (status completed/answered), not the mockup's
 // stricter "clean hangup with talk time". Measured over the last 7 days they differ by 19 calls
 // of 4,841 (85.1% vs 84.7%), all clean hangups at zero seconds. One definition across both tabs
 // beats two that disagree on the same lane by a rounding error.
 //
-// Data: /api/dashboard/analytics (hero) and /api/audience/players (list), both scoped by the
-// sidebar brand and the market tab. Read-only, no provider spend, nothing near the call or SMS path.
+// Data: /api/dashboard/analytics (hero), /api/audience/reach (Members, Reach, Deposits by day,
+// families) and /api/audience/players (the filtered, paged player query), all scoped by the sidebar
+// brand, the market tab and the window. Read-only, no provider spend, nothing near the call or SMS path.
 
 import { useCallback, useEffect, useState } from "react";
-import { Search, X } from "lucide-react";
+import { Download, Search, X } from "lucide-react";
 import { loadSnapshot, saveSnapshot } from "@/lib/sessionSnapshot";
 import { useBrandScope } from "@/lib/brandScope";
 import { brandLabel } from "@/lib/campaignDisplay";
 import type { TrendPoint } from "@/lib/dashboardAnalytics";
 import type { DayCount } from "@/lib/connectRateHero";
 import type { RangeKey } from "@/lib/rangeWindow";
+import { addDays } from "@/lib/rangeCalendar";
+import { triggerDownload } from "@/lib/download";
 import { SectionTick } from "../analytics/SectionIsland";
 import ConnectRateHero from "../analytics/ConnectRateHero";
 import GlobalExport from "../analytics/GlobalExport";
+import RangeCalendar from "../analytics/RangeCalendar";
 import { CardGridSkeleton } from "../analytics/loadingSkeletons";
-import AudiencePlayers from "./AudiencePlayers";
-import type { AudiencePlayerRow } from "../api/audience/players/route";
+import AudiencePlayers, { type PlayerFilters, DEFAULT_FILTERS } from "./AudiencePlayers";
+import AudienceFamilies from "./AudienceFamilies";
+import { DepositsByDay, MembersStat, ReachCard } from "./AudienceReach";
+import type { AudiencePlayersResponse } from "../api/audience/players/route";
+import type { AudienceReachResponse } from "../api/audience/reach/route";
 
 // The mockup's market allowlist: "AU, CA, NZ. FR, PH and PL are test and trace lanes — excluded
 // from audience surfaces, still visible in the campaign views." Applied as an intersection with
@@ -47,9 +53,9 @@ import type { AudiencePlayerRow } from "../api/audience/players/route";
 // "QA" pseudo-market the country parser derives from test campaign names cannot appear here.
 const AUDIENCE_MARKETS = ["Australia", "Canada", "New Zealand"] as const;
 
-// The mockup's own range bar. 14d default: its hero is a 14-day series against the prior window.
-const RANGES: readonly RangeKey[] = ["7d", "14d", "30d"];
-const DEFAULT_RANGE: RangeKey = "14d";
+// The dashboard's presets (Campaign Performance, Global): [caption, days back incl. today]; 0 = all time.
+const RANGE_PRESETS: [string, number][] = [["7d", 7], ["14d", 14], ["30d", 30], ["60d", 60], ["90d", 90], ["All", 0]];
+const DEFAULT_DAYS = 14; // the mockup's hero is a 14-day series against the prior window
 
 interface AudienceResponse {
   rangeDays: number;
@@ -61,11 +67,18 @@ interface AudienceResponse {
 
 export default function AudiencePage() {
   const brand = useBrandScope();
-  const [range, setRange] = useState<RangeKey>(DEFAULT_RANGE);
+  const todayIso = new Date().toISOString().slice(0, 10);
+  // The window as two dates, the way Campaign Performance holds it: a preset lights up only while
+  // the window equals it; "" and "" is all time.
+  const [from, setFrom] = useState(() => addDays(todayIso, -(DEFAULT_DAYS - 1)));
+  const [to, setTo] = useState(() => todayIso);
+  const [calendarPicked, setCalendarPicked] = useState(false);
   // "" = every market in the allowlist, the mockup's ALL tab: "the default question".
   const [market, setMarket] = useState<string>("");
-  // The mockup's `#q`: phone or name, filtering the member list.
+  // The mockup's `#q`: phone or name, sent to the player query once typing pauses.
   const [q, setQ] = useState("");
+  const [needle, setNeedle] = useState("");
+  useEffect(() => { const t = setTimeout(() => setNeedle(q.trim()), 350); return () => clearTimeout(t); }, [q]);
   const [data, setData] = useState<AudienceResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -77,7 +90,16 @@ export default function AudiencePage() {
     setMarket("");
   }
 
-  const query = new URLSearchParams({ range });
+  // The window, as the routes take it: a preset key when the dates equal one (the analytics route
+  // then reasons about "the prior window" the way Global does), lifetime for All, custom otherwise.
+  const preset = RANGE_PRESETS.find(([, d]) => (d ? from === addDays(todayIso, -(d - 1)) && to === todayIso : from === "" && to === ""));
+  const rangeKey: RangeKey = !preset ? "custom" : preset[1] === 0 ? "lifetime" : (preset[0] as RangeKey);
+  const windowQs = (p: URLSearchParams) => {
+    p.set("range", rangeKey);
+    if (rangeKey === "custom") { p.set("from", from); p.set("to", to); }
+  };
+  const query = new URLSearchParams();
+  windowQs(query);
   if (brand) query.set("brand", brand);
   if (market) query.set("country", market);
   const qs = query.toString();
@@ -105,22 +127,71 @@ export default function AudiencePage() {
     load(qs);
   }, [load, qs]);
 
-  // Player activity: the 100 most recently contacted players in the same scope. Its own request,
-  // so a slow list never holds the hero back, and its own error line.
-  const [players, setPlayers] = useState<AudiencePlayerRow[]>([]);
+  // The aggregate blocks: Members, Reach, Deposits by day, families. One request, scoped like the
+  // list, plus the window for the deposits. Each block can be unavailable on its own.
+  const [agg, setAgg] = useState<AudienceReachResponse | null>(null);
+  const [aggLoading, setAggLoading] = useState(false);
+  const [aggError, setAggError] = useState<string | null>(null);
+  useEffect(() => {
+    const ctrl = new AbortController();
+    setAggLoading(true);
+    const snap = loadSnapshot<AudienceReachResponse>(`audience.reach:${qs}`);
+    if (snap) setAgg(snap);
+    fetch(`/api/audience/reach?${qs}`, { cache: "no-store", signal: ctrl.signal })
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then((j: AudienceReachResponse) => { setAgg(j); saveSnapshot(`audience.reach:${qs}`, j); setAggError(null); })
+      .catch((e: unknown) => { if (!(e instanceof Error && e.name === "AbortError")) setAggError(e instanceof Error ? e.message : "Failed to load"); })
+      .finally(() => setAggLoading(false));
+    return () => ctrl.abort();
+  }, [qs]);
+  const laneCount = market ? 1 : new Set((agg?.families ?? []).map((f) => f.market).filter(Boolean)).size;
+
+  // The player query: filters, sort, page, search, the window. A new scope or filter starts at page one.
+  const [filters, setFilters] = useState<PlayerFilters>(DEFAULT_FILTERS);
+  const [page, setPage] = useState(1);
+  const [players, setPlayers] = useState<AudiencePlayersResponse | null>(null);
   const [playersLoading, setPlayersLoading] = useState(false);
   const [playersError, setPlayersError] = useState<string | null>(null);
-  const scopeQs = (() => { const p = new URLSearchParams(); if (brand) p.set("brand", brand); if (market) p.set("country", market); return p.toString(); })();
+  const playersQs = (() => {
+    const p = new URLSearchParams();
+    windowQs(p);
+    if (brand) p.set("brand", brand);
+    if (market) p.set("country", market);
+    if (filters.deposited !== "any") p.set("deposited", filters.deposited);
+    if (filters.contact !== "any") p.set("contact", filters.contact);
+    if (filters.family) p.set("family", filters.family);
+    if (filters.sort !== "last_contact") p.set("sort", filters.sort);
+    if (needle) p.set("q", needle);
+    return p.toString();
+  })();
+  const [prevPlayersQs, setPrevPlayersQs] = useState(playersQs);
+  if (prevPlayersQs !== playersQs) { setPrevPlayersQs(playersQs); setPage(1); }
   useEffect(() => {
     const ctrl = new AbortController();
     setPlayersLoading(true);
-    fetch(`/api/audience/players?${scopeQs}`, { cache: "no-store", signal: ctrl.signal })
+    fetch(`/api/audience/players?${playersQs}&page=${page}`, { cache: "no-store", signal: ctrl.signal })
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-      .then((j: { rows: AudiencePlayerRow[] }) => { setPlayers(j.rows ?? []); setPlayersError(null); })
+      .then((j: AudiencePlayersResponse) => { setPlayers(j); setPlayersError(null); })
       .catch((e: unknown) => { if (!(e instanceof Error && e.name === "AbortError")) setPlayersError(e instanceof Error ? e.message : "Failed to load players"); })
       .finally(() => setPlayersLoading(false));
     return () => ctrl.abort();
-  }, [scopeQs]);
+  }, [playersQs, page]);
+
+  // Export players: the whole filtered set as CSV, from the same query, never the page.
+  const [exporting, setExporting] = useState(false);
+  const exportPlayers = async () => {
+    setExporting(true);
+    try {
+      const r = await fetch(`/api/audience/players?${playersQs}&format=csv`, { cache: "no-store" });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const stem = ["audience-players", brand || "all-brands", market ? market.toLowerCase().replace(/\s+/g, "-") : "all-markets", rangeKey === "custom" ? `${from}_${to}` : rangeKey === "lifetime" ? "all-time" : rangeKey].join("_");
+      triggerDownload(await r.blob(), `${stem}.csv`);
+    } catch (e) {
+      setPlayersError(e instanceof Error ? e.message : "Export failed");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   // Reach is materially estimated when a big share of connects are not yet evaluated for
   // voicemail (detection is forward-only), same rule and threshold as Global Performance.
@@ -130,6 +201,8 @@ export default function AudiencePage() {
   const markets = (data?.options.countries ?? []).filter((c) =>
     (AUDIENCE_MARKETS as readonly string[]).includes(c.value),
   );
+  const runDates = (agg?.families ?? []).flatMap((f) => f.runList.map((r) => (r.startAt ?? "").slice(0, 10))).filter(Boolean);
+  const familyOptions = (agg?.families ?? []).map((f) => ({ value: f.key, label: f.label }));
 
   return (
     <div className="px-[30px] pt-4 pb-16 w-full max-w-[1680px] mx-auto grid gap-4">
@@ -177,34 +250,53 @@ export default function AudiencePage() {
         </label>
       </div>
 
-      {/* The mockup's `rangebar()`: presets, then Export at the right. One control drives the hero
-          and the export; a page range and a card range that can disagree is a bug generator. */}
-      <div className="flex items-center gap-[5px] flex-wrap">
-        {RANGES.map((key) => (
-          <button
-            key={key}
-            type="button"
-            aria-pressed={range === key}
-            onClick={() => setRange(key)}
-            className={`px-[9px] py-1 rounded-md text-[12px] font-mono border transition ${
-              range === key
-                ? "border-primary text-[var(--text-1)] bg-[var(--bg-elevated)]"
-                : "border-[var(--border)] text-[var(--text-3)] bg-[var(--bg-elevated)] hover:border-[var(--border-2)] hover:text-[var(--text-2)]"
-            }`}
-          >
-            {key}
-          </button>
-        ))}
-        {loading && <span className="text-[11px] text-[var(--text-3)] ml-1">Updating…</span>}
-        {error && <span className="text-[11px] text-amber-400 font-mono ml-1">{error}</span>}
+      {/* The dashboard's range control (Campaign Performance's toolbar): Export first, then the
+          presets, then the window picker at the right. One control drives the hero, the deposits,
+          the player query and both exports; a page range and a card range that can disagree is a
+          bug generator. A preset lights only while the window equals it. */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <GlobalExport
+          filters={{ range: rangeKey, from: rangeKey === "custom" ? from : undefined, to: rangeKey === "custom" ? to : undefined, campaignIds: [], country: market, prompt: "", phone: "" }}
+          scopeIds={brand ? (data?.options.campaigns ?? []).map((c) => c.id) : null}
+          disabled={!data}
+        />
+        <button
+          type="button"
+          onClick={exportPlayers}
+          disabled={exporting || !players || players.total === 0}
+          title={players ? `Export ${players.total.toLocaleString("en-US")} players as CSV (the whole filtered list, opens in Excel)` : "Loading…"}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-[var(--border)] text-[var(--text-2)] hover:text-[var(--text-1)] hover:bg-[var(--bg-hover)] transition disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Download size={13} /> {exporting ? "Exporting…" : "Export players"}
+        </button>
+        <div className="inline-flex p-[3px] gap-0.5 rounded-[9px] bg-[var(--bg-elevated)] border border-[var(--border)]">
+          {RANGE_PRESETS.map(([key, days]) => {
+            const pf = days ? addDays(todayIso, -(days - 1)) : "";
+            const pt = days ? todayIso : "";
+            const on = from === pf && to === pt;
+            return (
+              <button
+                key={key}
+                type="button"
+                aria-pressed={on}
+                onClick={() => { setFrom(pf); setTo(pt); setCalendarPicked(false); }}
+                className={`px-2.5 py-1 rounded-md text-[12.5px] font-semibold font-mono transition ${on ? "bg-primary text-white" : "text-[var(--text-3)] hover:text-[var(--text-1)]"}`}
+              >
+                {key}
+              </button>
+            );
+          })}
+        </div>
+        {(loading || aggLoading) && <span className="text-[11px] text-[var(--text-3)] ml-1">Updating…</span>}
+        {(error || aggError) && <span className="text-[11px] text-amber-400 font-mono ml-1">{error ?? aggError}</span>}
         <div className="ml-auto">
-          {/* The records export engine, scoped like the dashboard's: the market as the country
-              filter and, under a brand, the brand's in-window campaign ids (the records routes
-              know no brand). It refuses past the routes' campaign cap rather than truncating. */}
-          <GlobalExport
-            filters={{ range, campaignIds: [], country: market, prompt: "", phone: "" }}
-            scopeIds={brand ? (data?.options.campaigns ?? []).map((c) => c.id) : null}
-            disabled={!data}
+          <RangeCalendar
+            from={from}
+            to={to}
+            runDates={runDates}
+            onApply={(f, t) => { setFrom(f); setTo(t); setCalendarPicked(!!(f || t)); }}
+            ariaLabel="Pick the Audience window"
+            label={calendarPicked ? undefined : "Pick a window"}
           />
         </div>
       </div>
@@ -214,16 +306,36 @@ export default function AudiencePage() {
           trend={data.trend}
           baseline={data.baseline ?? null}
           rangeDays={data.rangeDays}
-          todayIso={new Date().toISOString().slice(0, 10)}
+          todayIso={todayIso}
           estimated={estimated}
           noBaselineWhy={data.baseline === undefined ? "This deployment's API does not return a baseline yet." : undefined}
+          lead={<MembersStat reach={agg?.reach ?? null} families={agg?.families.length ?? 0} lanes={laneCount} unavailable={agg?.unavailable.reach} />}
         />
       ) : (
         <CardGridSkeleton />
       )}
 
+      {/* Order (Jasiel 2026-09-07): the money, the channels, the players, and the campaign families last;
+          the mockup had the families above the players, and they read as a wall between the two. */}
+      <DepositsByDay deposits={agg?.deposits ?? null} unavailable={agg?.unavailable.deposits} />
+      <ReachCard reach={agg?.reach ?? null} deposited={agg?.deposited ?? null} unavailable={agg?.unavailable.reach} />
+
       {playersError && <p className="text-[11px] text-amber-400 font-mono px-1">{playersError}</p>}
-      <AudiencePlayers rows={players} loading={playersLoading} showMarket={!market} query={q} brandLabel={brand ? brandLabel(brand) : ""} />
+      <AudiencePlayers
+        data={players}
+        page={page}
+        onPage={setPage}
+        loading={playersLoading}
+        showMarket={!market}
+        marketLabel={market}
+        brandLabel={brand ? brandLabel(brand) : ""}
+        filters={filters}
+        onFilters={setFilters}
+        familyOptions={familyOptions}
+        searching={!!needle}
+      />
+
+      <AudienceFamilies families={agg?.families ?? []} loading={aggLoading} showMarket={!market} unavailable={agg?.unavailable.families} />
     </div>
   );
 }

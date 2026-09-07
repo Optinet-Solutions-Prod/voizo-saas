@@ -21,7 +21,7 @@ export interface CampaignDisplay {
 
 // The trailing run/date suffix (e.g. "_28/0", "_11/06/2026") — the bit that distinguishes
 // two otherwise-identical campaign names.
-const RUN_TAG = /[_\s]+(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)\s*$/;
+export const RUN_TAG = /[_\s]+(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)\s*$/;
 
 function countryOf(name: string): string {
   const region = name.match(/(?:^|[_\s])(GCC|UAE|MENA)(?=[_\s]|$)/i);

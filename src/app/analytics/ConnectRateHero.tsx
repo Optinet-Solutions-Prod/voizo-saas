@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 // Global Performance's hero (ported from the dashboard mockup, Jasiel 2026-09-02): ONE connect
 // rate for the window and whether it is gaining or losing against the equal-length window
 // before it. This replaced the three PerformanceCards that sat here: their Call attempts /
@@ -25,7 +27,7 @@ const shortDate = (iso: string) => {
 };
 const fmt = (n: number) => n.toLocaleString("en-US");
 
-function Info({ text }: { text: string }) {
+export function Info({ text }: { text: string }) {
   return (
     <Hint content={<span className="block max-w-[320px] text-[11px] leading-relaxed">{text}</span>}>
       <span
@@ -47,6 +49,7 @@ export default function ConnectRateHero({
   todayIso,
   estimated,
   noBaselineWhy,
+  lead,
 }: {
   trend: TrendPoint[];
   baseline: DayCount[] | null;
@@ -59,6 +62,9 @@ export default function ConnectRateHero({
    *  Without it a null baseline reads as "no completed calls in the prior window", which is
    *  a different claim and a wrong one. */
   noBaselineWhy?: string;
+  /** The Audience mockup sits its stat tiles flush at the top of this card, divided by a hairline
+   *  ("combine them", Jasiel). Rendered above everything else when given; the dashboard passes none. */
+  lead?: ReactNode;
 }) {
   const days: DayCount[] = trend.map((p) => ({ day: p.day, terminal: p.terminal, connected: p.connected }));
   const A = summarizeWindow(days);
@@ -75,6 +81,7 @@ export default function ConnectRateHero({
 
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] px-5 py-4">
+      {lead && <div className="-mx-5 -mt-4 mb-3.5 border-b border-[var(--border)]">{lead}</div>}
       {estimated && (
         <p className="text-[11px] text-[var(--text-3)] flex items-center gap-1.5 mb-3">
           <EstBadge tone="warn" content="Estimated: long windows include connects not yet evaluated for voicemail (forward-only from ~19 Jun), which count as reached." />
