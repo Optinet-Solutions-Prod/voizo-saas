@@ -25,6 +25,12 @@ import { ROW_COLOR } from "../analytics/PerformanceCards";
 import type { AudienceDeposits, DepositTotal, LaneReach, LifetimeDeposited } from "../api/audience/reach/route";
 
 const fmt = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString("en-US"));
+/** A loading placeholder the exact size of what it stands in for: the card keeps its height and the
+ *  operator sees where the number will land (Jasiel 2026-09-07: "an operator expects something to
+ *  look into even if the data still loads"). */
+const Pulse = ({ w, h = "h-3", className = "" }: { w: string; h?: string; className?: string }) => (
+  <span aria-hidden className={`inline-block rounded bg-[var(--bg-elevated)] animate-pulse ${w} ${h} ${className}`} />
+);
 const money0 =(cur: string, n: number) => `${cur} ${Math.round(n).toLocaleString("en-US")}`;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const mmdd = (iso: string) => iso.slice(5, 10);
@@ -50,7 +56,7 @@ export function MembersStat({ reach, families, lanes, unavailable }: {
         Members
         <Info text="Every player ever loaded into this scope's campaigns, counted once by phone number however many campaigns they sat in." />
       </div>
-      <div className="font-mono text-[22px] font-medium leading-[1.1] tracking-[-0.02em] text-[var(--text-1)]">{reach ? fmt(reach.members) : "—"}</div>
+      <div className="font-mono text-[22px] font-medium leading-[1.1] tracking-[-0.02em] text-[var(--text-1)]">{reach ? fmt(reach.members) : unavailable ? "—" : <Pulse w="w-24" h="h-5" />}</div>
       <div className="mt-1 text-[11px] text-[var(--text-3)] min-h-[15px]">{sub}</div>
     </div>
   );
@@ -91,8 +97,19 @@ export function ReachCard({ reach, deposited, unavailable }: { reach: LaneReach 
         </h2>
         <span className="ml-auto font-mono text-[10.5px] text-[var(--text-4)]">{m ? `of ${fmt(m.members)} players ever loaded` : ""}</span>
       </div>
-      {!m ? (
-        <p className="text-[11.5px] text-[var(--text-4)] py-3">{unavailable ? "Not available yet." : "Loading…"}</p>
+      {!m && unavailable ? (
+        <p className="text-[11.5px] text-[var(--text-4)] py-3">Not available yet.</p>
+      ) : !m ? (
+        <div aria-label="Loading reach" aria-busy="true">
+          {["Dialled", "Reached", "Texted", "Emailed", "Deposited"].map((label) => (
+            <div key={label} className={`${TRACK} py-[5px] text-[12px]`}>
+              <span className="text-[var(--text-3)]">{label}</span>
+              <span className="h-[7px] rounded-[4px] bg-[var(--bg-elevated)] overflow-hidden animate-pulse" />
+              <span className="text-right"><Pulse w="w-9" /></span>
+              <span className="text-right"><Pulse w="w-12" /></span>
+            </div>
+          ))}
+        </div>
       ) : (
         <>
           <Row label="Dialled" n={m.dialled} members={m.members} color={ROW_COLOR.unreachable}
@@ -205,6 +222,17 @@ export function DepositsByDay({ deposits, unavailable }: { deposits: AudienceDep
   const grossLines = [...totals].filter((t) => t.deposits > 0).sort((a, b) => b.amountEur - a.amountEur).map((t) => money0(t.currency, t.amountLocal));
   return (
     <section className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl overflow-hidden" aria-label="Deposits by day">
+      {!d && !unavailable && (
+        <div className="grid grid-cols-4 max-[820px]:grid-cols-2 border-b border-[var(--border)]" aria-label="Money in the window" aria-busy="true">
+          {["Deposits", "Depositors", "Gross", "Average"].map((label) => (
+            <div key={label} className="px-4 py-3 border-l border-[var(--border)] first:border-l-0 min-w-0">
+              <div className="text-[10px] uppercase tracking-[.07em] text-[var(--text-4)] mb-1">{label}</div>
+              <Pulse w="w-20" h="h-[18px]" />
+              <div className="mt-1"><Pulse w="w-28" h="h-2.5" /></div>
+            </div>
+          ))}
+        </div>
+      )}
       {d && d.totals && (
         <div className="grid grid-cols-4 max-[820px]:grid-cols-2 border-b border-[var(--border)]" aria-label="Money in the window">
           {stat("Deposits", fmt(depCount), before ? `${fmt(before)} more before contact, not counted` : "after contact, in this window",
@@ -227,8 +255,17 @@ export function DepositsByDay({ deposits, unavailable }: { deposits: AudienceDep
             {d && days.length ? `${mmdd(days[0])} → ${mmdd(days[days.length - 1])} · ${fmt(total)} deposit${total === 1 ? "" : "s"}` : ""}
           </span>
         </div>
-        {!d ? (
-          <p className="text-[11.5px] text-[var(--text-4)] py-3">{unavailable ? "Not available yet." : "Loading…"}</p>
+        {!d && unavailable ? (
+          <p className="text-[11.5px] text-[var(--text-4)] py-3">Not available yet.</p>
+        ) : !d ? (
+          <div className="relative mt-[22px]" aria-label="Loading deposits by day" aria-busy="true">
+            <div className="flex items-end gap-[3px] h-16">
+              {Array.from({ length: 14 }, (_, i) => (
+                <span key={i} className="flex-1 rounded-t-[2px] bg-[var(--bg-elevated)] animate-pulse" style={{ height: `${18 + ((i * 37) % 60)}%` }} />
+              ))}
+            </div>
+            <div className="mt-1 h-[10px]" />
+          </div>
         ) : (
           <div className="relative mt-[22px]">
             <div className="flex items-end gap-[3px]">

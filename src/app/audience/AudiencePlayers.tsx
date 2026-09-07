@@ -72,8 +72,6 @@ const DOT_COLOR: Record<Dot, string> = {
   voicemail: ROW_COLOR.voicemail,
   never: ROW_COLOR.unreachable,
 };
-// --color-primary is the app's token (globals.css); a bare --primary resolves to nothing and the dot vanishes.
-const EVENT_COLOR = { call: ROW_COLOR.reached, sms: ROW_COLOR.neutral, dep: "var(--color-primary)", crm: ROW_COLOR.voicemail, event: ROW_COLOR.silent_pickup } as const;
 // The attempt chip of the depositor view: funnel-furthest of the player's last calls.
 const ATTEMPT_LADDER: Dot[] = ["spoke", "silent", "voicemail", "never"];
 
@@ -90,13 +88,6 @@ const mmddhm = (iso: string | null) => {
   return Number.isNaN(d.getTime()) ? "—" : `${mmdd(iso)} ${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}`;
 };
 const money = (cur: string, n: number) => `${cur} ${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const eventLine = (e: PlayerEvent, firstAt: string | null) =>
-  e.kind === "sms"
-    ? `SMS ${e.what === "delivered" ? "delivered" : e.what} — offer follow-up`
-    : e.kind === "dep"
-      ? `Deposit ${e.what}${firstAt && e.at < firstAt ? " · before contact" : ""}`
-      : `${e.what.replace(/_/g, " ")}${e.durationSeconds ? ` — ${e.durationSeconds}s` : ""}`;
-
 /** Sums per currency, sorted largest first. Money is never added across currencies. */
 function sums(deps: PlayerDeposit[]): [string, number][] {
   const by = new Map<string, number>();
@@ -327,7 +318,45 @@ export default function AudiencePlayers({ data, page, onPage, loading, showMarke
 }
 
 // ── the drawer: the mockup's, plus the live Customer.io footprint (2026-09-07) ──
+// The journey is a STORY, not a log (Jasiel 2026-09-07: "still looks a bit confusing"): grouped by day,
+// one plain line per event in the operator's words ("We called · voicemail, 14 s", "Deposited AUD 70",
+// "Customer.io emailed: Your deposit has been received · opened", "Logged in"), two sources told apart
+// by colour (Voizo, Customer.io) with the money and the first-contact pin standing out. Balance-update
+// events and our own deposit hooks are left out: they repeat what the deposit line already says.
 type CrmState = { status: "loading" } | { status: "none" } | { status: "ready"; data: PlayerCrmResponse[] } | { status: "error"; message: string };
+type Source = "voizo" | "cio" | "dep" | "pin";
+const SOURCE_COLOR: Record<Source, string> = { voizo: ROW_COLOR.neutral, cio: ROW_COLOR.voicemail, dep: "var(--color-primary)", pin: "var(--text-3)" };
+const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const dayLabel = (iso: string) => { const d = new Date(iso); return `${DOW[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`; };
+const hhmm = (iso: string) => { const d = new Date(iso); return `${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}`; };
+const secs = (n: number | null | undefined) => (!n ? "" : n >= 60 ? `${Math.floor(n / 60)} min ${n % 60} s` : `${n} s`);
+// The lean attempt tag in the operator's words. "spoke" never becomes "said yes": goal_reached is not agreement.
+const callLine = (e: PlayerEvent) => {
+  const d = secs(e.durationSeconds);
+  switch (e.what) {
+    case "voicemail": return `We called · voicemail${d ? `, ${d}` : ""}`;
+    case "unreachable": return "We called · no answer";
+    case "silent_pickup": case "early_hangup": return `We called · answered, no conversation${d ? `, ${d}` : ""}`;
+    default: return `We called · spoke${d ? `, ${d}` : ""}`;
+  }
+};
+const smsLine = (e: PlayerEvent) => `We texted · ${e.what === "delivered" ? "delivered" : e.what === "sent" ? "sent, not confirmed" : e.what.replace(/_/g, " ")}`;
+const CRM_VERB: Record<string, string> = { email: "emailed", in_app: "showed an in-app message", push: "sent a push", sms: "texted" };
+const crmMessageLine = (m: PlayerCrmResponse["messages"][number]) => {
+  const verb = CRM_VERB[m.type] ?? `sent a ${m.type}`;
+  const state = m.failedAt ? " · failed" : m.clickedAt ? " · clicked" : m.openedAt ? " · opened" : "";
+  return `Customer.io ${verb}${m.type === "email" && m.name ? `: ${m.name}` : ""}${state}`;
+};
+const CRM_EVENT: Record<string, string> = {
+  login_activity_status: "Logged in", login_failed: "Login failed", bonuses_issued: "Bonus issued", freespin_bonus_issued: "Free spins issued",
+  sportsbook_bonus_issued: "Sportsbook bonus issued", deposit_canceled: "Deposit cancelled", cashout_requested: "Cash-out requested",
+  cashout_approved: "Cash-out approved", cashout_canceled: "Cash-out cancelled", password_change: "Password changed",
+  reset_password_instructions: "Password reset requested", user_verified: "Account verified", document_not_approved: "Document not approved",
+  user_limit_created: "Deposit limit set", user_limit_disabled: "Deposit limit removed", status_suspended: "Account suspended",
+};
+const SKIP_EVENTS = new Set(["deposit_made", "player_balance", "email_status", "confirmation_instructions", "unlock_instructions", "password_compromised"]);
+const crmEventLine = (name: string) => CRM_EVENT[name] ?? name.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
 
 function PlayerDrawer({ row: open, brandLabel, onClose }: { row: AudiencePlayerRow; brandLabel: string; onClose: () => void }) {
   const [crm, setCrm] = useState<CrmState>(open.cio.length ? { status: "loading" } : { status: "none" });
@@ -349,25 +378,28 @@ function PlayerDrawer({ row: open, brandLabel, onClose }: { row: AudiencePlayerR
   const crmData = crm.status === "ready" ? crm.data : [];
   const profile = crmData.map((d) => d.profile).find((p) => p && (p.name || p.email)) ?? null;
   const messages = crmData.flatMap((d) => d.messages);
-  const crmEvents = crmData.flatMap((d) => d.events);
+  const crmEvents = crmData.flatMap((d) => d.events).filter((e) => !SKIP_EVENTS.has(e.name));
   const opened = messages.filter((m) => m.openedAt).length;
   const clicked = messages.filter((m) => m.clickedAt).length;
   const pulledAt = crmData[0]?.pulledAt ?? null;
   const partial = crmData.some((d) => d.unavailable.messages || d.unavailable.events);
-  // The timeline: Voizo's own events, the CRM's messages and events, the first-contact pin, newest first.
-  const timeline: { at: string; kind: "call" | "sms" | "dep" | "crm" | "event" | "pin"; text: string }[] = [
-    ...open.events.map((e) => ({ at: e.at, kind: e.kind, text: eventLine(e, open.firstAt) })),
-    ...(open.firstAt ? [{ at: open.firstAt, kind: "pin" as const, text: "First contact" }] : []),
-    ...messages.slice(0, 8).map((m) => ({
-      at: m.sentAt ?? m.createdAt ?? "",
-      kind: "crm" as const,
-      text: `CRM ${m.type}${m.name ? ` · ${m.name}` : ""}${m.failedAt ? " · failed" : m.clickedAt ? " · clicked" : m.openedAt ? " · opened" : m.deliveredAt ? " · delivered" : m.sentAt ? " · sent" : ""}`,
+  const entries: { at: string; source: Source; text: string }[] = [
+    ...open.events.map((e) => ({
+      at: e.at,
+      source: (e.kind === "dep" ? "dep" : "voizo") as Source,
+      text: e.kind === "sms" ? smsLine(e) : e.kind === "dep" ? `Deposited ${e.what}${open.firstAt && e.at < open.firstAt ? " · before we contacted them" : ""}` : callLine(e),
     })),
-    ...crmEvents.filter((e) => e.name !== "deposit_made").slice(0, 8).map((e) => ({ at: e.at, kind: "event" as const, text: `CRM event · ${e.name.replace(/_/g, " ")}` })),
-  ].filter((e) => e.at).sort((a, b) => (a.at < b.at ? 1 : -1)).slice(0, 24);
-  const dot = (kind: keyof typeof EVENT_COLOR | "pin") => (kind === "pin"
-    ? { background: "var(--bg-card)", border: "1px solid var(--text-3)" }
-    : { background: EVENT_COLOR[kind], border: `1px solid ${EVENT_COLOR[kind]}` });
+    ...(open.firstAt ? [{ at: open.firstAt, source: "pin" as Source, text: "First contact" }] : []),
+    ...messages.slice(0, 8).map((m) => ({ at: m.sentAt ?? m.createdAt ?? "", source: "cio" as Source, text: crmMessageLine(m) })),
+    ...crmEvents.slice(0, 10).map((e) => ({ at: e.at, source: "cio" as Source, text: crmEventLine(e.name) })),
+  ].filter((e) => e.at).sort((a, b) => (a.at < b.at ? 1 : -1)).slice(0, 30);
+  // grouped by UTC day, newest day first, the entries inside newest first
+  const days: { day: string; items: typeof entries }[] = [];
+  for (const e of entries) {
+    const key = e.at.slice(0, 10);
+    const last = days[days.length - 1];
+    if (last && last.day === key) last.items.push(e); else days.push({ day: key, items: [e] });
+  }
 
   return (
     <>
@@ -381,16 +413,16 @@ function PlayerDrawer({ row: open, brandLabel, onClose }: { row: AudiencePlayerR
           <div className="min-w-0">
             <div className="font-mono text-[14px] text-[var(--text-1)]">{open.phone}</div>
             <div className="text-[11px] text-[var(--text-4)] mt-[3px] truncate">
-              {[brandLabel, open.campaignLabel, open.alsoIn.length ? `also in ${open.alsoIn.join(", ")}` : "", open.name ?? ""].filter(Boolean).join(" · ")}
+              {[brandLabel, open.campaignLabel, open.alsoIn.length ? `also in ${open.alsoIn.join(", ")}` : ""].filter(Boolean).join(" · ")}
             </div>
             {/* The CRM identity, live: the phone alone does not find a profile in Customer.io. */}
-            <div className="text-[11px] mt-[5px] flex flex-col gap-px" aria-label="Customer.io identity">
+            <div className="text-[11px] mt-[6px] flex flex-col gap-px" aria-label="Customer.io identity">
               {crm.status === "loading" && <span className="text-[var(--text-4)]">Customer.io…</span>}
               {crm.status === "none" && <span className="text-[var(--text-4)]">no Customer.io record</span>}
               {crm.status === "error" && <span className="text-amber-400 font-mono">Customer.io not pulled: {crm.message}</span>}
               {crm.status === "ready" && (
                 <>
-                  {profile?.name && <span className="text-[var(--text-2)]">{profile.name}</span>}
+                  <span className="text-[12px] text-[var(--text-1)]">{profile?.name ?? open.name ?? "Name not on the profile"}</span>
                   {profile?.email && <span className="font-mono text-[var(--text-2)] truncate" title={profile.email}>{profile.email}</span>}
                   {open.cio.map((c) => (
                     <span key={c.cioId} className="font-mono text-[10.5px] text-[var(--text-4)] truncate" title="Customer.io id: search it in the People tab">
@@ -406,7 +438,7 @@ function PlayerDrawer({ row: open, brandLabel, onClose }: { row: AudiencePlayerR
           </button>
         </div>
         <div className="px-[17px] py-[15px] overflow-y-auto">
-          <div className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-[7px] mb-4 text-[11.5px]">
+          <div className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-[7px] mb-5 text-[11.5px]">
             <div className="text-[var(--text-3)]">Calls</div><div className="font-mono text-[12px] text-right text-[var(--text-1)]">{open.calls}</div>
             <div className="text-[var(--text-3)]">SMS</div>
             <div className="font-mono text-[12px] text-right text-[var(--text-1)]">
@@ -416,32 +448,46 @@ function PlayerDrawer({ row: open, brandLabel, onClose }: { row: AudiencePlayerR
             <div className={`font-mono text-[12px] text-right ${s === "after" ? "text-[var(--text-1)]" : "text-[var(--text-4)]"}`}>
               {s === "unknown" ? "no record" : s === "none" ? "none" : s === "before" ? "before contact only" : sums(open.deposits.filter((d) => d.afterContact)).map(([c, n]) => money(c, n)).join(" + ")}
             </div>
-            <div className="text-[var(--text-3)] flex items-center gap-1">CRM messages <Info text="Messages Customer.io sent this player (email, in-app, push, SMS, webhook), read live from Customer.io when this drawer opened. Opened and clicked count people only; machine opens by mail scanners never enter a number." /></div>
+            <div className="text-[var(--text-3)] flex items-center gap-1">CRM messages <Info text="Messages Customer.io sent this player (email, in-app, push, SMS), read live when this drawer opened. Opened and clicked count people only; machine opens by mail scanners never enter a number." /></div>
             <div className={`font-mono text-[12px] text-right ${crm.status === "ready" ? "text-[var(--text-1)]" : "text-[var(--text-4)]"}`} aria-label="CRM messages">
               {crm.status === "ready" ? (messages.length ? `${messages.length} · ${opened} opened · ${clicked} clicked` : partial ? "not pulled" : "none") : crm.status === "none" ? "no record" : crm.status === "error" ? "not pulled" : "…"}
             </div>
           </div>
-          <div className="border-l border-[var(--border)] pl-4 ml-1 flex flex-col gap-3">
-            {timeline.map((e, i) => (
-              <div key={i} className="relative">
-                <span className="absolute -left-5 top-1 w-[7px] h-[7px] rounded-full" style={dot(e.kind)} />
-                <div className="font-mono text-[10.5px] text-[var(--text-4)]">{mmddhm(e.at)}</div>
-                <div className="text-[12px] text-[var(--text-2)] mt-0.5">{e.kind === "pin" ? <b className="font-medium text-[var(--text-1)]">First contact</b> : e.text}</div>
-              </div>
+
+          {/* The journey, by day. */}
+          <div className="flex flex-col gap-3.5" aria-label="Journey">
+            {days.map((d) => (
+              <section key={d.day}>
+                <div className="text-[10px] uppercase tracking-[.07em] text-[var(--text-4)] mb-1.5">{dayLabel(d.day)}</div>
+                <div className="border-l border-[var(--border)] pl-4 ml-1 flex flex-col gap-2">
+                  {d.items.map((e, i) => (
+                    <div key={`${e.at}-${i}`} className="relative flex items-baseline gap-2.5">
+                      <span
+                        className="absolute -left-5 top-[5px] w-[7px] h-[7px] rounded-full"
+                        style={e.source === "pin" ? { background: "var(--bg-card)", border: "1px solid var(--text-3)" } : { background: SOURCE_COLOR[e.source], border: `1px solid ${SOURCE_COLOR[e.source]}` }}
+                      />
+                      <span className="font-mono text-[10.5px] text-[var(--text-4)] shrink-0 w-[34px]">{hhmm(e.at)}</span>
+                      <span className={`text-[12px] leading-snug ${e.source === "pin" ? "font-medium text-[var(--text-1)]" : e.source === "dep" ? "text-[var(--text-1)]" : "text-[var(--text-2)]"}`}>{e.text}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
             ))}
+            {crm.status === "loading" && <div className="text-[11px] text-[var(--text-4)]">Reading Customer.io…</div>}
           </div>
-          <div className="flex gap-3 flex-wrap mt-3.5 text-[10.5px] text-[var(--text-4)]">
-            <span className="inline-flex items-center gap-[5px]"><i className="inline-block w-[7px] h-[7px] rounded-full" style={{ background: EVENT_COLOR.call }} />Call</span>
-            <span className="inline-flex items-center gap-[5px]"><i className="inline-block w-[7px] h-[7px] rounded-full" style={{ background: EVENT_COLOR.sms }} />Text</span>
-            <span className="inline-flex items-center gap-[5px]"><i className="inline-block w-[7px] h-[7px] rounded-full" style={{ background: EVENT_COLOR.dep }} />Deposit</span>
-            <span className="inline-flex items-center gap-[5px]"><i className="inline-block w-[7px] h-[7px] rounded-full" style={{ background: EVENT_COLOR.crm }} />CRM message</span>
-            <span className="inline-flex items-center gap-[5px]"><i className="inline-block w-[7px] h-[7px] rounded-full" style={{ background: EVENT_COLOR.event }} />CRM event</span>
+
+          <div className="flex gap-3 flex-wrap mt-4 text-[10.5px] text-[var(--text-4)]">
+            <span className="inline-flex items-center gap-[5px]"><i className="inline-block w-[7px] h-[7px] rounded-full" style={{ background: SOURCE_COLOR.voizo }} />Voizo</span>
+            <span className="inline-flex items-center gap-[5px]"><i className="inline-block w-[7px] h-[7px] rounded-full" style={{ background: SOURCE_COLOR.cio }} />Customer.io</span>
+            <span className="inline-flex items-center gap-[5px]"><i className="inline-block w-[7px] h-[7px] rounded-full" style={{ background: SOURCE_COLOR.dep }} />Deposit</span>
             <span className="inline-flex items-center gap-[5px]"><i className="inline-block w-[7px] h-[7px] rounded-full border border-[var(--text-3)]" />First contact</span>
           </div>
-          <p className="mt-[15px] text-[11px] text-[var(--text-4)] leading-relaxed">
-            Calls and texts are live from our own records. Deposits are what Customer.io has sent us: the one-off pull of 25 Aug and the live feed since 2 Sep.
-            {crm.status === "ready" && pulledAt ? ` CRM messages, events and identity were read from Customer.io at ${mmddhm(pulledAt)} UTC; events cover its rolling 30-day window.` : ""}
-          </p>
+          {/* Sources, one line each, on the stats' margin; nothing here restates the legend. */}
+          <dl className="mt-3.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[10.5px] text-[var(--text-4)]" aria-label="Sources">
+            <dt className="text-[var(--text-3)]">Voizo</dt><dd>calls and texts, live</dd>
+            <dt className="text-[var(--text-3)]">Customer.io</dt>
+            <dd>deposits since 26 Jul; messages and events read {crm.status === "ready" && pulledAt ? `${hhmm(pulledAt)} UTC` : "on open"}</dd>
+          </dl>
         </div>
       </aside>
     </>
