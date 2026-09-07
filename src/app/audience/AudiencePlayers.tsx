@@ -24,6 +24,7 @@ import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import Pagination from "@/components/Pagination";
 import StyledSelect from "@/components/StyledSelect";
+import SortHead, { nextSort, type SortDir } from "./SortHead";
 import { Info } from "../analytics/ConnectRateHero";
 import { ROW_COLOR } from "../analytics/PerformanceCards";
 import type { Dot } from "@/lib/audienceLane";
@@ -35,9 +36,12 @@ export interface PlayerFilters {
   contact: Contact;
   /** A family key from /api/audience/reach; "" = any. */
   family: string;
+  /** Column sort, applied in the database (the list is a page of a lane-wide query). */
   sort: PlayerSort;
+  dir: SortDir;
 }
-export const DEFAULT_FILTERS: PlayerFilters = { deposited: "any", contact: "any", family: "", sort: "last_contact" };
+export const DEFAULT_FILTERS: PlayerFilters = { deposited: "any", contact: "any", family: "", sort: "last_contact", dir: "desc" };
+const ASC_FIRST: PlayerSort[] = ["phone", "first_contact"];
 
 const DEPOSITED_OPTIONS: { value: Deposited; label: string }[] = [
   { value: "any", label: "Any" },
@@ -52,11 +56,6 @@ const CONTACT_OPTIONS: { value: Contact; label: string }[] = [
   { value: "texted", label: "Texted" },
   { value: "delivered", label: "SMS delivered" },
   { value: "never", label: "Never reached" },
-];
-const SORT_OPTIONS: { value: PlayerSort; label: string }[] = [
-  { value: "last_contact", label: "Last contact" },
-  { value: "last_deposit", label: "Last deposit" },
-  { value: "amount", label: "Deposited amount" },
 ];
 
 // The mockup's DOT_LABEL, split at its dash: the first clause is the legend word.
@@ -172,6 +171,9 @@ export default function AudiencePlayers({ data, page, onPage, loading, showMarke
   const pages = Math.max(1, Math.ceil(total / pageSize));
   const onlyDep = filters.deposited === "after";
   const set = (patch: Partial<PlayerFilters>) => onFilters({ ...filters, ...patch });
+  // Column sorting runs in the database: a header click changes the query, never the page in hand.
+  const sortBy = (k: PlayerSort) => set(nextSort({ sort: filters.sort, dir: filters.dir }, k, ASC_FIRST));
+  const head = (label: string, k: PlayerSort, right = false, first = false) => <SortHead label={label} k={k} sort={filters.sort} dir={filters.dir} onSort={sortBy} right={right} first={first} />;
 
   // Escape closes the drawer, as the mockup's key handler does.
   useEffect(() => {
@@ -214,7 +216,6 @@ export default function AudiencePlayers({ data, page, onPage, loading, showMarke
             <StyledSelect size="sm" prefix="Deposited:" options={DEPOSITED_OPTIONS} value={filters.deposited} onChange={(v) => set({ deposited: v as Deposited })} placeholder="Any" />
             <StyledSelect size="sm" prefix="Contact:" options={CONTACT_OPTIONS} value={filters.contact} onChange={(v) => set({ contact: v as Contact })} placeholder="Any" />
             <StyledSelect size="sm" prefix="Family:" options={[{ value: "", label: "All" }, ...familyOptions]} value={filters.family} onChange={(v) => set({ family: v })} placeholder="All" />
-            <StyledSelect size="sm" prefix="Sort:" options={SORT_OPTIONS} value={filters.sort} onChange={(v) => set({ sort: v as PlayerSort })} placeholder="Last contact" />
           </div>
           <span className="ml-auto font-mono text-[11px] text-[var(--text-4)]" aria-label="Players shown">{loading && !data ? "" : total.toLocaleString("en-US")}</span>
         </div>
@@ -223,24 +224,28 @@ export default function AudiencePlayers({ data, page, onPage, loading, showMarke
           <table className="w-full text-[12.5px] border-collapse">
             <thead>
               <tr className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-3)]">
-                <th className="text-left px-4 py-2 font-semibold">Phone</th>
+                {head("Phone", "phone", false, true)}
                 {showMarket && th("Market")}
                 {th("Campaign")}
                 {onlyDep ? (
                   <>
                     {th("Attempt")}
-                    {th("First contact", true)}
-                    {th("Deposit", true)}
-                    {th("Days", true)}
-                    <th className="text-right px-4 py-2 font-semibold">Deposited</th>
+                    {head("First contact", "first_contact", true)}
+                    {head("Deposit", "first_deposit", true)}
+                    {head("Days", "lag", true)}
+                    {head("Deposited", "amount", true, true)}
                   </>
                 ) : (
                   <>
                     {th("Last 3 calls →")}
-                    <th className="text-right px-3 py-2 font-semibold whitespace-nowrap">
-                      Deposited after contact <Info text="Only deposits made after our first call or text to the player, as Customer.io reported them. Earlier deposits are shown greyed and not counted. A dash means no deposit on record; no record means we hold no identity to check." />
+                    <th className="text-right px-3 py-2 font-semibold whitespace-nowrap" aria-sort={filters.sort === "amount" ? (filters.dir === "asc" ? "ascending" : "descending") : "none"}>
+                      <button type="button" onClick={() => sortBy("amount")} title="Sort by deposited amount" className={`group inline-flex items-center gap-1 uppercase tracking-wider text-[10px] font-semibold transition-colors ${filters.sort === "amount" ? "text-[var(--text-1)]" : "text-[var(--text-3)] hover:text-[var(--text-2)]"}`}>
+                        Deposited after contact
+                        <span aria-hidden className={`text-[8px] ${filters.sort === "amount" ? "text-primary" : "text-[var(--text-4)] opacity-0 group-hover:opacity-70"}`}>{filters.sort === "amount" && filters.dir === "asc" ? "▲" : "▼"}</span>
+                      </button>
+                      {" "}<Info text="Only deposits made after our first call or text to the player, as Customer.io reported them. Earlier deposits are shown greyed and not counted. A dash means no deposit on record; no record means we hold no identity to check." />
                     </th>
-                    <th className="text-right px-4 py-2 font-semibold">Last contact</th>
+                    {head("Last contact", "last_contact", true, true)}
                   </>
                 )}
               </tr>

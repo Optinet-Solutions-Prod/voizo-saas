@@ -17,6 +17,7 @@ import { ChevronRight, CalendarDays, Search, X } from "lucide-react";
 import { loadSnapshot, saveSnapshot } from "@/lib/sessionSnapshot";
 import Pagination from "@/components/Pagination";
 import StyledSelect from "@/components/StyledSelect";
+import SortHead, { SortButton, nextSort, type SortDir } from "./SortHead";
 import CampaignRow, { StatusPill, type CampaignRowData, type DisplayStatus } from "../analytics/CampaignRow";
 import CampaignExpand from "@/components/analytics/CampaignExpand";
 import PromptModal from "../analytics/PromptModal";
@@ -87,6 +88,22 @@ export default function AudienceFamilies({ families, loading, showMarket, unavai
 }) {
   const [page, setPage] = useState(1);
   const [openKey, setOpenKey] = useState<string | null>(null);
+  // Column sorting on the family list runs in the browser: 42 rows, all in hand. Default = the route's
+  // order (running first, most runs, name), which "status" reproduces.
+  type FamilySort = "family" | "members" | "runs" | "status";
+  const [fSort, setFSort] = useState<{ sort: FamilySort; dir: SortDir }>({ sort: "status", dir: "desc" });
+  const STATUS_RANK = { running: 2, paused: 1, finished: 0 } as const;
+  const sorted = [...families].sort((a, b) => {
+    const d = fSort.dir === "asc" ? 1 : -1;
+    const cmp = (x: number | string | null, y: number | string | null) => (x == null && y == null ? 0 : x == null ? 1 : y == null ? -1 : x < y ? -d : x > y ? d : 0);
+    switch (fSort.sort) {
+      case "family": return cmp(a.label.toLowerCase(), b.label.toLowerCase()) || cmp(a.market, b.market);
+      case "members": return cmp(a.members, b.members) || cmp(a.runs, b.runs);
+      case "runs": return cmp(a.runs, b.runs) || cmp(a.members, b.members);
+      default: return cmp(STATUS_RANK[a.status], STATUS_RANK[b.status]) || cmp(a.runs, b.runs) || a.label.localeCompare(b.label);
+    }
+  });
+  const sortBy = (k: FamilySort) => { setFSort(nextSort(fSort, k, ["family"])); setPage(1); };
   // The dashboard's campaigns rows, for the run card. Fetched on the first expand, painted from
   // the last session's snapshot first (the same key CampaignTable saves under).
   const [camps, setCamps] = useState<Map<string, CampRow> | null>(null);
@@ -96,7 +113,7 @@ export default function AudienceFamilies({ families, loading, showMarket, unavai
 
   const pages = Math.max(1, Math.ceil(families.length / PAGE));
   const cur = Math.min(page, pages);
-  const shown = families.slice((cur - 1) * PAGE, cur * PAGE);
+  const shown = sorted.slice((cur - 1) * PAGE, cur * PAGE);
 
   const ensureCamps = () => {
     if (camps) return;
@@ -120,7 +137,18 @@ export default function AudienceFamilies({ families, loading, showMarket, unavai
       ) : families.length === 0 ? (
         <p className="px-4 py-8 text-center text-xs text-[var(--text-3)]">No campaign family in this scope.</p>
       ) : (
-        shown.map((f, i) => {
+        <>
+        {/* The rows are buttons, not table cells, so the sort header mirrors their layout: the name at
+            the left, the three figures grouped at the right with the rows' own gaps. */}
+        <div className="flex items-center gap-[11px] px-4 py-1.5 border-b border-[var(--border)] pl-[37px]" role="group" aria-label="Sort families">
+          <SortButton label="Family" k="family" sort={fSort.sort} dir={fSort.dir} onSort={sortBy} />
+          <div className="ml-auto flex items-center gap-[9px]">
+            <SortButton label="Members" k="members" sort={fSort.sort} dir={fSort.dir} onSort={sortBy} />
+            <SortButton label="Runs" k="runs" sort={fSort.sort} dir={fSort.dir} onSort={sortBy} />
+            <SortButton label="Status" k="status" sort={fSort.sort} dir={fSort.dir} onSort={sortBy} />
+          </div>
+        </div>
+        {shown.map((f, i) => {
           const on = f.key === openKey;
           return (
             <div key={f.key} className={i === 0 ? "" : "border-t border-[var(--border)]"}>
@@ -142,7 +170,8 @@ export default function AudienceFamilies({ families, loading, showMarket, unavai
               {on && <FamilyExpand family={f} camps={camps} campsErr={campsErr} />}
             </div>
           );
-        })
+        })}
+        </>
       )}
       {families.length > PAGE && (
         <div className="flex justify-end px-4 py-2 border-t border-[var(--border)]">
@@ -347,6 +376,9 @@ function RunNumbers({ campaignId }: { campaignId: string }) {
   const [needle, setNeedle] = useState("");
   const [deposited, setDeposited] = useState("any");
   const [contact, setContact] = useState("any");
+  type RunSort = "last_contact" | "amount" | "phone" | "calls";
+  const [rSort, setRSort] = useState<{ sort: RunSort; dir: SortDir }>({ sort: "last_contact", dir: "desc" });
+  const sortBy = (k: RunSort) => { setRSort(nextSort(rSort, k, ["phone"])); setPage(1); };
   const [page, setPage] = useState(1);
   const [data, setData] = useState<RunNumbersResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -357,12 +389,14 @@ function RunNumbers({ campaignId }: { campaignId: string }) {
     if (needle) sp.set("q", needle);
     if (deposited !== "any") sp.set("deposited", deposited);
     if (contact !== "any") sp.set("contact", contact);
+    if (rSort.sort !== "last_contact") sp.set("sort", rSort.sort);
+    if (rSort.dir !== "desc") sp.set("dir", rSort.dir);
     fetch(`/api/audience/run-numbers?${sp}`, { cache: "no-store", signal: ctrl.signal })
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((j: RunNumbersResponse) => { setData(j); setError(null); })
       .catch((e: unknown) => { if (!(e instanceof Error && e.name === "AbortError")) setError(e instanceof Error ? e.message : "Failed to load numbers"); });
     return () => ctrl.abort();
-  }, [campaignId, page, needle, deposited, contact]);
+  }, [campaignId, page, needle, deposited, contact, rSort]);
   const rows = data?.rows ?? [];
   const filtered = deposited !== "any" || contact !== "any";
   const total = data?.total ?? 0;
@@ -393,10 +427,10 @@ function RunNumbers({ campaignId }: { campaignId: string }) {
           <thead>
             <tr className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-3)]">
               <th className="text-left py-1.5 pr-3 font-semibold">Member</th>
-              <th className="text-left py-1.5 pr-3 font-semibold">Number</th>
+              <SortHead label="Number" k="phone" sort={rSort.sort} dir={rSort.dir} onSort={sortBy} />
               <th className="text-left py-1.5 pr-3 font-semibold">Outcome</th>
-              <th className="text-right py-1.5 pr-3 font-semibold whitespace-nowrap">Deposited after this run</th>
-              <th className="text-right py-1.5 font-semibold">Attempted</th>
+              <SortHead label="Deposited after this run" k="amount" sort={rSort.sort} dir={rSort.dir} onSort={sortBy} right />
+              <SortHead label="Attempted" k="last_contact" sort={rSort.sort} dir={rSort.dir} onSort={sortBy} right />
             </tr>
           </thead>
           <tbody>

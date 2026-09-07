@@ -5,7 +5,7 @@ import { deriveAttemptTag, type DashCallRow } from "@/lib/dashboardAnalytics";
 import { DOT_OF, type Dot } from "@/lib/audienceLane";
 
 /**
- * GET /api/audience/run-numbers?campaign=&page=&q=&deposited=&contact=
+ * GET /api/audience/run-numbers?campaign=&page=&q=&deposited=&contact=&sort=&dir=
  *
  * "Numbers on this run": the players of ONE campaign run for the Audience tab's family expand
  * (mockup 2026-08-25, `numbers()`), ten to a page (Jasiel: 10 per page, not 50), newest contact
@@ -26,6 +26,7 @@ const PAGE_SIZE = 10;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DEPOSITED = new Set(["any", "after", "before", "none", "unknown"]);
 const CONTACT = new Set(["any", "reached", "texted", "delivered", "never"]);
+const SORT = new Set(["last_contact", "first_contact", "amount", "calls", "phone"]);
 
 export interface RunNumberRow {
   phone: string;
@@ -71,6 +72,8 @@ export async function GET(request: NextRequest) {
   const q = (sp.get("q") ?? "").trim().slice(0, 60).replace(/[%_\\]/g, "");
   const deposited = DEPOSITED.has(sp.get("deposited") ?? "") ? (sp.get("deposited") as string) : "any";
   const contact = CONTACT.has(sp.get("contact") ?? "") ? (sp.get("contact") as string) : "any";
+  const sort = SORT.has(sp.get("sort") ?? "") ? (sp.get("sort") as string) : "last_contact";
+  const dir = sp.get("dir") === "asc" ? "asc" : "desc";
 
   try {
     const { data: camp, error: campErr } = await supabaseAdmin
@@ -91,7 +94,8 @@ export async function GET(request: NextRequest) {
       p_contact: contact,
       p_family_ids: null,
       p_q: q || null,
-      p_sort: "last_contact",
+      p_sort: sort,
+      p_dir: dir,
       p_limit: PAGE_SIZE,
       p_offset: (page - 1) * PAGE_SIZE,
     });

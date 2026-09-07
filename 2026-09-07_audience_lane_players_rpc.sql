@@ -1,5 +1,7 @@
--- 2026-09-07 Audience lane PLAYERS query + deposit totals per currency — v2, apply in one paste
--- (re-runnable: DROP then CREATE; the v1 of the same evening timed out on All brands, see PERFORMANCE).
+-- 2026-09-07 Audience lane PLAYERS query + deposit totals per currency — v3, apply in one paste
+-- (re-runnable: DROPs the v2 10-argument signature, then CREATE). v3 adds column sorting: p_dir and
+-- eight sort keys (Jasiel 2026-09-07: "sorting in the columns"). v1 of the same evening timed out on
+-- All brands, see PERFORMANCE.
 -- Companions to audience_lane_reach / audience_lane_deposits.
 --
 -- WHY. The Audience tab's Player activity list was a SAMPLE (the 100 most recently contacted players,
@@ -30,7 +32,9 @@
 --   p_contact    any | reached | texted | delivered | never (never reached, dialled or not)
 --   p_family_ids NULL = any; else the player holds a number in one of these campaigns
 --   p_q          NULL = none; else phone or name contains it (ILIKE)
---   p_sort       last_contact (default) | last_deposit | amount   (all descending, phone as tiebreak)
+--   p_sort       last_contact (default) | first_contact | last_deposit | first_deposit | amount (EUR after
+--                contact) | lag (first contact to first deposit after it) | calls | phone
+--   p_dir        desc (default) | asc. NULLs sort last either way; phone is the tiebreak, in p_dir's order.
 --
 -- PERFORMANCE (measured 2026-09-07 against prod). v1 joined identities and deposits to EVERY player of
 -- the lane and filtered afterwards; the cost tracked the players surviving the contact window before
@@ -49,6 +53,7 @@
 CREATE INDEX IF NOT EXISTS realtime_seen_members_phone_idx ON public.realtime_seen_members (phone_e164);
 
 DROP FUNCTION IF EXISTS public.audience_lane_players(uuid[], timestamptz, timestamptz, text, text, uuid[], text, text, int, int);
+DROP FUNCTION IF EXISTS public.audience_lane_players(uuid[], timestamptz, timestamptz, text, text, uuid[], text, text, text, int, int);
 CREATE FUNCTION public.audience_lane_players(
   p_campaign_ids uuid[],
   p_from timestamptz,
@@ -58,6 +63,7 @@ CREATE FUNCTION public.audience_lane_players(
   p_family_ids uuid[],
   p_q text,
   p_sort text,
+  p_dir text,
   p_limit int,
   p_offset int
 )
@@ -240,14 +246,32 @@ LANGUAGE sql STABLE AS $$
          f.dep_after_in_window, f.dep_after_in_window_eur,
          COUNT(*) OVER () AS total_count
   FROM filtered f
+  -- One sort key per type (a timestamp, a number), picked by p_sort; the other type's expression is
+  -- NULL for every row and sorts as a no-op. Direction is applied by duplicating each key, one ASC
+  -- and one DESC, with the other side NULL. NULLs last both ways: a player with no deposit sits at
+  -- the bottom whether the money column is sorted up or down.
   ORDER BY
-    CASE WHEN p_sort = 'last_deposit' THEN f.last_dep_at END DESC NULLS LAST,
-    CASE WHEN p_sort = 'amount' THEN f.dep_after_eur END DESC NULLS LAST,
-    f.last_at DESC NULLS LAST,
-    f.phone_e164
+    CASE WHEN p_dir = 'asc' THEN
+      CASE p_sort WHEN 'first_contact' THEN f.first_at WHEN 'last_deposit' THEN f.last_dep_at WHEN 'first_deposit' THEN f.first_dep_after_at
+                  WHEN 'amount' THEN NULL WHEN 'calls' THEN NULL WHEN 'lag' THEN NULL WHEN 'phone' THEN NULL ELSE f.last_at END
+    END ASC NULLS LAST,
+    CASE WHEN p_dir IS DISTINCT FROM 'asc' THEN
+      CASE p_sort WHEN 'first_contact' THEN f.first_at WHEN 'last_deposit' THEN f.last_dep_at WHEN 'first_deposit' THEN f.first_dep_after_at
+                  WHEN 'amount' THEN NULL WHEN 'calls' THEN NULL WHEN 'lag' THEN NULL WHEN 'phone' THEN NULL ELSE f.last_at END
+    END DESC NULLS LAST,
+    CASE WHEN p_dir = 'asc' THEN
+      CASE p_sort WHEN 'amount' THEN f.dep_after_eur WHEN 'calls' THEN f.calls::numeric
+                  WHEN 'lag' THEN EXTRACT(EPOCH FROM (f.first_dep_after_at - f.first_at)) END
+    END ASC NULLS LAST,
+    CASE WHEN p_dir IS DISTINCT FROM 'asc' THEN
+      CASE p_sort WHEN 'amount' THEN f.dep_after_eur WHEN 'calls' THEN f.calls::numeric
+                  WHEN 'lag' THEN EXTRACT(EPOCH FROM (f.first_dep_after_at - f.first_at)) END
+    END DESC NULLS LAST,
+    CASE WHEN p_dir = 'asc' THEN f.phone_e164 END ASC,
+    CASE WHEN p_dir IS DISTINCT FROM 'asc' THEN f.phone_e164 END DESC
   LIMIT p_limit OFFSET p_offset;
 $$;
-ALTER FUNCTION public.audience_lane_players(uuid[], timestamptz, timestamptz, text, text, uuid[], text, text, int, int) SET enable_nestloop = off;
+ALTER FUNCTION public.audience_lane_players(uuid[], timestamptz, timestamptz, text, text, uuid[], text, text, text, int, int) SET enable_nestloop = off;
 
 -- Deposit totals per CURRENCY for the money strip: after-contact deposits inside the window, counted in
 -- deposits, distinct players, the local amount (never summed across currencies) and the CRM's

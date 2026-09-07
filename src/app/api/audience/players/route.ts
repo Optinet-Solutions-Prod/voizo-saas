@@ -23,7 +23,8 @@ import { campaignLabeller, familyKeyOf, laneCampaignIds, DOT_OF, type Dot, type 
  * FILTERS (see the SQL file for the exact rules):
  *   deposited  any | after | before | none | unknown       contact  any | reached | texted | delivered | never
  *   family     a family key from /api/audience/reach       q        phone or name contains
- *   sort       last_contact | last_deposit | amount        page     1-based, 25 per page
+ *   sort       last_contact | first_contact | last_deposit | first_deposit | amount | lag | calls | phone
+ *   dir        desc (default) | asc                      page     1-based, 25 per page
  * THE WINDOW is the event the filter is about: deposit dates under deposited=after, last contact
  * otherwise. `from`/`to` are YYYY-MM-DD (to inclusive); `range=lifetime` with no dates = all time.
  *
@@ -43,12 +44,14 @@ const RPC_PAGE = 1_000;
 const DOTS = 3;
 const DEPOSITED = new Set(["any", "after", "before", "none", "unknown"]);
 const CONTACT = new Set(["any", "reached", "texted", "delivered", "never"]);
-const SORT = new Set(["last_contact", "last_deposit", "amount"]);
+const SORT = new Set(["last_contact", "first_contact", "last_deposit", "first_deposit", "amount", "lag", "calls", "phone"]);
+const DIR = new Set(["asc", "desc"]);
 
 export type { Dot };
 export type Deposited = "any" | "after" | "before" | "none" | "unknown";
 export type Contact = "any" | "reached" | "texted" | "delivered" | "never";
-export type PlayerSort = "last_contact" | "last_deposit" | "amount";
+export type PlayerSort = "last_contact" | "first_contact" | "last_deposit" | "first_deposit" | "amount" | "lag" | "calls" | "phone";
+export type SortDir = "asc" | "desc";
 
 export interface PlayerEvent {
   at: string;
@@ -134,6 +137,7 @@ export async function GET(request: NextRequest) {
   const deposited = pick<Deposited>(sp.get("deposited"), DEPOSITED, "any");
   const contact = pick<Contact>(sp.get("contact"), CONTACT, "any");
   const sort = pick<PlayerSort>(sp.get("sort"), SORT, "last_contact");
+  const dir = pick<SortDir>(sp.get("dir"), DIR, "desc");
   const familyKey = (sp.get("family") ?? "").trim().slice(0, 120);
   const q = (sp.get("q") ?? "").trim().slice(0, 60).replace(/[%_\\]/g, "");
   const page = Math.max(1, Math.trunc(Number(sp.get("page")) || 1));
@@ -173,6 +177,7 @@ export async function GET(request: NextRequest) {
         p_family_ids: familyIds,
         p_q: q || null,
         p_sort: sort,
+        p_dir: dir,
         p_limit: limit,
         p_offset: offset,
       });

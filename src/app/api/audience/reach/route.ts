@@ -198,7 +198,7 @@ export async function GET(request: NextRequest) {
     const depositorsRpc = async (fromIso: string, toIso: string) => {
       const { data, error } = await supabaseAdmin.rpc("audience_lane_players", {
         p_campaign_ids: ids, p_from: fromIso, p_to: toIso,
-        p_deposited: "after", p_contact: "any", p_family_ids: null, p_q: null, p_sort: "last_contact", p_limit: 1, p_offset: 0,
+        p_deposited: "after", p_contact: "any", p_family_ids: null, p_q: null, p_sort: "last_contact", p_dir: "desc", p_limit: 1, p_offset: 0,
       });
       if (error) throw new Error(error.message);
       const first = ((data ?? []) as { total_count: number | string }[])[0];

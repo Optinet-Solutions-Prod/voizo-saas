@@ -161,6 +161,7 @@ export default function AudiencePage() {
     if (filters.contact !== "any") p.set("contact", filters.contact);
     if (filters.family) p.set("family", filters.family);
     if (filters.sort !== "last_contact") p.set("sort", filters.sort);
+    if (filters.dir !== "desc") p.set("dir", filters.dir);
     if (needle) p.set("q", needle);
     return p.toString();
   })();
