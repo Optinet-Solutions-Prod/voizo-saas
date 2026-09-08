@@ -605,6 +605,34 @@ function SmsMessagesModal({ texts, pulledAt, phone, onClose }: { texts: PlayerSm
 
 type SmsState = { status: "loading" } | { status: "ready"; data: PlayerSmsResponse } | { status: "error"; message: string; detail: string };
 
+// Why no text went out, in the operator's words (Jasiel 2026-09-08: "we spoke but why didn't we
+// send SMS?"). The reason is decideSmsDispatch's own word for the player's latest call, replayed by
+// the player-sms route; the words are the drawer's attempt vocabulary.
+const SMS_WHY_WORDS: Record<string, string> = {
+  early_hangup: "hung up early",
+  voicemail: "voicemail",
+  voicemail_redial_first: "voicemail",
+  silent_pickup: "answered, no conversation",
+  not_reached: "never connected",
+  agent_timeout: "agent timed out",
+  opted_out_on_call: "asked not to be contacted",
+  customer_declined_sms: "declined a text",
+  no_human_conversation: "no conversation",
+};
+const SMS_MODE_WORDS: Record<string, string> = {
+  optin_reached_only: "a real conversation",
+  optin_any_pickup: "any pickup",
+  registered_optin: "a conversation with a registered player",
+  verbal_yes: "a spoken yes",
+};
+const smsWhyLine = (w: PlayerSmsResponse["why"]): { words: string; hint: string } | null => {
+  if (!w) return null;
+  if (!w.configured) return { words: "no text set on this campaign", hint: "This campaign has SMS off or no message written, so no call could have produced a text." };
+  if (w.attempt) return { words: "a text was expected", hint: "The last call qualified for a text under this campaign's rule, but none was sent. Worth a look." };
+  const words = SMS_WHY_WORDS[w.reason] ?? w.reason.replace(/_/g, " ");
+  return { words, hint: `The last call${w.lastCallAt ? ` on ${mmdd(w.lastCallAt)}` : ""} was read as "${words}". This campaign texts only after ${SMS_MODE_WORDS[w.mode] ?? w.mode}.` };
+};
+
 /** The same drawer, opened from a phone number instead of a table row (Jasiel 2026-09-08: the
  *  numbers on a run in Campaign families were not clickable "the same way as the depositors"). It
  *  fetches the player's full row from the players query, scoped like the page and over ALL time so
@@ -787,9 +815,14 @@ function PlayerDrawer({ row: open, brandLabel, onClose }: { row: AudiencePlayerR
                 {`${sms.data.texts.length} ${sms.data.texts.length === 1 ? "text" : "texts"} · ${sms.data.texts.filter((t) => t.status === "delivered").length} delivered`}
               </button>
             ) : (
-              <div className="font-mono text-[12px] text-right text-[var(--text-1)]" aria-label="Texts sent" title={sms.status === "error" ? sms.detail : undefined}>
-                {open.smsDelivered ? `${open.smsDelivered} delivered` : open.smsSent ? "sent, not confirmed" : "none"}
-              </div>
+              (() => {
+                const why = sms.status === "ready" && !sms.data.texts.length ? smsWhyLine(sms.data.why) : null;
+                return (
+                  <div className="font-mono text-[12px] text-right text-[var(--text-1)]" aria-label="Texts sent" title={sms.status === "error" ? sms.detail : why?.hint}>
+                    {open.smsDelivered ? `${open.smsDelivered} delivered` : open.smsSent ? "sent, not confirmed" : why ? <>none <span className="text-[var(--text-4)]">· {why.words}</span></> : "none"}
+                  </div>
+                );
+              })()
             )}
             <div className="text-[var(--text-3)]">Deposited after contact</div>
             <div className={`font-mono text-[12px] text-right ${s === "after" ? "text-[var(--text-1)]" : "text-[var(--text-4)]"}`}>
