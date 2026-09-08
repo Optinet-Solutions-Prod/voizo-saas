@@ -20,8 +20,8 @@
 // The deposit cell has FOUR states, because the column never says less than it knows:
 //   after    credited, with the date        before   greyed, "not counted"; hiding it would be a lie
 //   none     a dash, never 0.00             no record  we hold no CRM identity, so we cannot say
-import { useEffect, useState } from "react";
-import { Download, Mail, X } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { Download, Mail, MessageSquare, X } from "lucide-react";
 import { CSV_BOM, csvCell, triggerDownload } from "@/lib/download";
 import Pagination from "@/components/Pagination";
 import StyledSelect from "@/components/StyledSelect";
@@ -32,6 +32,7 @@ import { ROW_COLOR } from "../analytics/PerformanceCards";
 import type { Dot } from "@/lib/audienceLane";
 import type { AudiencePlayerRow, AudiencePlayersResponse, Contact, Deposited, PlayerDeposit, PlayerEvent, PlayerSort } from "../api/audience/players/route";
 import type { PlayerCrmResponse } from "../api/audience/player-crm/route";
+import type { PlayerSmsResponse, PlayerSmsText } from "../api/audience/player-sms/route";
 
 export interface PlayerFilters {
   deposited: Deposited;
@@ -408,21 +409,12 @@ const crmStates = (m: CrmMsg): { word: string; at: string | null; hot: boolean }
   return [m.deliveredAt ? { word: "delivered", at: m.deliveredAt, hot: false } : m.sentAt ? { word: "sent", at: m.sentAt, hot: false } : { word: "queued", at: m.createdAt, hot: false }];
 };
 
-function CrmMessagesModal({ messages, pulledAt, phone, onClose }: { messages: CrmMsg[]; pulledAt: string | null; phone: string; onClose: () => void }) {
-  // Per-player export (Jasiel 2026-09-08: "can those data be extracted too?"): the same rows the
-  // popup shows, one line per message, every timestamp as a column so a spreadsheet can pivot by
-  // subject. Client-side from the data already in hand; the shared csvCell guards quoting and
-  // formula injection, the BOM keeps Excel's encoding detection honest.
-  const exportCsv = () => {
-    const head = ["day_utc", "time_utc", "type", "subject", "created_at", "sent_at", "delivered_at", "opened_at", "clicked_at", "failed_at", "interaction"];
-    const rows = messages.map((m) => [
-      (m.createdAt ?? "").slice(0, 10), m.createdAt ? hhmm(m.createdAt) : "", CRM_TYPE[m.type] ?? m.type, m.name,
-      m.createdAt, m.sentAt, m.deliveredAt, m.openedAt, m.clickedAt, m.failedAt,
-      m.failedAt ? "failed" : m.clickedAt ? "clicked" : m.openedAt ? "opened" : "",
-    ]);
-    const csv = CSV_BOM + [head, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n");
-    triggerDownload(new Blob([csv], { type: "text/csv;charset=utf-8;" }), `crm-messages_${phone.replace(/\D/g, "")}_${new Date().toISOString().slice(0, 10)}.csv`);
-  };
+// The centred popup both message lists share (the dashboard's recordings-popup chrome). One shell,
+// two lists: Customer.io's messages and the texts we sent through Mobivate.
+function PopupShell({ label, icon, title, meta, subtitle, onExport, exportLabel, onClose, children }: {
+  label: string; icon: ReactNode; title: string; meta: string; subtitle: string;
+  onExport: () => void; exportLabel: string; onClose: () => void; children: ReactNode;
+}) {
   useEffect(() => {
     // The players list closes the DRAWER on Escape from a window listener; document listeners run
     // first in the bubble, so stopping here makes Escape close only this popup. Second Escape, drawer.
@@ -430,40 +422,75 @@ function CrmMessagesModal({ messages, pulledAt, phone, onClose }: { messages: Cr
     document.addEventListener("keydown", h);
     return () => document.removeEventListener("keydown", h);
   }, [onClose]);
-  const opened = messages.filter((m) => m.openedAt).length;
-  const clicked = messages.filter((m) => m.clickedAt).length;
-  const byType = [...messages.reduce((acc, m) => acc.set(m.type, (acc.get(m.type) ?? 0) + 1), new Map<string, number>())]
-    .sort((a, b) => b[1] - a[1]).map(([t, n]) => `${n} ${CRM_TYPE[t] ?? t}`).join(" · ");
-  // newest first, grouped by UTC day like the journey
-  const days: { day: string; items: CrmMsg[] }[] = [];
-  for (const m of [...messages].sort((p, q) => ((p.createdAt ?? "") < (q.createdAt ?? "") ? 1 : -1))) {
-    const key = (m.createdAt ?? "").slice(0, 10);
-    const last = days[days.length - 1];
-    if (last && last.day === key) last.items.push(m); else days.push({ day: key, items: [m] });
-  }
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60" onClick={onClose}>
-      <div role="dialog" aria-label="CRM messages" className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+      <div role="dialog" aria-label={label} className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-[var(--border)]">
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-[var(--text-1)]">
-              <Mail size={15} className="shrink-0" />
-              <span className="font-semibold">{messages.length.toLocaleString("en-US")} CRM messages</span>
-              <span className="font-mono text-[11.5px] text-[var(--text-3)]">· {opened} opened · {clicked} clicked</span>
+              {icon}
+              <span className="font-semibold">{title}</span>
+              <span className="font-mono text-[11.5px] text-[var(--text-3)]">{meta}</span>
             </div>
-            <p className="text-[11px] text-[var(--text-3)] mt-1">
-              Everything Customer.io sent this player{byType ? ` (${byType})` : ""}, newest first, read live{pulledAt ? ` at ${hhmm(pulledAt)} UTC` : ""}. Opened and clicked count people; opens by mail scanners never count.
-            </p>
+            <p className="text-[11px] text-[var(--text-3)] mt-1">{subtitle}</p>
           </div>
           <div className="flex items-center gap-3 shrink-0">
-            <button type="button" onClick={exportCsv} aria-label="Export CRM messages as CSV" title="One row per message, every timestamp as a column, opens in Excel"
+            <button type="button" onClick={onExport} aria-label={exportLabel} title="One row per message, every timestamp as a column, opens in Excel"
               className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-md border border-[var(--border)] text-[var(--text-2)] hover:text-[var(--text-1)] hover:border-[var(--border-2)] transition-colors">
               <Download size={12} /> Export CSV
             </button>
             <button type="button" onClick={onClose} aria-label="Close" className="text-[var(--text-3)] hover:text-[var(--text-1)] transition-colors"><X size={18} /></button>
           </div>
         </div>
-        <div className="px-5 py-3 overflow-y-auto" aria-label="CRM message list">
+        <div className="px-5 py-3 overflow-y-auto" aria-label={`${label} list`}>{children}</div>
+      </div>
+    </div>
+  );
+}
+
+/** Newest first, grouped by UTC day like the journey. */
+function groupByDay<T>(items: T[], at: (x: T) => string | null): { day: string; items: T[] }[] {
+  const days: { day: string; items: T[] }[] = [];
+  for (const m of [...items].sort((p, q) => ((at(p) ?? "") < (at(q) ?? "") ? 1 : -1))) {
+    const key = (at(m) ?? "").slice(0, 10);
+    const last = days[days.length - 1];
+    if (last && last.day === key) last.items.push(m); else days.push({ day: key, items: [m] });
+  }
+  return days;
+}
+const DayHead = ({ day }: { day: string }) => (
+  <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-4)] py-1">{day ? dayLabel(`${day}T00:00:00Z`) : "Undated"}</div>
+);
+const downloadCsv = (head: string[], rows: (string | number | null | undefined)[][], name: string) => {
+  const csv = CSV_BOM + [head, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n");
+  triggerDownload(new Blob([csv], { type: "text/csv;charset=utf-8;" }), name);
+};
+
+function CrmMessagesModal({ messages, pulledAt, phone, onClose }: { messages: CrmMsg[]; pulledAt: string | null; phone: string; onClose: () => void }) {
+  // Per-player export (Jasiel 2026-09-08: "can those data be extracted too?"): the same rows the
+  // popup shows, one line per message, every timestamp as a column so a spreadsheet can pivot by
+  // subject. Client-side from the data already in hand; the shared csvCell guards quoting and
+  // formula injection, the BOM keeps Excel's encoding detection honest.
+  const exportCsv = () => downloadCsv(
+    ["day_utc", "time_utc", "type", "subject", "created_at", "sent_at", "delivered_at", "opened_at", "clicked_at", "failed_at", "interaction"],
+    messages.map((m) => [
+      (m.createdAt ?? "").slice(0, 10), m.createdAt ? hhmm(m.createdAt) : "", CRM_TYPE[m.type] ?? m.type, m.name,
+      m.createdAt, m.sentAt, m.deliveredAt, m.openedAt, m.clickedAt, m.failedAt,
+      m.failedAt ? "failed" : m.clickedAt ? "clicked" : m.openedAt ? "opened" : "",
+    ]),
+    `crm-messages_${phone.replace(/\D/g, "")}_${new Date().toISOString().slice(0, 10)}.csv`,
+  );
+  const opened = messages.filter((m) => m.openedAt).length;
+  const clicked = messages.filter((m) => m.clickedAt).length;
+  const byType = [...messages.reduce((acc, m) => acc.set(m.type, (acc.get(m.type) ?? 0) + 1), new Map<string, number>())]
+    .sort((a, b) => b[1] - a[1]).map(([t, n]) => `${n} ${CRM_TYPE[t] ?? t}`).join(" · ");
+  const days = groupByDay(messages, (m) => m.createdAt);
+  return (
+    <PopupShell label="CRM messages" icon={<Mail size={15} className="shrink-0" />}
+      title={`${messages.length.toLocaleString("en-US")} CRM messages`} meta={`· ${opened} opened · ${clicked} clicked`}
+      subtitle={`Everything Customer.io sent this player${byType ? ` (${byType})` : ""}, newest first, read live${pulledAt ? ` at ${hhmm(pulledAt)} UTC` : ""}. Opened and clicked count people; opens by mail scanners never count.`}
+      onExport={exportCsv} exportLabel="Export CRM messages as CSV" onClose={onClose}>
+      <>
           {days.map(({ day, items }) => (
             <section key={day || "undated"} className="mb-3">
               <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-4)] py-1">{day ? dayLabel(`${day}T00:00:00Z`) : "Undated"}</div>
@@ -488,15 +515,92 @@ function CrmMessagesModal({ messages, pulledAt, phone, onClose }: { messages: Cr
               })}
             </section>
           ))}
-        </div>
-      </div>
-    </div>
+      </>
+    </PopupShell>
   );
 }
+
+// ── the texts WE sent, through Mobivate (Jasiel 2026-09-08: "how about the messages we sent? that's
+// important too"). Our own rows: the body, the sender, the receipt, the failure reason, and price/parts
+// once the nightly Mobivate reconcile has filled them. "sent, not confirmed" is the honest word for a
+// text with no receipt: Mobivate sends none when it refuses a text at the door.
+const SMS_STATE: Record<string, { word: string; hot: boolean; bad: boolean }> = {
+  delivered: { word: "delivered", hot: true, bad: false },
+  sent: { word: "sent, not confirmed", hot: false, bad: false },
+  queued: { word: "queued", hot: false, bad: false },
+  undelivered: { word: "undelivered", hot: false, bad: true },
+  failed: { word: "failed", hot: false, bad: true },
+};
+const smsState = (t: PlayerSmsText) => SMS_STATE[t.status] ?? { word: t.status.replace(/_/g, " "), hot: false, bad: false };
+const money4 = (n: number) => `EUR ${n.toFixed(3).replace(/0$/, "")}`;
+
+function SmsMessagesModal({ texts, pulledAt, phone, onClose }: { texts: PlayerSmsText[]; pulledAt: string | null; phone: string; onClose: () => void }) {
+  const delivered = texts.filter((t) => t.status === "delivered").length;
+  const exportCsv = () => downloadCsv(
+    ["day_utc", "time_utc", "sender", "campaign", "body", "status", "state", "error", "sent_at", "updated_at", "price_eur", "parts"],
+    texts.map((t) => [(t.at ?? "").slice(0, 10), hhmm(t.at), t.sender, t.campaign, t.body, t.status, smsState(t).word, t.error, t.at, t.updatedAt, t.priceEur, t.parts]),
+    `texts-we-sent_${phone.replace(/\D/g, "")}_${new Date().toISOString().slice(0, 10)}.csv`,
+  );
+  const spent = texts.reduce((a, t) => a + (t.priceEur ?? 0), 0);
+  const priced = texts.filter((t) => t.priceEur != null).length;
+  const days = groupByDay(texts, (t) => t.at);
+  return (
+    <PopupShell label="Texts we sent" icon={<MessageSquare size={15} className="shrink-0" />}
+      title={`${texts.length} ${texts.length === 1 ? "text" : "texts"} we sent`} meta={`· ${delivered} delivered${priced ? ` · ${money4(spent)}` : ""}`}
+      subtitle={`Sent by Voizo through Mobivate, newest first, from our own records${pulledAt ? ` read at ${hhmm(pulledAt)} UTC` : ""}. Delivered means the handset confirmed receipt. "Sent, not confirmed" means no receipt came back; Mobivate sends none when it refuses a text at the door, and the nightly reconcile closes those within a day.${priced ? "" : " Price per text appears once that reconcile has run."}`}
+      onExport={exportCsv} exportLabel="Export texts as CSV" onClose={onClose}>
+      {days.map(({ day, items }) => (
+        <section key={day || "undated"} className="mb-3">
+          <DayHead day={day} />
+          {items.map((t) => {
+            const st = smsState(t);
+            return (
+              <div key={t.id} role="row" className={`grid grid-cols-[44px_1fr_auto] items-start gap-x-3 py-[7px] border-t border-[var(--border)] text-[12px] ${st.hot ? "" : "text-[var(--text-3)]"}`}>
+                <span className="font-mono text-[10.5px] text-[var(--text-4)] pt-px">{hhmm(t.at)}</span>
+                <span className="min-w-0">
+                  <span className="flex items-center gap-2 mb-[3px]">
+                    {t.sender && <span className="text-[10px] px-[6px] py-px rounded-full border border-[var(--border-2)] text-[var(--text-4)] whitespace-nowrap">{t.sender}</span>}
+                    <span className="text-[10.5px] text-[var(--text-4)] truncate">{t.campaign}</span>
+                  </span>
+                  <span className={`block leading-snug ${st.hot ? "text-[var(--text-1)]" : ""}`}>{t.body}</span>
+                </span>
+                <span className="flex flex-col items-end gap-1 whitespace-nowrap pt-px">
+                  <span aria-label={st.word} title={t.error ?? undefined}
+                    className={`text-[10px] px-[7px] py-px rounded-full border ${st.hot || st.bad ? "" : "border-[var(--border-2)] text-[var(--text-4)]"}`}
+                    style={st.hot ? { color: ROW_COLOR.reached, borderColor: ROW_COLOR.reached } : st.bad ? { color: ROW_COLOR.declined, borderColor: ROW_COLOR.declined } : undefined}>
+                    {st.word}{st.hot && t.updatedAt ? ` ${hhmm(t.updatedAt)}` : ""}
+                  </span>
+                  {(t.priceEur != null || t.parts != null) && (
+                    <span className="font-mono text-[10px] text-[var(--text-4)]">{[t.priceEur != null ? money4(t.priceEur) : null, t.parts != null ? `${t.parts} ${t.parts === 1 ? "part" : "parts"}` : null].filter(Boolean).join(" · ")}</span>
+                  )}
+                </span>
+              </div>
+            );
+          })}
+        </section>
+      ))}
+    </PopupShell>
+  );
+}
+
+type SmsState = { status: "loading" } | { status: "ready"; data: PlayerSmsResponse } | { status: "error"; message: string; detail: string };
 
 function PlayerDrawer({ row: open, brandLabel, onClose }: { row: AudiencePlayerRow; brandLabel: string; onClose: () => void }) {
   const [crm, setCrm] = useState<CrmState>(open.cio.length ? { status: "loading" } : { status: "none" });
   const [crmOpen, setCrmOpen] = useState(false);
+  const [sms, setSms] = useState<SmsState>({ status: "loading" });
+  const [smsOpen, setSmsOpen] = useState(false);
+  useEffect(() => {
+    const ctrl = new AbortController();
+    fetch(`/api/audience/player-sms?phone=${encodeURIComponent(open.phone)}`, { cache: "no-store", signal: ctrl.signal })
+      .then(async (r) => {
+        if (!r.ok) { const b = (await r.json().catch(() => null)) as { error?: unknown } | null; throw new Error(b?.error ? String(b.error) : `HTTP ${r.status}`); }
+        return r.json() as Promise<PlayerSmsResponse>;
+      })
+      .then((d) => setSms({ status: "ready", data: d }))
+      .catch((e: unknown) => { if (!(e instanceof Error && e.name === "AbortError")) setSms({ status: "error", message: "Our text records did not load just now", detail: e instanceof Error ? e.message : String(e) }); });
+    return () => ctrl.abort();
+  }, [open.phone]);
   useEffect(() => {
     if (!open.cio.length) return;
     const ctrl = new AbortController();
@@ -597,9 +701,17 @@ function PlayerDrawer({ row: open, brandLabel, onClose }: { row: AudiencePlayerR
           <div className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-[7px] mb-5 text-[11.5px]">
             <div className="text-[var(--text-3)]">Calls</div><div className="font-mono text-[12px] text-right text-[var(--text-1)]">{open.calls}</div>
             <div className="text-[var(--text-3)]">SMS</div>
-            <div className="font-mono text-[12px] text-right text-[var(--text-1)]">
-              {open.smsDelivered ? `${open.smsDelivered} delivered` : open.smsSent ? "sent, not confirmed" : "none"}
-            </div>
+            {sms.status === "ready" && sms.data.texts.length ? (
+              // The summary opens the full list: every text we sent, the words, and whether it arrived.
+              <button type="button" onClick={() => setSmsOpen(true)} aria-label="Texts we sent" aria-haspopup="dialog" title="Every text we sent this player, with the message and its delivery state"
+                className="font-mono text-[12px] text-right text-[var(--text-1)] underline decoration-dotted decoration-[var(--text-4)] underline-offset-[3px] hover:decoration-[var(--text-2)] cursor-pointer justify-self-end">
+                {`${sms.data.texts.length} ${sms.data.texts.length === 1 ? "text" : "texts"} · ${sms.data.texts.filter((t) => t.status === "delivered").length} delivered`}
+              </button>
+            ) : (
+              <div className="font-mono text-[12px] text-right text-[var(--text-1)]" aria-label="Texts we sent" title={sms.status === "error" ? sms.detail : undefined}>
+                {open.smsDelivered ? `${open.smsDelivered} delivered` : open.smsSent ? "sent, not confirmed" : "none"}
+              </div>
+            )}
             <div className="text-[var(--text-3)]">Deposited after contact</div>
             <div className={`font-mono text-[12px] text-right ${s === "after" ? "text-[var(--text-1)]" : "text-[var(--text-4)]"}`}>
               {s === "unknown" ? "no record" : s === "none" ? "none" : s === "before" ? "before contact only" : sums(open.deposits.filter((d) => d.afterContact)).map(([c, n]) => money(c, n)).join(" + ")}
@@ -655,6 +767,7 @@ function PlayerDrawer({ row: open, brandLabel, onClose }: { row: AudiencePlayerR
         </div>
       </aside>
       {crmOpen && <CrmMessagesModal messages={messages} pulledAt={pulledAt} phone={open.phone} onClose={() => setCrmOpen(false)} />}
+      {smsOpen && sms.status === "ready" && <SmsMessagesModal texts={sms.data.texts} pulledAt={sms.data.pulledAt} phone={open.phone} onClose={() => setSmsOpen(false)} />}
     </>
   );
 }
