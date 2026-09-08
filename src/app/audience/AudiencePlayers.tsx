@@ -21,7 +21,7 @@
 //   after    credited, with the date        before   greyed, "not counted"; hiding it would be a lie
 //   none     a dash, never 0.00             no record  we hold no CRM identity, so we cannot say
 import { useEffect, useState, type ReactNode } from "react";
-import { Download, Mail, MessageSquare, X } from "lucide-react";
+import { Download, Mail, MessageSquare, Search, X } from "lucide-react";
 import { CSV_BOM, csvCell, triggerDownload } from "@/lib/download";
 import Pagination from "@/components/Pagination";
 import StyledSelect from "@/components/StyledSelect";
@@ -141,12 +141,16 @@ function DepCell({ r }: { r: AudiencePlayerRow }) {
   return <td className="px-3 py-2 text-right text-[var(--text-4)]">—</td>;
 }
 
-export default function AudiencePlayers({ data, page, onPage, loading, showMarket, marketLabel, brandLabel, filters, onFilters, familyOptions, searching, onExport, exporting }: {
+export default function AudiencePlayers({ data, page, onPage, loading, showMarket, marketLabel, brandLabel, filters, onFilters, familyOptions, searching, onExport, exporting, query, onQuery }: {
   data: AudiencePlayersResponse | null;
   /** Export THIS list with THESE filters as CSV (the page owns the fetch; the button lives here,
    *  beside the filters it obeys, since 2026-09-08). */
   onExport: () => void;
   exporting: boolean;
+  /** The raw search box text; the page debounces it into the query. It only ever filtered this
+   *  table, so the box lives here beside the other filters (2026-09-08). */
+  query: string;
+  onQuery: (v: string) => void;
   page: number;
   onPage: (p: number) => void;
   loading: boolean;
@@ -216,6 +220,22 @@ export default function AudiencePlayers({ data, page, onPage, loading, showMarke
             <StyledSelect size="sm" prefix="Family:" options={[{ value: "", label: "All" }, ...familyOptions]} value={filters.family} onChange={(v) => set({ family: v })} placeholder="All" />
           </div>
           <div className="ml-auto flex items-center gap-2.5">
+            <label className="relative">
+              <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-4)] pointer-events-none" />
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => onQuery(e.target.value)}
+                placeholder="Phone or name"
+                aria-label="Search players"
+                className="pl-[26px] pr-6 py-1 w-[170px] text-[12px] rounded-md bg-[var(--bg-elevated)] border border-[var(--border)] text-[var(--text-1)] placeholder:text-[var(--text-4)] focus:outline-none focus:border-primary transition"
+              />
+              {query && (
+                <button type="button" aria-label="Clear the search" onClick={() => onQuery("")} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[var(--text-3)] hover:text-[var(--text-1)]">
+                  <X size={12} />
+                </button>
+              )}
+            </label>
             <span className="font-mono text-[11px] text-[var(--text-4)]" aria-label="Players shown">{loading && !data ? "" : total.toLocaleString("en-US")}</span>
             <button
               type="button"

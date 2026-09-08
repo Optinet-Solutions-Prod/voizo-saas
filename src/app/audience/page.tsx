@@ -27,7 +27,6 @@
 // brand, the market tab and the window. Read-only, no provider spend, nothing near the call or SMS path.
 
 import { useCallback, useEffect, useState } from "react";
-import { Search, X } from "lucide-react";
 import { loadSnapshot, saveSnapshot } from "@/lib/sessionSnapshot";
 import { useBrandScope } from "@/lib/brandScope";
 import { brandLabel } from "@/lib/campaignDisplay";
@@ -233,22 +232,8 @@ export default function AudiencePage() {
             );
           })}
         </div>
-        <label className="ml-auto relative">
-          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-4)] pointer-events-none" />
-          <input
-            type="search"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Phone or name"
-            aria-label="Search members"
-            className="pl-8 pr-7 py-1.5 w-[210px] text-[13px] rounded-[9px] bg-[var(--bg-elevated)] border border-[var(--border)] text-[var(--text-1)] placeholder:text-[var(--text-4)] focus:outline-none focus:border-primary transition"
-          />
-          {q && (
-            <button type="button" aria-label="Clear the search" onClick={() => setQ("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-3)] hover:text-[var(--text-1)]">
-              <X size={13} />
-            </button>
-          )}
-        </label>
+        {/* The search moved into the Player activity card with the Export button (Jasiel 2026-09-08):
+            it only ever filtered THAT table, so a box in the page header read as a page-wide search. */}
       </div>
 
       {/* The dashboard's range control (Campaign Performance's toolbar): Export first, then the
@@ -321,6 +306,8 @@ export default function AudiencePage() {
         data={players}
         onExport={exportPlayers}
         exporting={exporting}
+        query={q}
+        onQuery={setQ}
         page={page}
         onPage={setPage}
         loading={playersLoading}
