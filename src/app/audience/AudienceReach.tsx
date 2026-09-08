@@ -54,7 +54,7 @@ export function MembersStat({ reach, families, lanes, unavailable }: {
     <div className="px-5 py-3.5" aria-label="Members">
       <div className="flex items-center gap-[5px] text-[10px] uppercase tracking-[.07em] text-[var(--text-4)] mb-1.5">
         Members
-        <Info text="Every player ever loaded into this scope's campaigns, counted once by phone number however many campaigns they sat in." />
+        <Info text="Everyone loaded into these campaigns. Counted once per phone, even if they appear in several." />
       </div>
       <div className="font-mono text-[22px] font-medium leading-[1.1] tracking-[-0.02em] text-[var(--text-1)]">{reach ? fmt(reach.members) : unavailable ? "—" : <Pulse w="w-24" h="h-5" />}</div>
       <div className="mt-1 text-[11px] text-[var(--text-3)] min-h-[15px]">{sub}</div>
@@ -89,16 +89,16 @@ function Row({ label, n, members, color, note, pending, ariaLabel }: { label: st
 // something false. Proximity is not lift either (25 Aug: contacted and never-reached players
 // deposit at the same rate), so the note says so where the numbers are read.
 const TOUCH_ROWS: { bucket: LastTouchBucket["bucket"]; label: string; color: string; note: string }[] = [
-  { bucket: "call_spoke", label: "Spoke with us", color: ROW_COLOR.reached,
-    note: "The last thing before the deposit was a call that connected and ran 30 seconds or longer. The strongest contact evidence we hold, and still only evidence that it happened first." },
+  { bucket: "call_spoke", label: "Spoke", color: ROW_COLOR.reached,
+    note: "A call that connected and lasted 30 seconds or more." },
   { bucket: "sms_delivered", label: "Text delivered", color: ROW_COLOR.neutral,
-    note: "The last touch was a text the handset confirmed receiving. Whether the player read it or tapped the link is unknown: Mobivate has no click webhook registered." },
-  { bucket: "call", label: "We called", color: ROW_COLOR.unreachable,
-    note: "The last touch was a call attempt that did not become a conversation: no answer, voicemail, or a pickup under 30 seconds." },
-  { bucket: "sms", label: "We texted", color: ROW_COLOR.voicemail,
-    note: "The last touch was a text with no delivery receipt, so we do not know it arrived. Mobivate sends no receipt when it refuses a text at the door." },
-  { bucket: "none", label: "No touch we can see", color: ROW_COLOR.declined,
-    note: "No Voizo call or text in the look-back window. This is NOT 'organic'. We hold no record of CRM email, bonus or login activity, so anything the CRM did lands here. Measured 2026-09-08 this bucket is 72 percent at 7 days, and most of it is CRM activity we cannot read yet." },
+    note: "A text the phone confirmed it received. Whether they read it or tapped the link is unknown." },
+  { bucket: "call", label: "Called", color: ROW_COLOR.unreachable,
+    note: "A call that did not become a conversation: no answer, voicemail, or under 30 seconds." },
+  { bucket: "sms", label: "Texted", color: ROW_COLOR.voicemail,
+    note: "A text with no delivery confirmation, so it is not known whether it arrived." },
+  { bucket: "none", label: "No touch on record", color: ROW_COLOR.declined,
+    note: "No call or text on record in that window. This is not 'organic': CRM emails and bonuses are not visible here, so those land here too." },
 ];
 
 export function LastTouchCard({ lastTouch, unavailable }: { lastTouch: AudienceLastTouch | null; unavailable?: string }) {
@@ -112,7 +112,7 @@ export function LastTouchCard({ lastTouch, unavailable }: { lastTouch: AudienceL
       <div className="flex items-baseline gap-2.5 mb-0.5">
         <h2 className="text-[12.5px] font-medium text-[var(--text-2)] flex items-center gap-[5px]">
           What came before the deposit
-          <Info text={`Every deposit in this window, bucketed by the LAST Voizo touch in the ${windowWord} before it. This describes what happened first, never what caused it: the 25 August study found contacted and never-reached players deposit at the same rate, so only a holdout would show lift. Counted in deposits, not players; the player count sits beside each row.`} />
+          <Info text={`Each deposit in this window, matched to the last call or text before it, within ${windowWord}. Shows what came first, not what caused it.`} />
         </h2>
         <span className="ml-auto font-mono text-[10.5px] text-[var(--text-4)]">{lastTouch ? `${fmt(total)} deposits · last ${windowWord}` : ""}</span>
       </div>
@@ -130,14 +130,14 @@ export function LastTouchCard({ lastTouch, unavailable }: { lastTouch: AudienceL
           ))}
         </div>
       ) : total === 0 ? (
-        <p className="text-[11.5px] text-[var(--text-4)] py-3">No deposit in this window. An empty result is an answer.</p>
+        <p className="text-[11.5px] text-[var(--text-4)] py-3">No deposits in this window.</p>
       ) : (
         <>
           {TOUCH_ROWS.map((r) => (
             <Row key={r.bucket} label={r.label} n={byBucket.get(r.bucket)?.deposits ?? 0} members={total} color={r.color} note={r.note} />
           ))}
           <p className="mt-2 font-mono text-[10.5px] text-[var(--text-4)]">
-            {fmt(reached)} of {fmt(total)} deposits followed a Voizo touch within {windowWord}. Order, not cause.
+            {fmt(reached)} of {fmt(total)} deposits came after a call or text. Order, not cause.
           </p>
         </>
       )}
@@ -157,7 +157,7 @@ export function ReachCard({ reach, deposited, unavailable }: { reach: LaneReach 
       <div className="flex items-baseline gap-2.5 mb-0.5">
         <h2 className="text-[12.5px] font-medium text-[var(--text-2)] flex items-center gap-[5px]">
           Reach
-          <Info text="Share of every player ever loaded into this scope's campaigns that each channel reached, counted as distinct players, not rows or attempts. The bars are independent and overlap: a player can be in several. See the note below." />
+          <Info text="How many of those players each channel reached. Bars count people, not attempts, and they overlap: one player can be in several." />
         </h2>
         <span className="ml-auto font-mono text-[10.5px] text-[var(--text-4)]">{m ? `of ${fmt(m.members)} players ever loaded` : ""}</span>
       </div>
@@ -177,11 +177,11 @@ export function ReachCard({ reach, deposited, unavailable }: { reach: LaneReach 
       ) : (
         <>
           <Row label="Dialled" n={m.dialled} members={m.members} color={ROW_COLOR.unreachable}
-            note="At least one call attempt was placed. Reaching the handset is a separate question: that is the connect rate above." />
+            note="At least one call attempt. Whether it connected is the connect rate above." />
           <Row label="Reached" n={m.spoke_lean} members={m.members} color={ROW_COLOR.reached}
-            note="The call connected and did not go to an answering machine, the dashboard's Reached definition, from call data without transcripts. A dead-air pickup counts here where the transcript pass would call it silent." />
+            note="The call connected and was not voicemail. A pickup with nobody talking still counts here." />
           <Row label="Texted" n={m.texted} members={m.members} color={ROW_COLOR.neutral}
-            note="Sent at least one SMS. Not a subset of the row above; see the note below. The thin bar underneath is the texts themselves, by delivery receipt." />
+            note="At least one text sent. Not a subset of Reached: most texted players were never spoken to. The thin bar below is the texts." />
           {m.msgs > 0 && (
             <div className={`${TRACK} items-start pb-[7px]`}>
               <span />
@@ -192,27 +192,27 @@ export function ReachCard({ reach, deposited, unavailable }: { reach: LaneReach 
               </span>
               <span className="col-start-2 col-end-5 font-mono text-[10.5px] text-[var(--text-4)] flex items-center gap-[5px] flex-wrap mt-[5px]">
                 {fmt(m.msgs)} texts: {tp(m.msgs_delivered)} delivered · {tp(m.msgs_failed)} failed · {tp(m.msgs_unconfirmed)} unconfirmed · clicks not tracked
-                <Info text="The texts behind the row above, by Mobivate delivery receipt, counted in texts, not people. Delivered: the handset confirmed receipt, the only success. Failed: the carrier refused or could not deliver. Unconfirmed: no receipt yet. Mobivate sends none when it refuses a text at the door; a nightly read of its message history closes those within a day, so what stays here is genuinely unknown. Clicks: Mobivate counts taps only on links its own shortener rewrote and has no click webhook, so clicks are unknown, not zero." />
+                <Info text="The texts themselves, not people. Delivered: the phone confirmed it. Failed: the network refused it. Unconfirmed: nothing came back yet. Clicks: unknown, not zero, because Mobivate does not report them." />
               </span>
             </div>
           )}
           <Row label="Emailed" n={0} members={m.members} color={ROW_COLOR.voicemail} pending
-            note="Follow-up emails sent by Customer.io after our call. Voizo fires the event; the mail only goes out once a Customer.io campaign listens for it, and none does yet. Never shown as 0%, which would claim it ran and reached nobody." />
+            note="Follow-up emails after a call. The trigger is sent, but no Customer.io campaign listens for it yet, so nothing goes out. Shown as none yet, not 0%." />
           {deposited ? (
             <>
               <Row label="Deposited" n={deposited.players} members={m.members} color="var(--color-primary)" ariaLabel="Deposited after contact"
-                note="Players who made at least one deposit at or after our first call or text to them, as Customer.io reported it (the 25 Aug pull plus the live feed since 2 Sep). Deposits made before we contacted a player are not counted. Proximity is not causation: two studies found contacted and never-reached players deposit at the same rate." />
+                note="Players who deposited at or after the first call or text. Earlier deposits are left out. Order, not cause: contacted and never-reached players deposit at the same rate." />
               <div className={`${TRACK} items-start pb-[7px]`}>
                 <span />
                 <span className="col-start-2 col-end-5 font-mono text-[10.5px] text-[var(--text-4)] flex items-center gap-[5px] flex-wrap" aria-label="Gross deposited after contact">
                   {depCount ? <>{fmt(depCount)} deposits after contact: {grossLine(depTotals)} · EUR {Math.round(depEur).toLocaleString("en-US")} normalised</> : "no deposit after contact on record"}
-                  <Info text="Gross deposits per currency, never added across currencies; the EUR figure is the CRM's own normalisation of each deposit, summed. Gross volume, not attribution." />
+                  <Info text="Deposits per currency, never added together. The EUR line is the CRM's own conversion. Total money in, not money the calls caused." />
                 </span>
               </div>
             </>
           ) : (
             <Row label="Deposited" n={0} members={m.members} color="var(--color-primary)" pending ariaLabel="Deposited after contact"
-              note="Players who deposited at or after our first contact. Reads none yet until the deposit functions answer." />
+              note="Players who deposited at or after the first call or text." />
           )}
           <p className="mt-[11px] pt-2.5 border-t border-[var(--border)] text-[11.5px] text-[var(--text-3)] leading-normal">
             Not a funnel: {notReached == null ? "—" : `${notReached}%`} of texted players were never reached.
@@ -264,9 +264,9 @@ export function DepositsByDay({ deposits, unavailable }: { deposits: AudienceDep
   const before = totals.reduce((a, t) => a + t.before, 0);
   const coverageWords = cov
     ? [
-        cov.captureFrom && cov.captureTo ? `the one-off pull of 25 Aug covers ${shortDate(cov.captureFrom)} to ${shortDate(cov.captureTo)}` : "",
-        cov.liveFrom ? `the live feed started ${shortDate(cov.liveFrom)}` : "",
-      ].filter(Boolean).join(" and ")
+        cov.captureFrom && cov.captureTo ? `${shortDate(cov.captureFrom)} to ${shortDate(cov.captureTo)}` : "",
+        cov.liveFrom ? `${shortDate(cov.liveFrom)} onwards` : "",
+      ].filter(Boolean).join(", ")
     : "";
   // `value` may be several lines (one per currency): money is never summed across currencies, and a
   // truncated third currency (seen 2026-09-07: "NZ…") would read as a rounding of the first two.
@@ -278,9 +278,9 @@ export function DepositsByDay({ deposits, unavailable }: { deposits: AudienceDep
           {value.map((v, i) => <div key={v} className={i === 0 ? "text-[18px]" : "text-[14px] text-[var(--text-2)]"}>{v}</div>)}
         </div>
       ) : (
-        <div className="font-mono text-[18px] font-medium leading-[1.1] tracking-[-0.02em] text-[var(--text-1)] truncate">{value}</div>
+        <div className="font-mono text-[18px] font-medium leading-[1.1] tracking-[-0.02em] text-[var(--text-1)] truncate" title={typeof value === "string" ? value : undefined}>{value}</div>
       )}
-      {sub && <div className="mt-1 text-[11px] text-[var(--text-3)] truncate">{sub}</div>}
+      {sub && <div className="mt-1 text-[11px] text-[var(--text-3)] truncate" title={typeof sub === "string" ? sub : undefined}>{sub}</div>}
     </div>
   );
   const grossLines = [...totals].filter((t) => t.deposits > 0).sort((a, b) => b.amountEur - a.amountEur).map((t) => money0(t.currency, t.amountLocal));
@@ -300,20 +300,20 @@ export function DepositsByDay({ deposits, unavailable }: { deposits: AudienceDep
       {d && d.totals && (
         <div className="grid grid-cols-4 max-[820px]:grid-cols-2 border-b border-[var(--border)]" aria-label="Money in the window">
           {stat("Deposits", fmt(depCount), before ? `${fmt(before)} more before contact, not counted` : "after contact, in this window",
-            "Deposits made at or after our first call or text to the player, inside the window. Deposits made before we contacted a player are listed here in words and never counted.")}
+            "Deposits made at or after the first call or text, inside the window. Earlier ones are named below, never counted.")}
           {stat("Depositors", d.depositors == null ? "—" : fmt(d.depositors), depCount && d.depositors ? `${(depCount / d.depositors).toFixed(1)} deposits each` : undefined,
-            "Distinct players behind those deposits, counted once however many times or in how many currencies they deposited.")}
+            "How many different players made those deposits, counted once each.")}
           {stat("Gross", depCount && grossLines.length ? grossLines : "—", depCount ? `EUR ${Math.round(eur).toLocaleString("en-US")} normalised` : undefined,
-            "The deposited amounts per currency, never added across currencies. The EUR line is the CRM's own normalisation of each deposit, summed. Gross volume, not attribution.")}
+            "Amounts per currency, never added together. The EUR line is the CRM's own conversion.")}
           {stat("Average", depCount ? `EUR ${(eur / depCount).toFixed(2)}` : "—", depCount ? "per deposit, normalised" : undefined,
-            "EUR-normalised gross divided by the number of after-contact deposits in the window.")}
+            "The EUR total divided by the number of deposits in the window.")}
         </div>
       )}
       <div className="px-[18px] py-4">
         <div className="flex items-baseline gap-2.5 mb-0.5">
           <h2 className="text-[12.5px] font-medium text-[var(--text-2)] flex items-center gap-[5px]">
             Deposits by {weekly ? "week" : "day"}
-            <Info text={`Deposits made by players after our first call or text to them, counted on the ${weekly ? "week" : "day"} each deposit happened. ${weekly ? "Weeks run Sunday to Saturday; the window is too long for one bar a day. " : ""}Days marked not captured are outside what we hold${coverageWords ? `: ${coverageWords}` : ""}.`} />
+            <Info text={`Deposits made after the first call or text, counted on the ${weekly ? "week" : "day"} each deposit happened. ${weekly ? "Weeks run Sunday to Saturday. The window is too long for a bar a day. " : ""}Days marked not captured are outside the records${coverageWords ? `, which cover ${coverageWords}` : ""}.`} />
           </h2>
           <span className="ml-auto font-mono text-[10.5px] text-[var(--text-4)]">
             {d && days.length ? `${mmdd(days[0])} → ${mmdd(days[days.length - 1])} · ${fmt(total)} deposit${total === 1 ? "" : "s"}` : ""}

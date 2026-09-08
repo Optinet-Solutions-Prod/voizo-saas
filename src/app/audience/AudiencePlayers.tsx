@@ -134,7 +134,7 @@ function DepCell({ r }: { r: AudiencePlayerRow }) {
   if (s === "unknown") {
     return (
       <td className="px-3 py-2 text-right text-[11px] text-[var(--text-4)] whitespace-nowrap">
-        no record <Info text="We hold no Customer.io identity for this player, so we cannot say whether they deposited. This is not a zero." />
+        no record <Info text="No Customer.io record for this player, so this cannot be answered. Not a zero." />
       </td>
     );
   }
@@ -211,7 +211,7 @@ export default function AudiencePlayers({ data, page, onPage, loading, showMarke
           <h2 className="text-[12.5px] font-medium text-[var(--text-2)]">{onlyDep ? "Depositors" : "Player activity"}</h2>
           {onlyDep && (
             <span className="text-[11px] text-[var(--text-4)] flex items-center gap-1">
-              <Info text="Players who deposited after our first call or text to them, inside the window the range control sets, newest deposit first. Proximity is not causation: two independent studies found contacted and never-reached players deposit at the same rate. This view shows WHO touched each depositor and WHEN, so people judge with the evidence in front of them." />
+              <Info text="Players who deposited after the first call or text, newest first. Order, not cause: contacted and never-reached players deposit at the same rate." />
             </span>
           )}
           <div className="flex items-center gap-2 flex-wrap ml-1" aria-label="Player filters">
@@ -242,7 +242,7 @@ export default function AudiencePlayers({ data, page, onPage, loading, showMarke
               onClick={onExport}
               disabled={exporting || !data || total === 0}
               aria-label="Export players"
-              title={data ? `Export these ${total.toLocaleString("en-US")} players as CSV: this list with these filters, not just the page. Opens in Excel.` : "Loading…"}
+              title={data ? `Export all ${total.toLocaleString("en-US")} players in this list, not just this page. Opens in Excel.` : "Loading…"}
               className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium border border-[var(--border)] text-[var(--text-2)] hover:text-[var(--text-1)] hover:border-[var(--border-2)] transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Download size={12} /> {exporting ? "Exporting…" : "Export"}
@@ -273,7 +273,7 @@ export default function AudiencePlayers({ data, page, onPage, loading, showMarke
                         Deposited after contact
                         <span aria-hidden className={`text-[8px] ${filters.sort === "amount" ? "text-primary" : "text-[var(--text-4)] opacity-0 group-hover:opacity-70"}`}>{filters.sort === "amount" && filters.dir === "asc" ? "▲" : "▼"}</span>
                       </button>
-                      {" "}<Info text="Only deposits made after our first call or text to the player, as Customer.io reported them. Earlier deposits are shown greyed and not counted. A dash means no deposit on record; no record means we hold no identity to check." />
+                      {" "}<Info text="Deposits made after the first call or text. Earlier ones are greyed out and not counted. A dash means none on record." />
                     </th>
                     {head("Last contact", "last_contact", true, true)}
                   </>
@@ -311,7 +311,7 @@ export default function AudiencePlayers({ data, page, onPage, loading, showMarke
                       {showMarket && <td className="px-3 py-2 font-mono text-[11px] text-[var(--text-3)]">{r.market || "—"}</td>}
                       <td className="px-3 py-2 text-[var(--text-2)]">
                         {r.campaignLabel}
-                        {!onlyDep && r.alsoIn.length > 0 && <> · <span className="text-primary">also in {r.alsoIn.join(", ")}</span></>}
+                        {!onlyDep && r.alsoIn.length > 0 && <> · <span className="text-primary" title={`also in ${r.alsoIn.join(", ")}`}>also in {r.alsoIn.join(", ")}</span></>}
                       </td>
                       {onlyDep ? (
                         <>
@@ -455,7 +455,7 @@ function PopupShell({ label, icon, title, meta, subtitle, onExport, exportLabel,
             <p className="text-[11px] text-[var(--text-3)] mt-1">{subtitle}</p>
           </div>
           <div className="flex items-center gap-3 shrink-0">
-            <button type="button" onClick={onExport} aria-label={exportLabel} title="One row per message, every timestamp as a column, opens in Excel"
+            <button type="button" onClick={onExport} aria-label={exportLabel} title="One row per message. Opens in Excel."
               className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-md border border-[var(--border)] text-[var(--text-2)] hover:text-[var(--text-1)] hover:border-[var(--border-2)] transition-colors">
               <Download size={12} /> Export CSV
             </button>
@@ -508,7 +508,7 @@ function CrmMessagesModal({ messages, pulledAt, phone, onClose }: { messages: Cr
   return (
     <PopupShell label="CRM messages" icon={<Mail size={15} className="shrink-0" />}
       title={`${messages.length.toLocaleString("en-US")} CRM messages`} meta={`· ${opened} opened · ${clicked} clicked`}
-      subtitle={`Everything Customer.io sent this player${byType ? ` (${byType})` : ""}, newest first, read live${pulledAt ? ` at ${hhmm(pulledAt)} UTC` : ""}. Opened and clicked count people; opens by mail scanners never count.`}
+      subtitle={`${byType ? `${byType}. ` : ""}${pulledAt ? `Read at ${hhmm(pulledAt)} UTC.` : ""}`}
       onExport={exportCsv} exportLabel="Export CRM messages as CSV" onClose={onClose}>
       <>
           {days.map(({ day, items }) => (
@@ -565,9 +565,9 @@ function SmsMessagesModal({ texts, pulledAt, phone, onClose }: { texts: PlayerSm
   const priced = texts.filter((t) => t.priceEur != null).length;
   const days = groupByDay(texts, (t) => t.at);
   return (
-    <PopupShell label="Texts we sent" icon={<MessageSquare size={15} className="shrink-0" />}
-      title={`${texts.length} ${texts.length === 1 ? "text" : "texts"} we sent`} meta={`· ${delivered} delivered${priced ? ` · ${money4(spent)}` : ""}`}
-      subtitle={`Sent by Voizo through Mobivate, newest first, from our own records${pulledAt ? ` read at ${hhmm(pulledAt)} UTC` : ""}. Delivered means the handset confirmed receipt. "Sent, not confirmed" means no receipt came back; Mobivate sends none when it refuses a text at the door, and the nightly reconcile closes those within a day.${priced ? "" : " Price per text appears once that reconcile has run."}`}
+    <PopupShell label="Texts sent" icon={<MessageSquare size={15} className="shrink-0" />}
+      title={`${texts.length} ${texts.length === 1 ? "text" : "texts"} sent`} meta={`· ${delivered} delivered${priced ? ` · ${money4(spent)}` : ""}`}
+      subtitle={pulledAt ? `Read at ${hhmm(pulledAt)} UTC.` : ""}
       onExport={exportCsv} exportLabel="Export texts as CSV" onClose={onClose}>
       {days.map(({ day, items }) => (
         <section key={day || "undated"} className="mb-3">
@@ -580,7 +580,7 @@ function SmsMessagesModal({ texts, pulledAt, phone, onClose }: { texts: PlayerSm
                 <span className="min-w-0">
                   <span className="flex items-center gap-2 mb-[3px]">
                     {t.sender && <span className="text-[10px] px-[6px] py-px rounded-full border border-[var(--border-2)] text-[var(--text-4)] whitespace-nowrap">{t.sender}</span>}
-                    <span className="text-[10.5px] text-[var(--text-4)] truncate">{t.campaign}</span>
+                    <span className="text-[10.5px] text-[var(--text-4)] truncate" title={t.campaign || undefined}>{t.campaign}</span>
                   </span>
                   <span className={`block leading-snug ${st.hot ? "text-[var(--text-1)]" : ""}`}>{t.body}</span>
                 </span>
@@ -605,6 +605,11 @@ function SmsMessagesModal({ texts, pulledAt, phone, onClose }: { texts: PlayerSm
 
 type SmsState = { status: "loading" } | { status: "ready"; data: PlayerSmsResponse } | { status: "error"; message: string; detail: string };
 
+/** The drawer's sub line: brand, this player's family, and any other family they sit in. Built once
+ *  so the visible (truncated) line and its hover title cannot drift apart. */
+const SUB_LINE = (brand: string, r: AudiencePlayerRow) =>
+  [brand, r.campaignLabel, r.alsoIn.length ? `also in ${r.alsoIn.join(", ")}` : ""].filter(Boolean).join(" · ");
+
 function PlayerDrawer({ row: open, brandLabel, onClose }: { row: AudiencePlayerRow; brandLabel: string; onClose: () => void }) {
   const [crm, setCrm] = useState<CrmState>(open.cio.length ? { status: "loading" } : { status: "none" });
   const [crmOpen, setCrmOpen] = useState(false);
@@ -618,7 +623,7 @@ function PlayerDrawer({ row: open, brandLabel, onClose }: { row: AudiencePlayerR
         return r.json() as Promise<PlayerSmsResponse>;
       })
       .then((d) => setSms({ status: "ready", data: d }))
-      .catch((e: unknown) => { if (!(e instanceof Error && e.name === "AbortError")) setSms({ status: "error", message: "Our text records did not load just now", detail: e instanceof Error ? e.message : String(e) }); });
+      .catch((e: unknown) => { if (!(e instanceof Error && e.name === "AbortError")) setSms({ status: "error", message: "Text records did not load", detail: e instanceof Error ? e.message : String(e) }); });
     return () => ctrl.abort();
   }, [open.phone]);
   useEffect(() => {
@@ -635,7 +640,7 @@ function PlayerDrawer({ row: open, brandLabel, onClose }: { row: AudiencePlayerR
               // Neither touches the calls, texts or deposits above. The technical reason rides along in
               // `detail` for whoever debugs it, shown on hover only.
               const b = (await r.json().catch(() => null)) as { error?: unknown } | null;
-              const err: CrmFetchError = new Error(r.status === 503 ? "Customer.io is not connected for this brand yet" : "Customer.io did not answer just now");
+              const err: CrmFetchError = new Error(r.status === 503 ? "Customer.io is not connected for this brand" : "Customer.io did not answer");
               err.detail = b?.error ? String(b.error) : `HTTP ${r.status}`;
               throw err;
             }
@@ -647,7 +652,7 @@ function PlayerDrawer({ row: open, brandLabel, onClose }: { row: AudiencePlayerR
       .catch((e: unknown) => {
         if (e instanceof Error && e.name === "AbortError") return;
         const err = e as CrmFetchError;
-        setCrm({ status: "error", message: e instanceof Error ? e.message : "Customer.io did not answer just now", detail: err?.detail ?? (e instanceof Error ? e.message : String(e)) });
+        setCrm({ status: "error", message: e instanceof Error ? e.message : "Customer.io did not answer", detail: err?.detail ?? (e instanceof Error ? e.message : String(e)) });
       });
     return () => ctrl.abort();
   }, [open.cio]);
@@ -690,8 +695,8 @@ function PlayerDrawer({ row: open, brandLabel, onClose }: { row: AudiencePlayerR
         <div className="flex items-start gap-2.5 px-[17px] py-[15px] border-b border-[var(--border)]">
           <div className="min-w-0">
             <div className="font-mono text-[14px] text-[var(--text-1)]">{open.phone}</div>
-            <div className="text-[11px] text-[var(--text-4)] mt-[3px] truncate">
-              {[brandLabel, open.campaignLabel, open.alsoIn.length ? `also in ${open.alsoIn.join(", ")}` : ""].filter(Boolean).join(" · ")}
+            <div className="text-[11px] text-[var(--text-4)] mt-[3px] truncate" title={SUB_LINE(brandLabel, open)}>
+              {SUB_LINE(brandLabel, open)}
             </div>
             {/* The CRM identity, live: the phone alone does not find a profile in Customer.io. */}
             <div className="text-[11px] mt-[6px] flex flex-col gap-px" aria-label="Customer.io identity">
@@ -699,7 +704,7 @@ function PlayerDrawer({ row: open, brandLabel, onClose }: { row: AudiencePlayerR
               {crm.status === "none" && <span className="text-[var(--text-4)]">no Customer.io record</span>}
               {/* Muted like the other neutral states, never amber: nothing on this page is broken, one
                   source is missing. The technical reason sits on hover for whoever debugs it. */}
-              {crm.status === "error" && <span className="text-[var(--text-4)]" title={crm.detail}>{crm.message}; the calls, texts and deposits here are unaffected.</span>}
+              {crm.status === "error" && <span className="text-[var(--text-4)]" title={crm.detail}>{crm.message}. Everything else here is fine.</span>}
               {crm.status === "ready" && (
                 <>
                   <span className="text-[12px] text-[var(--text-1)]">{profile?.name ?? open.name ?? "Name not on the profile"}</span>
@@ -723,7 +728,7 @@ function PlayerDrawer({ row: open, brandLabel, onClose }: { row: AudiencePlayerR
             <div className="text-[var(--text-3)]">SMS</div>
             {sms.status === "ready" && sms.data.texts.length ? (
               // The summary opens the full list: every text we sent, the words, and whether it arrived.
-              <button type="button" onClick={() => setSmsOpen(true)} aria-label="Texts we sent" aria-haspopup="dialog" title="Every text we sent this player, with the message and its delivery state"
+              <button type="button" onClick={() => setSmsOpen(true)} aria-label="Texts we sent" aria-haspopup="dialog" title="See each text and whether it arrived"
                 className="font-mono text-[12px] text-right text-[var(--text-1)] underline decoration-dotted decoration-[var(--text-4)] underline-offset-[3px] hover:decoration-[var(--text-2)] cursor-pointer justify-self-end">
                 {`${sms.data.texts.length} ${sms.data.texts.length === 1 ? "text" : "texts"} · ${sms.data.texts.filter((t) => t.status === "delivered").length} delivered`}
               </button>
@@ -736,10 +741,10 @@ function PlayerDrawer({ row: open, brandLabel, onClose }: { row: AudiencePlayerR
             <div className={`font-mono text-[12px] text-right ${s === "after" ? "text-[var(--text-1)]" : "text-[var(--text-4)]"}`}>
               {s === "unknown" ? "no record" : s === "none" ? "none" : s === "before" ? "before contact only" : sums(open.deposits.filter((d) => d.afterContact)).map(([c, n]) => money(c, n)).join(" + ")}
             </div>
-            <div className="text-[var(--text-3)] flex items-center gap-1">CRM messages <Info text="Messages Customer.io sent this player (email, in-app, push, SMS), read live when this drawer opened. Opened and clicked count people only; machine opens by mail scanners never enter a number." /></div>
+            <div className="text-[var(--text-3)] flex items-center gap-1">CRM messages <Info text="Emails and in-app messages Customer.io sent this player, read when this panel opened. Opens and clicks count people only, never mail scanners." /></div>
             {crm.status === "ready" && messages.length ? (
               // The summary opens the full list: every message, its subject, and what the player did with it.
-              <button type="button" onClick={() => setCrmOpen(true)} aria-label="CRM messages" aria-haspopup="dialog" title="Every message, with opens and clicks"
+              <button type="button" onClick={() => setCrmOpen(true)} aria-label="CRM messages" aria-haspopup="dialog" title="See each message, and which ones they opened"
                 className="font-mono text-[12px] text-right text-[var(--text-1)] underline decoration-dotted decoration-[var(--text-4)] underline-offset-[3px] hover:decoration-[var(--text-2)] cursor-pointer justify-self-end">
                 {`${messages.length} · ${opened} opened · ${clicked} clicked`}
               </button>

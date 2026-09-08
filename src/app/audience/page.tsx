@@ -4,7 +4,7 @@
 //
 // Audience — the real tab, ported from the canonical mockup (2026-08-25 v4, VOZ-457) which until
 // now shipped only as the frozen snapshot at /audience/preview. Laid out in the mockup's order
-// (`render()`): the top row is the title, the market tabs and the member search; the toolbar below
+// (`render()`): the top row is the title and the market tabs; the toolbar below
 // is the DASHBOARD's range control (Jasiel 2026-09-07: "re-use this"): Export, the presets 7d to 90d
 // and All, and the Pick-a-window calendar, the same control Campaign Performance carries. Then the
 // connect-rate hero with the Members tile flush at its top, Deposits by day, Reach, the player list,
@@ -54,7 +54,9 @@ const AUDIENCE_MARKETS = ["Australia", "Canada", "New Zealand"] as const;
 
 // The dashboard's presets (Campaign Performance, Global): [caption, days back incl. today]; 0 = all time.
 const RANGE_PRESETS: [string, number][] = [["7d", 7], ["14d", 14], ["30d", 30], ["60d", 60], ["90d", 90], ["All", 0]];
-const DEFAULT_DAYS = 14; // the mockup's hero is a 14-day series against the prior window
+const DEFAULT_DAYS = 7; // Jasiel 2026-09-08; was the mockup's 14. Drives the whole page: the hero's
+                        // series and its prior-window comparison, the money strip, Deposits by day,
+                        // the last-touch card, the player query and both exports.
 
 interface AudienceResponse {
   rangeDays: number;

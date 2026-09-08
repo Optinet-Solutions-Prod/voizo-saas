@@ -171,7 +171,7 @@ export default function AudienceFamilies({ families, loading, showMarket, unavai
                 className="w-full flex items-center gap-[11px] px-4 py-[11px] text-left hover:bg-[var(--bg-hover)] transition-colors"
               >
                 <ChevronRight size={11} className={`shrink-0 text-[var(--text-4)] transition-transform ${on ? "rotate-90" : ""}`} strokeWidth={2.2} />
-                <span className="text-[12.5px] text-[var(--text-1)] truncate">{f.label}</span>
+                <span className="text-[12.5px] text-[var(--text-1)] truncate" title={f.label}>{f.label}</span>
                 <span className="ml-auto flex items-center gap-[9px] shrink-0 font-mono text-[11px] text-[var(--text-4)]">
                   {showMarket && f.market && <span>⚑ {f.market}</span>}
                   <span title={unavailable && f.members == null ? unavailable : undefined}>{f.members == null ? "—" : fmt(f.members)} members</span>
@@ -461,7 +461,7 @@ function RunNumbers({ campaignId }: { campaignId: string }) {
             ) : (
               rows.map((r) => (
                 <tr key={r.phone} className="border-t border-[var(--border)]">
-                  <td className="py-[6px] pr-3 text-[var(--text-2)] truncate max-w-[220px]">{r.name ?? "—"}</td>
+                  <td className="py-[6px] pr-3 text-[var(--text-2)] truncate max-w-[220px]" title={r.name ?? undefined}>{r.name ?? "—"}</td>
                   <td className="py-[6px] pr-3 font-mono text-[var(--text-1)] whitespace-nowrap">{r.phone}</td>
                   <td className="py-[6px] pr-3">
                     {r.outcome ? (
