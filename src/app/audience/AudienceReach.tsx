@@ -128,7 +128,7 @@ export function ReachCard({ reach, deposited, unavailable }: { reach: LaneReach 
               </span>
               <span className="col-start-2 col-end-5 font-mono text-[10.5px] text-[var(--text-4)] flex items-center gap-[5px] flex-wrap mt-[5px]">
                 {fmt(m.msgs)} texts: {tp(m.msgs_delivered)} delivered · {tp(m.msgs_failed)} failed · {tp(m.msgs_unconfirmed)} unconfirmed · clicks not tracked
-                <Info text="The texts behind the row above, by Mobivate delivery receipt, counted in texts, not people. Delivered: the handset confirmed receipt, the only success. Failed: the carrier refused or could not deliver. Unconfirmed: still 'sent'; receipts land in seconds and a gateway rejection sends none, so these never resolve. Clicks: Mobivate counts taps only on links its own shortener rewrote and has no click webhook, so clicks are unknown, not zero." />
+                <Info text="The texts behind the row above, by Mobivate delivery receipt, counted in texts, not people. Delivered: the handset confirmed receipt, the only success. Failed: the carrier refused or could not deliver. Unconfirmed: no receipt yet. Mobivate sends none when it refuses a text at the door; a nightly read of its message history closes those within a day, so what stays here is genuinely unknown. Clicks: Mobivate counts taps only on links its own shortener rewrote and has no click webhook, so clicks are unknown, not zero." />
               </span>
             </div>
           )}
