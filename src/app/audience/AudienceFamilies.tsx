@@ -81,9 +81,12 @@ function rowDataOf(r: CampRow): CampaignRowData {
   return { id: r.id, name: r.name, country: r.country, cioWorkspace: r.cioWorkspace, voiceId: r.voiceId, agentLabel: r.agentLabel, baseAssistantId: r.baseAssistantId, scheduleType: r.scheduleType, status: r.displayStatus, timeLabel, players: r.players, startAt: r.startAt, perf: r.perf };
 }
 
-export default function AudienceFamilies({ families, loading, showMarket, unavailable }: {
+export default function AudienceFamilies({ families, loading, showMarket, unavailable, onOpenPlayer }: {
   families: AudienceFamily[];
   loading: boolean;
+  /** A row in a run's numbers opens that player's drawer, the same one the players table opens
+   *  (Jasiel 2026-09-08). Omit and the rows stay plain. */
+  onOpenPlayer?: (phone: string) => void;
   showMarket: boolean;
   unavailable?: string;
 }) {
@@ -179,7 +182,7 @@ export default function AudienceFamilies({ families, loading, showMarket, unavai
                   <StatusPill s={f.status} />
                 </span>
               </button>
-              {on && <FamilyExpand family={f} camps={camps} campsErr={campsErr} />}
+              {on && <FamilyExpand family={f} camps={camps} campsErr={campsErr} onOpenPlayer={onOpenPlayer} />}
             </div>
           );
         })}
@@ -194,7 +197,7 @@ export default function AudienceFamilies({ families, loading, showMarket, unavai
   );
 }
 
-function FamilyExpand({ family, camps, campsErr }: { family: AudienceFamily; camps: Map<string, CampRow> | null; campsErr: string | null }) {
+function FamilyExpand({ family, camps, campsErr, onOpenPlayer }: { family: AudienceFamily; camps: Map<string, CampRow> | null; campsErr: string | null; onOpenPlayer?: (phone: string) => void }) {
   const runs = family.runList.filter((r) => r.startAt); // newest first, from the route
   const [runId, setRunId] = useState<string | null>(runs[0]?.id ?? null);
   const [recordsOpen, setRecordsOpen] = useState(false);
@@ -257,7 +260,7 @@ function FamilyExpand({ family, camps, campsErr }: { family: AudienceFamily; cam
       </div>
       {promptOpen && camp && <PromptModal campaignId={camp.id} title={formatCampaign(camp.name).display} onClose={() => setPromptOpen(false)} />}
 
-      <RunNumbers key={run.id} campaignId={run.id} />
+      <RunNumbers key={run.id} campaignId={run.id} onOpenPlayer={onOpenPlayer} />
     </div>
   );
 }
@@ -383,7 +386,7 @@ function WeekPicker({ runs, openRun, onPick }: { runs: FamilyRun[]; openRun: Fam
 }
 
 // ── the numbers table inside a run: ten to a page, paged by the server ──
-function RunNumbers({ campaignId }: { campaignId: string }) {
+function RunNumbers({ campaignId, onOpenPlayer }: { campaignId: string; onOpenPlayer?: (phone: string) => void }) {
   const [q, setQ] = useState("");
   const [needle, setNeedle] = useState("");
   const [deposited, setDeposited] = useState("any");
@@ -460,7 +463,12 @@ function RunNumbers({ campaignId }: { campaignId: string }) {
               <tr><td colSpan={5} className="py-5 text-center text-xs text-[var(--text-3)] border-t border-[var(--border)]">{needle ? `No number matches “${needle}”. An empty result is an answer.` : filtered ? "No player on this run matches these filters. An empty result is an answer." : "No numbers on this run."}</td></tr>
             ) : (
               rows.map((r) => (
-                <tr key={r.phone} className="border-t border-[var(--border)]">
+                <tr key={r.phone}
+                  className={`border-t border-[var(--border)] ${onOpenPlayer ? "cursor-pointer hover:bg-[var(--bg-hover)]" : ""}`}
+                  onClick={onOpenPlayer ? () => onOpenPlayer(r.phone) : undefined}
+                  onKeyDown={onOpenPlayer ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpenPlayer(r.phone); } } : undefined}
+                  tabIndex={onOpenPlayer ? 0 : undefined}
+                  title={onOpenPlayer ? "Open this player" : undefined}>
                   <td className="py-[6px] pr-3 text-[var(--text-2)] truncate max-w-[220px]" title={r.name ?? undefined}>{r.name ?? "—"}</td>
                   <td className="py-[6px] pr-3 font-mono text-[var(--text-1)] whitespace-nowrap">{r.phone}</td>
                   <td className="py-[6px] pr-3">

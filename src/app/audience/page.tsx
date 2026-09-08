@@ -40,7 +40,7 @@ import ConnectRateHero from "../analytics/ConnectRateHero";
 import GlobalExport from "../analytics/GlobalExport";
 import RangeCalendar from "../analytics/RangeCalendar";
 import { CardGridSkeleton } from "../analytics/loadingSkeletons";
-import AudiencePlayers, { type PlayerFilters, DEFAULT_FILTERS } from "./AudiencePlayers";
+import AudiencePlayers, { PlayerDrawerByPhone, type PlayerFilters, DEFAULT_FILTERS } from "./AudiencePlayers";
 import AudienceFamilies from "./AudienceFamilies";
 import { ContactWindowCard, DepositsByDay, MembersStat, ReachCard } from "./AudienceReach";
 import type { AudiencePlayersResponse } from "../api/audience/players/route";
@@ -104,6 +104,10 @@ export default function AudiencePage() {
   if (brand) query.set("brand", brand);
   if (market) query.set("country", market);
   const qs = query.toString();
+  // Brand and market only, no window: the drawer opened from a run's numbers looks the player up
+  // over all time, so the page's window cannot hide them.
+  const scopeQs = (() => { const p = new URLSearchParams(); if (brand) p.set("brand", brand); if (market) p.set("country", market); return p.toString(); })();
+  const [runPlayer, setRunPlayer] = useState<string | null>(null);
 
   const load = useCallback(async (s: string) => {
     setLoading(true);
@@ -322,7 +326,8 @@ export default function AudiencePage() {
         searching={!!needle}
       />
 
-      <AudienceFamilies families={agg?.families ?? []} loading={aggLoading} showMarket={!market} unavailable={agg?.unavailable.families} />
+      <AudienceFamilies families={agg?.families ?? []} loading={aggLoading} showMarket={!market} unavailable={agg?.unavailable.families} onOpenPlayer={setRunPlayer} />
+      {runPlayer && <PlayerDrawerByPhone key={runPlayer} phone={runPlayer} brandLabel={brand ? brandLabel(brand) : ""} scopeQs={scopeQs} onClose={() => setRunPlayer(null)} />}
     </div>
   );
 }

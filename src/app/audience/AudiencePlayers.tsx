@@ -605,6 +605,60 @@ function SmsMessagesModal({ texts, pulledAt, phone, onClose }: { texts: PlayerSm
 
 type SmsState = { status: "loading" } | { status: "ready"; data: PlayerSmsResponse } | { status: "error"; message: string; detail: string };
 
+/** The same drawer, opened from a phone number instead of a table row (Jasiel 2026-09-08: the
+ *  numbers on a run in Campaign families were not clickable "the same way as the depositors"). It
+ *  fetches the player's full row from the players query, scoped like the page and over ALL time so
+ *  the window cannot hide them, then renders PlayerDrawer, so calls, texts, deposits, both popups
+ *  and their exports come along unchanged. While it loads, the same shell with the number and
+ *  placeholders, so the click is answered at once. Escape closes it, like the list's own drawer. */
+type ByPhoneState = { status: "loading" } | { status: "ready"; row: AudiencePlayerRow } | { status: "missing" } | { status: "error"; message: string };
+export function PlayerDrawerByPhone({ phone, brandLabel, scopeQs, onClose }: { phone: string; brandLabel: string; scopeQs: string; onClose: () => void }) {
+  const [state, setState] = useState<ByPhoneState>({ status: "loading" });
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  // No reset here: the mount site keys this component on the phone, so a different player is a
+  // fresh instance already in its loading state (and React's set-state-in-effect rule stays green).
+  useEffect(() => {
+    const ctrl = new AbortController();
+    const digits = phone.replace(/\D/g, "");
+    fetch(`/api/audience/players?${scopeQs ? `${scopeQs}&` : ""}range=lifetime&q=${encodeURIComponent(digits)}&page=1`, { cache: "no-store", signal: ctrl.signal })
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() as Promise<AudiencePlayersResponse>; })
+      .then((j) => {
+        const row = j.rows.find((x) => x.phone.replace(/\D/g, "") === digits) ?? null;
+        setState(row ? { status: "ready", row } : { status: "missing" });
+      })
+      .catch((e: unknown) => { if (!(e instanceof Error && e.name === "AbortError")) setState({ status: "error", message: e instanceof Error ? e.message : String(e) }); });
+    return () => ctrl.abort();
+  }, [phone, scopeQs]);
+  if (state.status === "ready") return <PlayerDrawer row={state.row} brandLabel={brandLabel} onClose={onClose} />;
+  return (
+    <>
+      <button type="button" aria-label="Close" onClick={onClose} className="fixed inset-0 z-[90] bg-black/50 cursor-default" />
+      <aside role="dialog" aria-label="Member detail" aria-busy={state.status === "loading"} className="fixed top-0 right-0 bottom-0 z-[95] w-[392px] max-w-[92vw] bg-[var(--bg-card)] border-l border-[var(--border)] shadow-2xl flex flex-col">
+        <div className="flex items-start gap-2.5 px-[17px] py-[15px] border-b border-[var(--border)]">
+          <div className="min-w-0 flex-1">
+            <div className="font-mono text-[14px] text-[var(--text-1)]">{phone}</div>
+            <div className="text-[11px] text-[var(--text-4)] mt-[3px]">
+              {state.status === "loading" ? <Pulse w="w-40" /> : state.status === "missing" ? "No player record for this number in this scope." : `Did not load: ${state.message}`}
+            </div>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close" className="text-[var(--text-3)] hover:text-[var(--text-1)]"><X size={16} /></button>
+        </div>
+        {state.status === "loading" && (
+          <div className="px-[17px] py-[13px] grid grid-cols-[1fr_auto] gap-y-2 text-[12px]">
+            {["Calls", "SMS", "Deposited after contact", "CRM messages"].map((l) => (
+              <div key={l} className="contents"><span className="text-[var(--text-3)]">{l}</span><Pulse w="w-16" /></div>
+            ))}
+          </div>
+        )}
+      </aside>
+    </>
+  );
+}
+
 /** The drawer's sub line: brand, this player's family, and any other family they sit in. Built once
  *  so the visible (truncated) line and its hover title cannot drift apart. */
 const SUB_LINE = (brand: string, r: AudiencePlayerRow) =>
@@ -728,12 +782,12 @@ function PlayerDrawer({ row: open, brandLabel, onClose }: { row: AudiencePlayerR
             <div className="text-[var(--text-3)]">SMS</div>
             {sms.status === "ready" && sms.data.texts.length ? (
               // The summary opens the full list: every text we sent, the words, and whether it arrived.
-              <button type="button" onClick={() => setSmsOpen(true)} aria-label="Texts we sent" aria-haspopup="dialog" title="See each text and whether it arrived"
+              <button type="button" onClick={() => setSmsOpen(true)} aria-label="Texts sent" aria-haspopup="dialog" title="See each text and whether it arrived"
                 className="font-mono text-[12px] text-right text-[var(--text-1)] underline decoration-dotted decoration-[var(--text-4)] underline-offset-[3px] hover:decoration-[var(--text-2)] cursor-pointer justify-self-end">
                 {`${sms.data.texts.length} ${sms.data.texts.length === 1 ? "text" : "texts"} · ${sms.data.texts.filter((t) => t.status === "delivered").length} delivered`}
               </button>
             ) : (
-              <div className="font-mono text-[12px] text-right text-[var(--text-1)]" aria-label="Texts we sent" title={sms.status === "error" ? sms.detail : undefined}>
+              <div className="font-mono text-[12px] text-right text-[var(--text-1)]" aria-label="Texts sent" title={sms.status === "error" ? sms.detail : undefined}>
                 {open.smsDelivered ? `${open.smsDelivered} delivered` : open.smsSent ? "sent, not confirmed" : "none"}
               </div>
             )}

@@ -197,7 +197,7 @@ export function ReachCard({ reach, deposited, unavailable }: { reach: LaneReach 
           {deposited ? (
             <>
               <Row label="Deposited" n={deposited.players} members={m.members} color="var(--color-primary)" ariaLabel="Deposited after contact"
-                note="Players who deposited at or after the first call or text. Earlier deposits are left out. The line below is the money per currency, never added together; the EUR figure is the CRM's own conversion. Order, not cause." />
+                note="Players who deposited at or after the first call or text. Earlier deposits are left out. The line below is the money per currency, never added together; EUR is the CRM's conversion. Order, not cause." />
               <p className={NOTE} aria-label="Gross deposited after contact">
                 {depCount ? <>{fmt(depCount)} deposits · EUR {Math.round(depEur).toLocaleString("en-US")} · {grossLine(depTotals)}</> : "no deposit after contact on record"}
               </p>
