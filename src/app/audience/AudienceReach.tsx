@@ -22,7 +22,7 @@
 // is a different, smaller number and is never labelled as this one.
 import { Info } from "../analytics/ConnectRateHero";
 import { ROW_COLOR } from "../analytics/PerformanceCards";
-import type { AudienceDeposits, DepositTotal, LaneReach, LifetimeDeposited } from "../api/audience/reach/route";
+import type { AudienceDeposits, AudienceLastTouch, DepositTotal, LastTouchBucket, LaneReach, LifetimeDeposited } from "../api/audience/reach/route";
 
 const fmt = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString("en-US"));
 /** A loading placeholder the exact size of what it stands in for: the card keeps its height and the
@@ -78,6 +78,70 @@ function Row({ label, n, members, color, note, pending, ariaLabel }: { label: st
       <span className={`font-mono text-[13px] text-right ${muted || "text-[var(--text-1)]"}`}>{pending ? "" : `${p.toFixed(1)}%`}</span>
       <span className={`font-mono text-[11.5px] text-right ${muted || "text-[var(--text-3)]"}`}>{pending ? "none yet" : fmt(n)}</span>
     </div>
+  );
+}
+
+// ── What came before the deposit (VOZ-509, Jasiel 2026-09-08) ──
+// Deliberately NOT called attribution. Every deposit is bucketed by the latest Voizo touch before
+// it, and the empty bucket is named "No Voizo touch we can see" because that is all we know:
+// cio_events holds deposits and nothing else, so a CRM email or a bonus is invisible to us and
+// lands here. Measured 2026-09-08, that bucket is 72% at 7d. Calling it "organic" would state
+// something false. Proximity is not lift either (25 Aug: contacted and never-reached players
+// deposit at the same rate), so the note says so where the numbers are read.
+const TOUCH_ROWS: { bucket: LastTouchBucket["bucket"]; label: string; color: string; note: string }[] = [
+  { bucket: "call_spoke", label: "Spoke with us", color: ROW_COLOR.reached,
+    note: "The last thing before the deposit was a call that connected and ran 30 seconds or longer. The strongest contact evidence we hold, and still only evidence that it happened first." },
+  { bucket: "sms_delivered", label: "Text delivered", color: ROW_COLOR.neutral,
+    note: "The last touch was a text the handset confirmed receiving. Whether the player read it or tapped the link is unknown: Mobivate has no click webhook registered." },
+  { bucket: "call", label: "We called", color: ROW_COLOR.unreachable,
+    note: "The last touch was a call attempt that did not become a conversation: no answer, voicemail, or a pickup under 30 seconds." },
+  { bucket: "sms", label: "We texted", color: ROW_COLOR.voicemail,
+    note: "The last touch was a text with no delivery receipt, so we do not know it arrived. Mobivate sends no receipt when it refuses a text at the door." },
+  { bucket: "none", label: "No touch we can see", color: ROW_COLOR.declined,
+    note: "No Voizo call or text in the look-back window. This is NOT 'organic'. We hold no record of CRM email, bonus or login activity, so anything the CRM did lands here. Measured 2026-09-08 this bucket is 72 percent at 7 days, and most of it is CRM activity we cannot read yet." },
+];
+
+export function LastTouchCard({ lastTouch, unavailable }: { lastTouch: AudienceLastTouch | null; unavailable?: string }) {
+  const byBucket = new Map((lastTouch?.buckets ?? []).map((b) => [b.bucket, b]));
+  const total = (lastTouch?.buckets ?? []).reduce((a, b) => a + b.deposits, 0);
+  const hours = lastTouch?.windowHours ?? 168;
+  const windowWord = hours === 24 ? "24 hours" : hours === 72 ? "72 hours" : "7 days";
+  const reached = TOUCH_ROWS.filter((r) => r.bucket !== "none").reduce((a, r) => a + (byBucket.get(r.bucket)?.deposits ?? 0), 0);
+  return (
+    <section className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl px-[18px] py-4" aria-label="What came before the deposit">
+      <div className="flex items-baseline gap-2.5 mb-0.5">
+        <h2 className="text-[12.5px] font-medium text-[var(--text-2)] flex items-center gap-[5px]">
+          What came before the deposit
+          <Info text={`Every deposit in this window, bucketed by the LAST Voizo touch in the ${windowWord} before it. This describes what happened first, never what caused it: the 25 August study found contacted and never-reached players deposit at the same rate, so only a holdout would show lift. Counted in deposits, not players; the player count sits beside each row.`} />
+        </h2>
+        <span className="ml-auto font-mono text-[10.5px] text-[var(--text-4)]">{lastTouch ? `${fmt(total)} deposits · last ${windowWord}` : ""}</span>
+      </div>
+      {!lastTouch && unavailable ? (
+        <p className="text-[11.5px] text-[var(--text-4)] py-3">Not available yet.</p>
+      ) : !lastTouch ? (
+        <div aria-label="Loading what came before the deposit" aria-busy="true">
+          {TOUCH_ROWS.map((r) => (
+            <div key={r.bucket} className={`${TRACK} py-[5px] text-[12px]`}>
+              <span className="text-[var(--text-3)]">{r.label}</span>
+              <span className="h-[7px] rounded-[4px] bg-[var(--bg-elevated)] overflow-hidden animate-pulse" />
+              <span className="text-right"><Pulse w="w-9" /></span>
+              <span className="text-right"><Pulse w="w-12" /></span>
+            </div>
+          ))}
+        </div>
+      ) : total === 0 ? (
+        <p className="text-[11.5px] text-[var(--text-4)] py-3">No deposit in this window. An empty result is an answer.</p>
+      ) : (
+        <>
+          {TOUCH_ROWS.map((r) => (
+            <Row key={r.bucket} label={r.label} n={byBucket.get(r.bucket)?.deposits ?? 0} members={total} color={r.color} note={r.note} />
+          ))}
+          <p className="mt-2 font-mono text-[10.5px] text-[var(--text-4)]">
+            {fmt(reached)} of {fmt(total)} deposits followed a Voizo touch within {windowWord}. Order, not cause.
+          </p>
+        </>
+      )}
+    </section>
   );
 }
 

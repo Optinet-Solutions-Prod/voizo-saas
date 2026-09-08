@@ -43,7 +43,7 @@ import RangeCalendar from "../analytics/RangeCalendar";
 import { CardGridSkeleton } from "../analytics/loadingSkeletons";
 import AudiencePlayers, { type PlayerFilters, DEFAULT_FILTERS } from "./AudiencePlayers";
 import AudienceFamilies from "./AudienceFamilies";
-import { DepositsByDay, MembersStat, ReachCard } from "./AudienceReach";
+import { DepositsByDay, LastTouchCard, MembersStat, ReachCard } from "./AudienceReach";
 import type { AudiencePlayersResponse } from "../api/audience/players/route";
 import type { AudienceReachResponse } from "../api/audience/reach/route";
 
@@ -320,6 +320,7 @@ export default function AudiencePage() {
           the mockup had the families above the players, and they read as a wall between the two. */}
       <DepositsByDay deposits={agg?.deposits ?? null} unavailable={agg?.unavailable.deposits} />
       <ReachCard reach={agg?.reach ?? null} deposited={agg?.deposited ?? null} unavailable={agg?.unavailable.reach} />
+      <LastTouchCard lastTouch={agg?.lastTouch ?? null} unavailable={agg?.unavailable.lastTouch} />
 
       {playersError && <p className="text-[11px] text-amber-400 font-mono px-1">{playersError}</p>}
       <AudiencePlayers
