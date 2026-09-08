@@ -21,7 +21,7 @@
 //   after    credited, with the date        before   greyed, "not counted"; hiding it would be a lie
 //   none     a dash, never 0.00             no record  we hold no CRM identity, so we cannot say
 import { useEffect, useState } from "react";
-import { X } from "lucide-react";
+import { Mail, X } from "lucide-react";
 import Pagination from "@/components/Pagination";
 import StyledSelect from "@/components/StyledSelect";
 import SortHead, { nextSort, type SortDir } from "./SortHead";
@@ -372,8 +372,92 @@ const CRM_EVENT: Record<string, string> = {
 const SKIP_EVENTS = new Set(["deposit_made", "player_balance", "email_status", "confirmation_instructions", "unlock_instructions", "password_compromised"]);
 const crmEventLine = (name: string) => CRM_EVENT[name] ?? name.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
 
+// ── every CRM message, one line each (Jasiel 2026-09-08: "it's a summary, can we make that actually
+// viewable?"). The stat line "76 · 16 opened · 6 clicked" opens this; same centred chrome as the
+// dashboard's recordings popup (PromptModal / CallDetailModal). Nothing is fetched here: the drawer
+// already holds every message with its timestamps, this only stops collapsing them into one line.
+type CrmMsg = PlayerCrmResponse["messages"][number];
+const CRM_TYPE: Record<string, string> = { email: "email", in_app: "in-app", push: "push", sms: "SMS" };
+// What the player did with it, strongest evidence first: the same precedence the journey line uses.
+// Opened and clicked both show when both happened; that is the interaction Jasiel asked to see.
+const crmStates = (m: CrmMsg): { word: string; at: string | null; hot: boolean }[] => {
+  if (m.failedAt) return [{ word: "failed", at: m.failedAt, hot: false }];
+  const hot: { word: string; at: string | null; hot: boolean }[] = [];
+  if (m.openedAt) hot.push({ word: "opened", at: m.openedAt, hot: true });
+  if (m.clickedAt) hot.push({ word: "clicked", at: m.clickedAt, hot: true });
+  if (hot.length) return hot;
+  return [m.deliveredAt ? { word: "delivered", at: m.deliveredAt, hot: false } : m.sentAt ? { word: "sent", at: m.sentAt, hot: false } : { word: "queued", at: m.createdAt, hot: false }];
+};
+
+function CrmMessagesModal({ messages, pulledAt, onClose }: { messages: CrmMsg[]; pulledAt: string | null; onClose: () => void }) {
+  useEffect(() => {
+    // The players list closes the DRAWER on Escape from a window listener; document listeners run
+    // first in the bubble, so stopping here makes Escape close only this popup. Second Escape, drawer.
+    const h = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } };
+    document.addEventListener("keydown", h);
+    return () => document.removeEventListener("keydown", h);
+  }, [onClose]);
+  const opened = messages.filter((m) => m.openedAt).length;
+  const clicked = messages.filter((m) => m.clickedAt).length;
+  const byType = [...messages.reduce((acc, m) => acc.set(m.type, (acc.get(m.type) ?? 0) + 1), new Map<string, number>())]
+    .sort((a, b) => b[1] - a[1]).map(([t, n]) => `${n} ${CRM_TYPE[t] ?? t}`).join(" · ");
+  // newest first, grouped by UTC day like the journey
+  const days: { day: string; items: CrmMsg[] }[] = [];
+  for (const m of [...messages].sort((p, q) => ((p.createdAt ?? "") < (q.createdAt ?? "") ? 1 : -1))) {
+    const key = (m.createdAt ?? "").slice(0, 10);
+    const last = days[days.length - 1];
+    if (last && last.day === key) last.items.push(m); else days.push({ day: key, items: [m] });
+  }
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60" onClick={onClose}>
+      <div role="dialog" aria-label="CRM messages" className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-[var(--border)]">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 text-[var(--text-1)]">
+              <Mail size={15} className="shrink-0" />
+              <span className="font-semibold">{messages.length.toLocaleString("en-US")} CRM messages</span>
+              <span className="font-mono text-[11.5px] text-[var(--text-3)]">· {opened} opened · {clicked} clicked</span>
+            </div>
+            <p className="text-[11px] text-[var(--text-3)] mt-1">
+              Everything Customer.io sent this player{byType ? ` (${byType})` : ""}, newest first, read live{pulledAt ? ` at ${hhmm(pulledAt)} UTC` : ""}. Opened and clicked count people; opens by mail scanners never count.
+            </p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close" className="text-[var(--text-3)] hover:text-[var(--text-1)] transition-colors shrink-0"><X size={18} /></button>
+        </div>
+        <div className="px-5 py-3 overflow-y-auto" aria-label="CRM message list">
+          {days.map(({ day, items }) => (
+            <section key={day || "undated"} className="mb-3">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-4)] py-1">{day ? dayLabel(`${day}T00:00:00Z`) : "Undated"}</div>
+              {items.map((m) => {
+                const states = crmStates(m);
+                const interacted = states.some((s) => s.hot);
+                return (
+                  <div key={m.id} role="row" className={`grid grid-cols-[44px_52px_1fr_auto] items-baseline gap-x-3 py-[5px] border-t border-[var(--border)] text-[12px] ${interacted ? "" : "text-[var(--text-3)]"}`}>
+                    <span className="font-mono text-[10.5px] text-[var(--text-4)]">{m.createdAt ? hhmm(m.createdAt) : ""}</span>
+                    <span className="text-[10px] px-[6px] py-px rounded-full border border-[var(--border-2)] text-[var(--text-4)] whitespace-nowrap text-center">{CRM_TYPE[m.type] ?? m.type}</span>
+                    <span className={`truncate ${interacted ? "text-[var(--text-1)]" : ""}`} title={m.name || undefined}>{m.name || <i className="text-[var(--text-4)]">no subject</i>}</span>
+                    <span className="flex items-center gap-[6px] whitespace-nowrap">
+                      {states.map((s) => (
+                        <span key={s.word} aria-label={s.word} className={`text-[10px] px-[7px] py-px rounded-full border ${s.hot ? "" : "border-[var(--border-2)] text-[var(--text-4)]"}`}
+                          style={s.hot ? { color: ROW_COLOR.reached, borderColor: ROW_COLOR.reached } : s.word === "failed" ? { color: ROW_COLOR.declined, borderColor: ROW_COLOR.declined } : undefined}>
+                          {s.word}{s.at ? ` ${hhmm(s.at)}` : ""}
+                        </span>
+                      ))}
+                    </span>
+                  </div>
+                );
+              })}
+            </section>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PlayerDrawer({ row: open, brandLabel, onClose }: { row: AudiencePlayerRow; brandLabel: string; onClose: () => void }) {
   const [crm, setCrm] = useState<CrmState>(open.cio.length ? { status: "loading" } : { status: "none" });
+  const [crmOpen, setCrmOpen] = useState(false);
   useEffect(() => {
     if (!open.cio.length) return;
     const ctrl = new AbortController();
@@ -463,9 +547,17 @@ function PlayerDrawer({ row: open, brandLabel, onClose }: { row: AudiencePlayerR
               {s === "unknown" ? "no record" : s === "none" ? "none" : s === "before" ? "before contact only" : sums(open.deposits.filter((d) => d.afterContact)).map(([c, n]) => money(c, n)).join(" + ")}
             </div>
             <div className="text-[var(--text-3)] flex items-center gap-1">CRM messages <Info text="Messages Customer.io sent this player (email, in-app, push, SMS), read live when this drawer opened. Opened and clicked count people only; machine opens by mail scanners never enter a number." /></div>
-            <div className={`font-mono text-[12px] text-right ${crm.status === "ready" ? "text-[var(--text-1)]" : "text-[var(--text-4)]"}`} aria-label="CRM messages">
-              {crm.status === "ready" ? (messages.length ? `${messages.length} · ${opened} opened · ${clicked} clicked` : partial ? "not pulled" : "none") : crm.status === "none" ? "no record" : crm.status === "error" ? "not pulled" : "…"}
-            </div>
+            {crm.status === "ready" && messages.length ? (
+              // The summary opens the full list: every message, its subject, and what the player did with it.
+              <button type="button" onClick={() => setCrmOpen(true)} aria-label="CRM messages" aria-haspopup="dialog" title="Every message, with opens and clicks"
+                className="font-mono text-[12px] text-right text-[var(--text-1)] underline decoration-dotted decoration-[var(--text-4)] underline-offset-[3px] hover:decoration-[var(--text-2)] cursor-pointer justify-self-end">
+                {`${messages.length} · ${opened} opened · ${clicked} clicked`}
+              </button>
+            ) : (
+              <div className="font-mono text-[12px] text-right text-[var(--text-4)]" aria-label="CRM messages">
+                {crm.status === "ready" ? (partial ? "not pulled" : "none") : crm.status === "none" ? "no record" : crm.status === "error" ? "not pulled" : "…"}
+              </div>
+            )}
           </div>
 
           {/* The journey, by day. */}
@@ -504,6 +596,7 @@ function PlayerDrawer({ row: open, brandLabel, onClose }: { row: AudiencePlayerR
           </dl>
         </div>
       </aside>
+      {crmOpen && <CrmMessagesModal messages={messages} pulledAt={pulledAt} onClose={() => setCrmOpen(false)} />}
     </>
   );
 }
