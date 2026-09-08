@@ -220,10 +220,11 @@ export default function AudiencePlayers({ data, page, onPage, loading, showMarke
               type="button"
               onClick={onExport}
               disabled={exporting || !data || total === 0}
+              aria-label="Export players"
               title={data ? `Export these ${total.toLocaleString("en-US")} players as CSV: this list with these filters, not just the page. Opens in Excel.` : "Loading…"}
               className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium border border-[var(--border)] text-[var(--text-2)] hover:text-[var(--text-1)] hover:border-[var(--border-2)] transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Download size={12} /> {exporting ? "Exporting…" : "Export players"}
+              <Download size={12} /> {exporting ? "Exporting…" : "Export"}
             </button>
           </div>
         </div>
