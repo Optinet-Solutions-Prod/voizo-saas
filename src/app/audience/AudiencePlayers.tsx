@@ -26,6 +26,7 @@ import Pagination from "@/components/Pagination";
 import StyledSelect from "@/components/StyledSelect";
 import SortHead, { nextSort, type SortDir } from "./SortHead";
 import { Info } from "../analytics/ConnectRateHero";
+import { Pulse } from "./AudienceReach";
 import { ROW_COLOR } from "../analytics/PerformanceCards";
 import type { Dot } from "@/lib/audienceLane";
 import type { AudiencePlayerRow, AudiencePlayersResponse, Contact, Deposited, PlayerDeposit, PlayerEvent, PlayerSort } from "../api/audience/players/route";
@@ -177,9 +178,9 @@ export default function AudiencePlayers({ data, page, onPage, loading, showMarke
   const where = marketLabel || "any market";
   const cols = (onlyDep ? 8 : 6) - (showMarket ? 0 : 1);
   const filtered = filters.deposited !== "any" || filters.contact !== "any" || !!filters.family || searching;
-  const empty = loading && !data
-    ? "Loading…"
-    : onlyDep
+  // The loading case never reaches here: the table renders placeholder rows for it (below), so this
+  // string is only ever a genuine empty result.
+  const empty = onlyDep
       ? `No player in ${where} deposited after we contacted them in this window${filtered && (filters.contact !== "any" || filters.family || searching) ? " with these filters" : ""}. That is a result, not a gap.`
       : filtered
         ? "No player matches these filters in this window. An empty result is an answer."
@@ -242,7 +243,20 @@ export default function AudiencePlayers({ data, page, onPage, loading, showMarke
               </tr>
             </thead>
             <tbody>
-              {rows.length === 0 ? (
+              {rows.length === 0 && loading && !data ? (
+                // Placeholder rows the shape of the real ones, so the table keeps its height and the
+                // operator sees where each column will land (the AudienceReach pattern). A genuine
+                // empty result still gets its sentence below.
+                [0, 1, 2, 3, 4].map((i) => (
+                  <tr key={i} className="border-t border-[var(--border)]" aria-busy="true">
+                    {Array.from({ length: cols }).map((_, c) => (
+                      <td key={c} className={`px-4 py-[7px] ${c >= cols - 2 ? "text-right" : ""}`}>
+                        <Pulse w={c === 0 ? "w-28" : c === cols - 1 ? "w-16" : i % 2 ? "w-14" : "w-20"} />
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : rows.length === 0 ? (
                 <tr><td colSpan={cols} className="px-4 py-8 text-center text-xs text-[var(--text-3)] border-t border-[var(--border)]">{empty}</td></tr>
               ) : (
                 rows.map((r) => {

@@ -28,7 +28,7 @@ const fmt = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleStr
 /** A loading placeholder the exact size of what it stands in for: the card keeps its height and the
  *  operator sees where the number will land (Jasiel 2026-09-07: "an operator expects something to
  *  look into even if the data still loads"). */
-const Pulse = ({ w, h = "h-3", className = "" }: { w: string; h?: string; className?: string }) => (
+export const Pulse = ({ w, h = "h-3", className = "" }: { w: string; h?: string; className?: string }) => (
   <span aria-hidden className={`inline-block rounded bg-[var(--bg-elevated)] animate-pulse ${w} ${h} ${className}`} />
 );
 const money0 =(cur: string, n: number) => `${cur} ${Math.round(n).toLocaleString("en-US")}`;

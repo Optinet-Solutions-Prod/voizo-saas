@@ -18,6 +18,7 @@ import { loadSnapshot, saveSnapshot } from "@/lib/sessionSnapshot";
 import Pagination from "@/components/Pagination";
 import StyledSelect from "@/components/StyledSelect";
 import SortHead, { SortButton, nextSort, type SortDir } from "./SortHead";
+import { Pulse } from "./AudienceReach";
 import CampaignRow, { StatusPill, type CampaignRowData, type DisplayStatus } from "../analytics/CampaignRow";
 import CampaignExpand from "@/components/analytics/CampaignExpand";
 import PromptModal from "../analytics/PromptModal";
@@ -133,7 +134,18 @@ export default function AudienceFamilies({ families, loading, showMarket, unavai
         <span className="ml-auto font-mono text-[11px] text-[var(--text-4)]" aria-label="Families">{loading && families.length === 0 ? "" : families.length}</span>
       </div>
       {loading && families.length === 0 ? (
-        <p className="px-4 py-8 text-center text-xs text-[var(--text-3)]">Loading…</p>
+        // Placeholders the shape of the rows they stand in for, so the panel keeps its height and
+        // the operator sees where the name and the three figures will land (the AudienceReach pattern).
+        <div aria-label="Loading campaign families" aria-busy="true">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <div key={i} className="flex items-center gap-[11px] px-4 py-[9px] border-b border-[var(--border)] pl-[37px]">
+              <Pulse w={i % 2 ? "w-40" : "w-52"} />
+              <div className="ml-auto flex items-center gap-[9px]">
+                <Pulse w="w-10" /><Pulse w="w-8" /><Pulse w="w-14" />
+              </div>
+            </div>
+          ))}
+        </div>
       ) : families.length === 0 ? (
         <p className="px-4 py-8 text-center text-xs text-[var(--text-3)]">No campaign family in this scope.</p>
       ) : (
@@ -435,7 +447,15 @@ function RunNumbers({ campaignId }: { campaignId: string }) {
           </thead>
           <tbody>
             {!data ? (
-              <tr><td colSpan={5} className="py-5 text-center text-xs text-[var(--text-3)] border-t border-[var(--border)]">Loading…</td></tr>
+              [0, 1, 2, 3, 4].map((i) => (
+                <tr key={i} className="border-t border-[var(--border)]" aria-busy="true">
+                  <td className="py-[6px] pr-3"><Pulse w={i % 2 ? "w-24" : "w-32"} /></td>
+                  <td className="py-[6px] pr-3"><Pulse w="w-28" /></td>
+                  <td className="py-[6px] pr-3"><Pulse w="w-16" h="h-4" className="rounded-full" /></td>
+                  <td className="py-[6px] pr-3 text-right"><Pulse w="w-12" /></td>
+                  <td className="py-[6px] text-right"><Pulse w="w-16" /></td>
+                </tr>
+              ))
             ) : rows.length === 0 ? (
               <tr><td colSpan={5} className="py-5 text-center text-xs text-[var(--text-3)] border-t border-[var(--border)]">{needle ? `No number matches “${needle}”. An empty result is an answer.` : filtered ? "No player on this run matches these filters. An empty result is an answer." : "No numbers on this run."}</td></tr>
             ) : (
