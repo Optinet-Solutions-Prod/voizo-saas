@@ -27,7 +27,7 @@
 // brand, the market tab and the window. Read-only, no provider spend, nothing near the call or SMS path.
 
 import { useCallback, useEffect, useState } from "react";
-import { Download, Search, X } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { loadSnapshot, saveSnapshot } from "@/lib/sessionSnapshot";
 import { useBrandScope } from "@/lib/brandScope";
 import { brandLabel } from "@/lib/campaignDisplay";
@@ -261,15 +261,9 @@ export default function AudiencePage() {
           scopeIds={brand ? (data?.options.campaigns ?? []).map((c) => c.id) : null}
           disabled={!data}
         />
-        <button
-          type="button"
-          onClick={exportPlayers}
-          disabled={exporting || !players || players.total === 0}
-          title={players ? `Export ${players.total.toLocaleString("en-US")} players as CSV (the whole filtered list, opens in Excel)` : "Loading…"}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-[var(--border)] text-[var(--text-2)] hover:text-[var(--text-1)] hover:bg-[var(--bg-hover)] transition disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <Download size={13} /> {exporting ? "Exporting…" : "Export players"}
-        </button>
+        {/* "Export players" moved into the Player activity card, beside its filters and count (Jasiel
+            2026-09-08: it exports THAT list with THOSE filters, so it belongs where the filters are; up
+            here, next to the page-wide call-records Export, it read as a second page export). */}
         <div className="inline-flex p-[3px] gap-0.5 rounded-[9px] bg-[var(--bg-elevated)] border border-[var(--border)]">
           {RANGE_PRESETS.map(([key, days]) => {
             const pf = days ? addDays(todayIso, -(days - 1)) : "";
@@ -325,6 +319,8 @@ export default function AudiencePage() {
       {playersError && <p className="text-[11px] text-amber-400 font-mono px-1">{playersError}</p>}
       <AudiencePlayers
         data={players}
+        onExport={exportPlayers}
+        exporting={exporting}
         page={page}
         onPage={setPage}
         loading={playersLoading}

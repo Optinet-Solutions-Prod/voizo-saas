@@ -140,8 +140,12 @@ function DepCell({ r }: { r: AudiencePlayerRow }) {
   return <td className="px-3 py-2 text-right text-[var(--text-4)]">—</td>;
 }
 
-export default function AudiencePlayers({ data, page, onPage, loading, showMarket, marketLabel, brandLabel, filters, onFilters, familyOptions, searching }: {
+export default function AudiencePlayers({ data, page, onPage, loading, showMarket, marketLabel, brandLabel, filters, onFilters, familyOptions, searching, onExport, exporting }: {
   data: AudiencePlayersResponse | null;
+  /** Export THIS list with THESE filters as CSV (the page owns the fetch; the button lives here,
+   *  beside the filters it obeys, since 2026-09-08). */
+  onExport: () => void;
+  exporting: boolean;
   page: number;
   onPage: (p: number) => void;
   loading: boolean;
@@ -202,7 +206,7 @@ export default function AudiencePlayers({ data, page, onPage, loading, showMarke
           <h2 className="text-[12.5px] font-medium text-[var(--text-2)]">{onlyDep ? "Depositors" : "Player activity"}</h2>
           {onlyDep && (
             <span className="text-[11px] text-[var(--text-4)] flex items-center gap-1">
-              contact → money, per player <Info text="Players who deposited after our first call or text to them, inside the window the range control sets, newest deposit first. Proximity is not causation: two independent studies found contacted and never-reached players deposit at the same rate. This view shows WHO touched each depositor and WHEN, so people judge with the evidence in front of them." />
+              <Info text="Players who deposited after our first call or text to them, inside the window the range control sets, newest deposit first. Proximity is not causation: two independent studies found contacted and never-reached players deposit at the same rate. This view shows WHO touched each depositor and WHEN, so people judge with the evidence in front of them." />
             </span>
           )}
           <div className="flex items-center gap-2 flex-wrap ml-1" aria-label="Player filters">
@@ -210,7 +214,18 @@ export default function AudiencePlayers({ data, page, onPage, loading, showMarke
             <StyledSelect size="sm" prefix="Contact:" options={CONTACT_OPTIONS} value={filters.contact} onChange={(v) => set({ contact: v as Contact })} placeholder="Any" />
             <StyledSelect size="sm" prefix="Family:" options={[{ value: "", label: "All" }, ...familyOptions]} value={filters.family} onChange={(v) => set({ family: v })} placeholder="All" />
           </div>
-          <span className="ml-auto font-mono text-[11px] text-[var(--text-4)]" aria-label="Players shown">{loading && !data ? "" : total.toLocaleString("en-US")}</span>
+          <div className="ml-auto flex items-center gap-2.5">
+            <span className="font-mono text-[11px] text-[var(--text-4)]" aria-label="Players shown">{loading && !data ? "" : total.toLocaleString("en-US")}</span>
+            <button
+              type="button"
+              onClick={onExport}
+              disabled={exporting || !data || total === 0}
+              title={data ? `Export these ${total.toLocaleString("en-US")} players as CSV: this list with these filters, not just the page. Opens in Excel.` : "Loading…"}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium border border-[var(--border)] text-[var(--text-2)] hover:text-[var(--text-1)] hover:border-[var(--border-2)] transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Download size={12} /> {exporting ? "Exporting…" : "Export players"}
+            </button>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
