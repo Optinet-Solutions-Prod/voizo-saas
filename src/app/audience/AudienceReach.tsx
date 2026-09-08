@@ -22,7 +22,7 @@
 // is a different, smaller number and is never labelled as this one.
 import { Info } from "../analytics/ConnectRateHero";
 import { ROW_COLOR } from "../analytics/PerformanceCards";
-import type { AudienceDeposits, AudienceLastTouch, DepositTotal, LastTouchBucket, LaneReach, LifetimeDeposited } from "../api/audience/reach/route";
+import type { AudienceDeposits, ContactWindow, DepositTotal, LaneReach, LifetimeDeposited } from "../api/audience/reach/route";
 
 const fmt = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString("en-US"));
 /** A loading placeholder the exact size of what it stands in for: the card keeps its height and the
@@ -81,47 +81,48 @@ function Row({ label, n, members, color, note, pending, ariaLabel }: { label: st
   );
 }
 
-// ── What came before the deposit (VOZ-509, Jasiel 2026-09-08) ──
-// Deliberately NOT called attribution. Every deposit is bucketed by the latest Voizo touch before
-// it, and the empty bucket is named "No Voizo touch we can see" because that is all we know:
-// cio_events holds deposits and nothing else, so a CRM email or a bonus is invisible to us and
-// lands here. Measured 2026-09-08, that bucket is 72% at 7d. Calling it "organic" would state
-// something false. Proximity is not lift either (25 Aug: contacted and never-reached players
-// deposit at the same rate), so the note says so where the numbers are read.
-const TOUCH_ROWS: { bucket: LastTouchBucket["bucket"]; label: string; color: string; note: string }[] = [
-  { bucket: "call_spoke", label: "Spoke", color: ROW_COLOR.reached,
-    note: "A call that connected and lasted 30 seconds or more." },
-  { bucket: "sms_delivered", label: "Text delivered", color: ROW_COLOR.neutral,
-    note: "A text the phone confirmed it received. Whether they read it or tapped the link is unknown." },
-  { bucket: "call", label: "Called", color: ROW_COLOR.unreachable,
-    note: "A call that did not become a conversation: no answer, voicemail, or under 30 seconds." },
-  { bucket: "sms", label: "Texted", color: ROW_COLOR.voicemail,
-    note: "A text with no delivery confirmation, so it is not known whether it arrived." },
-  { bucket: "none", label: "No touch on record", color: ROW_COLOR.declined,
-    note: "No call or text on record in that window. This is not 'organic': CRM emails and bonuses are not visible here, so those land here too." },
+// ── Contact this window (Jasiel 2026-09-08) ──
+// What Voizo DID in the window and what followed. Replaces "What came before the deposit", whose
+// denominator was every deposit (which Voizo does not control), so its biggest bar was really a
+// statement about contact VOLUME: in 7 days about 950 of 20,425 members get called or texted.
+//
+// The contacted-vs-not comparison drafted alongside this was NOT shipped, for two measured reasons:
+//   EXPOSURE  contacted players only count from the moment they were called, averaging 4.25 days of
+//             a 7-day window against 7.00 for everyone else. Raw rates read 0.63% vs 0.59%, which
+//             looks like nothing; per 1,000 player-days they are 1.49 vs 0.85. A side-by-side card
+//             would have hidden the only positive signal in the data.
+//   SELECTION the contacted cohort was 634 reactivation plus 315 new registrations, against a
+//             comparison group containing habitual depositors. Different populations.
+// So this card states facts about our own work and makes no causal claim. Cause is a holdout
+// question, designed separately the same day.
+const WORK_ROWS: { key: "spoke" | "texted" | "delivered" | "depositors"; label: string; color: string; note: string }[] = [
+  { key: "spoke", label: "Spoke", color: ROW_COLOR.reached,
+    note: "Of those players, how many had a call that connected and lasted 30 seconds or more." },
+  { key: "texted", label: "Texted", color: ROW_COLOR.neutral,
+    note: "Of those players, how many were sent at least one text." },
+  { key: "delivered", label: "Text delivered", color: ROW_COLOR.voicemail,
+    note: "Of those texts, how many the phone confirmed it received." },
+  { key: "depositors", label: "Deposited after", color: ROW_COLOR.declined,
+    note: "Of those players, how many deposited at or after the first call or text in this window. Order, not cause: this card has no comparison group, and only a holdout would show whether contact changed anything." },
 ];
 
-export function LastTouchCard({ lastTouch, unavailable }: { lastTouch: AudienceLastTouch | null; unavailable?: string }) {
-  const byBucket = new Map((lastTouch?.buckets ?? []).map((b) => [b.bucket, b]));
-  const total = (lastTouch?.buckets ?? []).reduce((a, b) => a + b.deposits, 0);
-  const hours = lastTouch?.windowHours ?? 168;
-  const windowWord = hours === 24 ? "24 hours" : hours === 72 ? "72 hours" : "7 days";
-  const reached = TOUCH_ROWS.filter((r) => r.bucket !== "none").reduce((a, r) => a + (byBucket.get(r.bucket)?.deposits ?? 0), 0);
+export function ContactWindowCard({ work, unavailable }: { work: ContactWindow | null; unavailable?: string }) {
+  const base = work?.contacted ?? 0;
   return (
-    <section className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl px-[18px] py-4" aria-label="What came before the deposit">
+    <section className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl px-[18px] py-4" aria-label="Contact this window">
       <div className="flex items-baseline gap-2.5 mb-0.5">
         <h2 className="text-[12.5px] font-medium text-[var(--text-2)] flex items-center gap-[5px]">
-          What came before the deposit
-          <Info text={`Each deposit in this window, matched to the last call or text before it, within ${windowWord}. Shows what came first, not what caused it.`} />
+          Contact this window
+          <Info text="Players called or texted inside the window, and what followed for them. Counts players, not attempts. It says what was done, never what it caused." />
         </h2>
-        <span className="ml-auto font-mono text-[10.5px] text-[var(--text-4)]">{lastTouch ? `${fmt(total)} deposits · last ${windowWord}` : ""}</span>
+        <span className="ml-auto font-mono text-[10.5px] text-[var(--text-4)]">{work ? `${fmt(base)} contacted` : ""}</span>
       </div>
-      {!lastTouch && unavailable ? (
+      {!work && unavailable ? (
         <p className="text-[11.5px] text-[var(--text-4)] py-3">Not available yet.</p>
-      ) : !lastTouch ? (
-        <div aria-label="Loading what came before the deposit" aria-busy="true">
-          {TOUCH_ROWS.map((r) => (
-            <div key={r.bucket} className={`${TRACK} py-[5px] text-[12px]`}>
+      ) : !work ? (
+        <div aria-label="Loading contact this window" aria-busy="true">
+          {WORK_ROWS.map((r) => (
+            <div key={r.key} className={`${TRACK} py-[5px] text-[12px]`}>
               <span className="text-[var(--text-3)]">{r.label}</span>
               <span className="h-[7px] rounded-[4px] bg-[var(--bg-elevated)] overflow-hidden animate-pulse" />
               <span className="text-right"><Pulse w="w-9" /></span>
@@ -129,15 +130,17 @@ export function LastTouchCard({ lastTouch, unavailable }: { lastTouch: AudienceL
             </div>
           ))}
         </div>
-      ) : total === 0 ? (
-        <p className="text-[11.5px] text-[var(--text-4)] py-3">No deposits in this window.</p>
+      ) : base === 0 ? (
+        <p className="text-[11.5px] text-[var(--text-4)] py-3">Nobody was called or texted in this window.</p>
       ) : (
         <>
-          {TOUCH_ROWS.map((r) => (
-            <Row key={r.bucket} label={r.label} n={byBucket.get(r.bucket)?.deposits ?? 0} members={total} color={r.color} note={r.note} />
+          {WORK_ROWS.map((r) => (
+            <Row key={r.key} label={r.label} n={work[r.key]} members={base} color={r.color} note={r.note} />
           ))}
           <p className="mt-2 font-mono text-[10.5px] text-[var(--text-4)]">
-            {fmt(reached)} of {fmt(total)} deposits came after a call or text. Order, not cause.
+            {work.depositors > 0
+              ? `${fmt(work.depositors)} of ${fmt(base)} contacted players deposited after, ${money0("EUR", work.amountEur)}. Order, not cause.`
+              : `None of the ${fmt(base)} contacted players deposited after.`}
           </p>
         </>
       )}

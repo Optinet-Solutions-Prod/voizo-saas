@@ -42,7 +42,7 @@ import RangeCalendar from "../analytics/RangeCalendar";
 import { CardGridSkeleton } from "../analytics/loadingSkeletons";
 import AudiencePlayers, { type PlayerFilters, DEFAULT_FILTERS } from "./AudiencePlayers";
 import AudienceFamilies from "./AudienceFamilies";
-import { DepositsByDay, LastTouchCard, MembersStat, ReachCard } from "./AudienceReach";
+import { ContactWindowCard, DepositsByDay, MembersStat, ReachCard } from "./AudienceReach";
 import type { AudiencePlayersResponse } from "../api/audience/players/route";
 import type { AudienceReachResponse } from "../api/audience/reach/route";
 
@@ -56,7 +56,7 @@ const AUDIENCE_MARKETS = ["Australia", "Canada", "New Zealand"] as const;
 const RANGE_PRESETS: [string, number][] = [["7d", 7], ["14d", 14], ["30d", 30], ["60d", 60], ["90d", 90], ["All", 0]];
 const DEFAULT_DAYS = 7; // Jasiel 2026-09-08; was the mockup's 14. Drives the whole page: the hero's
                         // series and its prior-window comparison, the money strip, Deposits by day,
-                        // the last-touch card, the player query and both exports.
+                        // Contact this window, the player query and both exports.
 
 interface AudienceResponse {
   rangeDays: number;
@@ -301,7 +301,7 @@ export default function AudiencePage() {
           the mockup had the families above the players, and they read as a wall between the two. */}
       <DepositsByDay deposits={agg?.deposits ?? null} unavailable={agg?.unavailable.deposits} />
       <ReachCard reach={agg?.reach ?? null} deposited={agg?.deposited ?? null} unavailable={agg?.unavailable.reach} />
-      <LastTouchCard lastTouch={agg?.lastTouch ?? null} unavailable={agg?.unavailable.lastTouch} />
+      <ContactWindowCard work={agg?.contactWindow ?? null} unavailable={agg?.unavailable.contactWindow} />
 
       {playersError && <p className="text-[11px] text-amber-400 font-mono px-1">{playersError}</p>}
       <AudiencePlayers

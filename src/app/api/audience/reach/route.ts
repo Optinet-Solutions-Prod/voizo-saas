@@ -89,19 +89,18 @@ export interface LifetimeDeposited {
   players: number;
   totals: DepositTotal[];
 }
-/** The window's deposits bucketed by the latest Voizo touch before each one (VOZ-509).
- *  `none` means no touch WE CAN SEE: cio_events holds deposits only, so CRM email, bonus and login
- *  activity is invisible lane-wide and most of `none` is that, never "organic". Proximity, not
- *  lift: the 25 Aug study found contacted and never-reached players deposit at the same rate. */
-export interface LastTouchBucket {
-  bucket: "call_spoke" | "sms_delivered" | "call" | "sms" | "none";
-  deposits: number;
-  players: number;
+/** What Voizo DID in the window and what followed (Jasiel 2026-09-08). Counts of players, no
+ *  comparison group and no claim about cause: the contacted cohort is selected (reactivation and new
+ *  registrations) and its deposit exposure is shorter than the window, so any side-by-side rate
+ *  would mislead. `depositors` are contacted players who deposited at or after their FIRST touch in
+ *  the window. Replaces the last-touch bucket card; cause is a holdout question. */
+export interface ContactWindow {
+  contacted: number;
+  spoke: number;
+  texted: number;
+  delivered: number;
+  depositors: number;
   amountEur: number;
-}
-export interface AudienceLastTouch {
-  windowHours: number;
-  buckets: LastTouchBucket[];
 }
 export interface AudienceReachResponse {
   scopeCampaigns: number;
@@ -109,8 +108,8 @@ export interface AudienceReachResponse {
   deposited: LifetimeDeposited | null;
   families: AudienceFamily[];
   deposits: AudienceDeposits | null;
-  lastTouch: AudienceLastTouch | null;
-  unavailable: { reach?: string; families?: string; deposits?: string; lastTouch?: string };
+  contactWindow: ContactWindow | null;
+  unavailable: { reach?: string; families?: string; deposits?: string; contactWindow?: string };
 }
 
 const CAPTURE_SOURCE = "activities_capture_2026-08-25";
@@ -155,7 +154,7 @@ export async function GET(request: NextRequest) {
     const ids = [...laneIds];
     const unavailable: AudienceReachResponse["unavailable"] = {};
     if (ids.length === 0) {
-      return NextResponse.json({ scopeCampaigns: 0, reach: null, deposited: null, families: [], deposits: null, lastTouch: null, unavailable } satisfies AudienceReachResponse);
+      return NextResponse.json({ scopeCampaigns: 0, reach: null, deposited: null, families: [], deposits: null, contactWindow: null, unavailable } satisfies AudienceReachResponse);
     }
 
     // ── Families: Campaign Performance's rule (the recurring parent, else the run itself). ──
@@ -219,14 +218,7 @@ export async function GET(request: NextRequest) {
       const first = ((data ?? []) as { total_count: number | string }[])[0];
       return first ? Number(first.total_count) : 0;
     };
-    // Look-back for the last-touch card: 24h / 72h / 7d, defaulting to 7d (the widest, so the card
-    // shows the most Voizo touches it can honestly claim). Anything else falls back rather than
-    // reaching the database with a caller's number.
-    const TOUCH_HOURS = new Set([24, 72, 168]);
-    const askedHours = Number(request.nextUrl.searchParams.get("touchHours"));
-    const windowHours = TOUCH_HOURS.has(askedHours) ? askedHours : 168;
-
-    const [reachRes, famRes, depRes, covRes, totRes, depositorsRes, lifeTotRes, lifeDepRes, touchRes] = await Promise.allSettled([
+    const [reachRes, famRes, depRes, covRes, totRes, depositorsRes, lifeTotRes, lifeDepRes, workRes] = await Promise.allSettled([
       laneReach(ids),
       (async () => {
         const out = new Map<string, number>();
@@ -272,19 +264,22 @@ export async function GET(request: NextRequest) {
       totalsRpc(EPOCH, nowIso),
       depositorsRpc(EPOCH, nowIso),
       (async () => {
-        const { data, error } = await supabaseAdmin.rpc("audience_lane_last_touch", {
+        const { data, error } = await supabaseAdmin.rpc("audience_lane_contact_window", {
           p_campaign_ids: ids,
           p_from: new Date(startMs).toISOString(),
           p_to: new Date(endMs).toISOString(),
-          p_window_hours: windowHours,
         });
         if (error) throw new Error(error.message);
-        return ((data ?? []) as { bucket: string; deposits: number; players: number; amount_eur: number | string }[]).map((b) => ({
-          bucket: b.bucket as LastTouchBucket["bucket"],
-          deposits: Number(b.deposits) || 0,
-          players: Number(b.players) || 0,
-          amountEur: Number(b.amount_eur) || 0,
-        }));
+        const r = ((data ?? []) as { contacted: number; spoke: number; texted: number; delivered: number; depositors: number; amount_eur: number | string }[])[0];
+        if (!r) return null;
+        return {
+          contacted: Number(r.contacted) || 0,
+          spoke: Number(r.spoke) || 0,
+          texted: Number(r.texted) || 0,
+          delivered: Number(r.delivered) || 0,
+          depositors: Number(r.depositors) || 0,
+          amountEur: Number(r.amount_eur) || 0,
+        } satisfies ContactWindow;
       })(),
     ]);
 
@@ -311,11 +306,11 @@ export async function GET(request: NextRequest) {
       unavailable.deposits = why instanceof Error ? why.message : String(why);
     }
 
-    let lastTouch: AudienceLastTouch | null = null;
-    if (touchRes.status === "fulfilled") lastTouch = { windowHours, buckets: touchRes.value };
-    else unavailable.lastTouch = touchRes.reason instanceof Error ? touchRes.reason.message : String(touchRes.reason);
+    let contactWindow: ContactWindow | null = null;
+    if (workRes.status === "fulfilled") contactWindow = workRes.value;
+    else unavailable.contactWindow = workRes.reason instanceof Error ? workRes.reason.message : String(workRes.reason);
 
-    return NextResponse.json({ scopeCampaigns: ids.length, reach, deposited, families, deposits, lastTouch, unavailable } satisfies AudienceReachResponse);
+    return NextResponse.json({ scopeCampaigns: ids.length, reach, deposited, families, deposits, contactWindow, unavailable } satisfies AudienceReachResponse);
   } catch (err) {
     console.error("[audience/reach] failed:", err);
     return NextResponse.json({ error: "Failed to load audience reach" }, { status: 500 });
