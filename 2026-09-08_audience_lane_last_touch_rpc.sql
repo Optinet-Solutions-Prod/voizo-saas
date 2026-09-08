@@ -42,8 +42,12 @@ as $$
     order by r.cio_id, r.first_seen_at desc nulls last
   ),
   dep as (
-    -- candidates first (the 09-07 lesson: the window's rows before any join work)
-    select e.cio_id, e.occurred_at, coalesce(e.amount_norm, 0)::numeric as amount_eur, m.phone_e164
+    -- candidates first (the 09-07 lesson: the window's rows before any join work).
+    -- dep_id gives every deposit ROW its own identity so the pick below can be a single join
+    -- instead of a per-deposit subquery, and so two deposits by the same player at the same
+    -- instant are never collapsed into one.
+    select row_number() over () as dep_id,
+           e.cio_id, e.occurred_at, coalesce(e.amount_norm, 0)::numeric as amount_eur, m.phone_e164
     from public.cio_events e
     join lane_members m on m.cio_id = e.cio_id
     where e.event_name = 'deposit_made'
@@ -70,18 +74,25 @@ as $$
       and s.created_at <= p_to
   ),
   labelled as (
-    select d.cio_id,
+    -- ONE left join, then one sort, instead of a correlated subquery per deposit. The first
+    -- version re-scanned the touches set once per deposit (about 1,242 x 86,000 rows on an
+    -- All-brands lifetime window) and tripped the 8 s statement_timeout (57014) on the 72h and 7d
+    -- look-backs; the four narrower combinations reconciled exactly, so this rewrite is about
+    -- speed only and must not change a single number.
+    -- distinct on (dep_id) + this order picks, per deposit, the LATEST touch in range, tie-broken
+    -- by the stronger evidence. A deposit with no touch keeps its left-join NULL row (nulls last
+    -- only matters when some row matched) and coalesce turns it into 'none'.
+    select distinct on (d.dep_id)
+           d.dep_id,
+           d.cio_id,
            d.amount_eur,
-           coalesce((
-             select t.kind
-             from touches t
-             where t.phone_e164 = d.phone_e164
-               and t.at <= d.occurred_at
-               and t.at >= d.occurred_at - make_interval(hours => p_window_hours)
-             order by t.at desc, t.rank desc
-             limit 1
-           ), 'none') as bucket
+           coalesce(t.kind, 'none') as bucket
     from dep d
+    left join touches t
+      on t.phone_e164 = d.phone_e164
+     and t.at <= d.occurred_at
+     and t.at >= d.occurred_at - make_interval(hours => p_window_hours)
+    order by d.dep_id, t.at desc nulls last, t.rank desc nulls last
   )
   select bucket,
          count(*)::bigint                as deposits,
@@ -94,8 +105,11 @@ $$;
 comment on function public.audience_lane_last_touch(uuid[], timestamptz, timestamptz, int) is
   'Deposits in a window bucketed by the latest Voizo touch before each one (call_spoke | sms_delivered | call | sms | none). Mirrors src/lib/lastTouch.ts. "none" means no touch WE CAN SEE: cio_events holds deposits only, so CRM activity is invisible. Proximity, not lift.';
 
--- The touches subquery is the cost. If this trips Supabase's 8 s statement_timeout (57014) on an
--- All-brands lifetime window, the 09-07 fix for audience_lane_players applies here too:
+-- Applied 2026-09-08 ("Success. No rows returned"). The FIRST version used a correlated subquery
+-- per deposit and timed out (57014) on All-brands lifetime at the 72h and 7d look-backs, while the
+-- four narrower combinations reconciled exactly; `labelled` is now a single left join + sort, which
+-- is a speed change only. If a wide window still trips the 8 s timeout, the 09-07 fix for
+-- audience_lane_players is the next lever:
 --   alter function public.audience_lane_last_touch(uuid[], timestamptz, timestamptz, int) set enable_nestloop = off;
 -- The phone index that function needed already exists: realtime_seen_members_phone_idx.
 
