@@ -37,6 +37,7 @@ export const CRON_NAMES = {
   goldenReplay: "golden-replay",
   dailySnapshot: "daily-snapshot",
   realtimePoll: "realtime-poll",
+  mobivateReconcile: "mobivate-reconcile",
 } as const;
 
 export type CronName = (typeof CRON_NAMES)[keyof typeof CRON_NAMES];
@@ -57,6 +58,7 @@ export const CRON_STALENESS_THRESHOLD_SECONDS: Record<CronName, number> = {
   "golden-replay": 93600, // daily (86400s) x ~1.08 -> 26h, matches stuck-slot-watchdog
   "daily-snapshot": 93600, // daily (86400s) x ~1.08 -> 26h, matches the other daily crons
   "realtime-poll": 300, // every 1min x 5 margin, matches campaign-scheduler
+  "mobivate-reconcile": 93600, // daily (86400s) x ~1.08 -> 26h, matches the other daily crons
 };
 
 const POST_TIMEOUT_MS = 3000;
