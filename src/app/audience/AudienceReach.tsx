@@ -63,6 +63,10 @@ export function MembersStat({ reach, families, lanes, unavailable }: {
 }
 
 const TRACK = "grid grid-cols-[132px_1fr_62px_74px] items-center gap-[11px] max-[820px]:grid-cols-[104px_1fr_54px_62px] max-[820px]:gap-[7px]";
+// A one-line caption under a row, in the LABEL column, so it reads as a note on the row above and
+// never as another bar (Jasiel 2026-09-08: the full-width texts bar under Texted was the widest
+// thing on the card, in a different unit, and its yellow meant something else one row up).
+const NOTE = "font-mono text-[10.5px] text-[var(--text-4)] leading-snug -mt-[3px] mb-[7px]";
 
 function Row({ label, n, members, color, note, pending, ariaLabel }: { label: string; n: number; members: number; color: string; note: string; pending?: boolean; ariaLabel?: string }) {
   const p = members ? (100 * n) / members : 0;
@@ -162,7 +166,7 @@ export function ReachCard({ reach, deposited, unavailable }: { reach: LaneReach 
           Reach
           <Info text="How many of those players each channel reached. Bars count people, not attempts, and they overlap: one player can be in several." />
         </h2>
-        <span className="ml-auto font-mono text-[10.5px] text-[var(--text-4)]">{m ? `of ${fmt(m.members)} players ever loaded` : ""}</span>
+        <span className="ml-auto font-mono text-[10.5px] text-[var(--text-4)]">{m ? `of ${fmt(m.members)} players, all time` : ""}</span>
       </div>
       {!m && unavailable ? (
         <p className="text-[11.5px] text-[var(--text-4)] py-3">Not available yet.</p>
@@ -184,34 +188,19 @@ export function ReachCard({ reach, deposited, unavailable }: { reach: LaneReach 
           <Row label="Reached" n={m.spoke_lean} members={m.members} color={ROW_COLOR.reached}
             note="The call connected and was not voicemail. A pickup with nobody talking still counts here." />
           <Row label="Texted" n={m.texted} members={m.members} color={ROW_COLOR.neutral}
-            note="At least one text sent. Not a subset of Reached: most texted players were never spoken to. The thin bar below is the texts." />
+            note="At least one text sent. Not a subset of Reached: most texted players were never spoken to. The line below counts texts, not people; unconfirmed means no delivery receipt came back. Clicks are not tracked yet." />
           {m.msgs > 0 && (
-            <div className={`${TRACK} items-start pb-[7px]`}>
-              <span />
-              <span className="flex h-1 rounded-[2px] overflow-hidden mt-px" aria-hidden>
-                <span style={{ flex: m.msgs_delivered, background: ROW_COLOR.reached }} />
-                <span style={{ flex: m.msgs_failed, background: ROW_COLOR.declined }} />
-                <span style={{ flex: m.msgs_unconfirmed, background: ROW_COLOR.unreachable }} />
-              </span>
-              <span className="col-start-2 col-end-5 font-mono text-[10.5px] text-[var(--text-4)] flex items-center gap-[5px] flex-wrap mt-[5px]">
-                {fmt(m.msgs)} texts: {tp(m.msgs_delivered)} delivered · {tp(m.msgs_failed)} failed · {tp(m.msgs_unconfirmed)} unconfirmed · clicks not tracked
-                <Info text="The texts themselves, not people. Delivered: the phone confirmed it. Failed: the network refused it. Unconfirmed: nothing came back yet. Clicks: unknown, not zero, because Mobivate does not report them." />
-              </span>
-            </div>
+            <p className={NOTE}>{fmt(m.msgs)} texts · {tp(m.msgs_delivered)} delivered · {tp(m.msgs_failed)} failed · {tp(m.msgs_unconfirmed)} unconfirmed</p>
           )}
           <Row label="Emailed" n={0} members={m.members} color={ROW_COLOR.voicemail} pending
             note="Follow-up emails after a call. The trigger is sent, but no Customer.io campaign listens for it yet, so nothing goes out. Shown as none yet, not 0%." />
           {deposited ? (
             <>
               <Row label="Deposited" n={deposited.players} members={m.members} color="var(--color-primary)" ariaLabel="Deposited after contact"
-                note="Players who deposited at or after the first call or text. Earlier deposits are left out. Order, not cause: contacted and never-reached players deposit at the same rate." />
-              <div className={`${TRACK} items-start pb-[7px]`}>
-                <span />
-                <span className="col-start-2 col-end-5 font-mono text-[10.5px] text-[var(--text-4)] flex items-center gap-[5px] flex-wrap" aria-label="Gross deposited after contact">
-                  {depCount ? <>{fmt(depCount)} deposits after contact: {grossLine(depTotals)} · EUR {Math.round(depEur).toLocaleString("en-US")} normalised</> : "no deposit after contact on record"}
-                  <Info text="Deposits per currency, never added together. The EUR line is the CRM's own conversion. Total money in, not money the calls caused." />
-                </span>
-              </div>
+                note="Players who deposited at or after the first call or text. Earlier deposits are left out. The line below is the money per currency, never added together; the EUR figure is the CRM's own conversion. Order, not cause." />
+              <p className={NOTE} aria-label="Gross deposited after contact">
+                {depCount ? <>{fmt(depCount)} deposits · EUR {Math.round(depEur).toLocaleString("en-US")} · {grossLine(depTotals)}</> : "no deposit after contact on record"}
+              </p>
             </>
           ) : (
             <Row label="Deposited" n={0} members={m.members} color="var(--color-primary)" pending ariaLabel="Deposited after contact"
