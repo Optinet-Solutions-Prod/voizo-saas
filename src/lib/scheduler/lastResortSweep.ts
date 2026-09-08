@@ -22,6 +22,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { decideLastResortSend, resolveSmsConsentMode, type SmsConsentMode } from "../smsDispatchDecision";
 import { getMobivateConfigError, resolveSmsSenderId, sendSMS } from "../mobivate";
+import { mobivateOptoutGate } from "../mobivateOptoutGate";
 
 /** Cost + budget bound: sends are not latency-critical (the player already
  *  missed every call today); the remainder goes next tick (60s later). */
@@ -169,6 +170,14 @@ export async function runLastResortSweep(
         .limit(1);
       if (sup && sup.length > 0) {
         suppressed++;
+        continue;
+      }
+
+      // Mobivate opt-out gate (2026-09-07): Mobivate would accept and silently drop this text.
+      const optout = await mobivateOptoutGate(supabase, phone);
+      if (optout.blocked) {
+        suppressed++;
+        console.log(`[lastResort] ${campaignName}: SMS skipped for ${phone.slice(0, -4)}**** (Mobivate opt-out list: ${optout.kind ?? "read error"}${optout.error ? ` — ${optout.error}` : ""})`);
         continue;
       }
 

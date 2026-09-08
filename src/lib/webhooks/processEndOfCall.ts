@@ -18,6 +18,7 @@ import { fireCallFollowup } from "@/lib/followupEvent";
 import { decideOutcomePark } from "@/lib/webhooks/hangupOutcome";
 import { deriveAttemptTag } from "@/lib/dashboardAnalytics";
 import { resolveCallCosts, type VapiCostPayload } from "@/lib/callCost";
+import { mobivateOptoutGate } from "@/lib/mobivateOptoutGate";
 
 export async function processEndOfCall(message: Record<string, unknown>): Promise<NextResponse> {
   const vapiCall = message.call as Record<string, unknown> | undefined;
@@ -668,9 +669,18 @@ export async function processEndOfCall(message: Record<string, unknown>): Promis
           .select("id")
           .eq("phone_e164", numRow.phone_e164)
           .limit(1);
+        // Mobivate opt-out gate (2026-09-07): a listed number is accepted and silently dropped by
+        // Mobivate, so skip it here and say so. Fails closed on a read error.
+        const optout = suppressed && suppressed.length > 0
+          ? { blocked: false, kind: null, error: null }
+          : await mobivateOptoutGate(supabaseAdmin, numRow.phone_e164);
 
         if (suppressed && suppressed.length > 0) {
           console.log(`SMS skipped for ${numRow.phone_e164.slice(0, -4)}**** (on suppression list)`);
+        } else if (optout.blocked) {
+          console.log(
+            `SMS skipped for ${numRow.phone_e164.slice(0, -4)}**** (on Mobivate opt-out list: ${optout.kind ?? "read error"}${optout.error ? ` — ${optout.error}` : ""})`,
+          );
         } else {
           // Idempotency + per-player dedup (2026-06-11): ONE text per player per
           // campaign. Keyed on campaign_number_id (not call_id) so webhook
