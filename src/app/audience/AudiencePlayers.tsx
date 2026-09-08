@@ -21,7 +21,8 @@
 //   after    credited, with the date        before   greyed, "not counted"; hiding it would be a lie
 //   none     a dash, never 0.00             no record  we hold no CRM identity, so we cannot say
 import { useEffect, useState } from "react";
-import { Mail, X } from "lucide-react";
+import { Download, Mail, X } from "lucide-react";
+import { CSV_BOM, csvCell, triggerDownload } from "@/lib/download";
 import Pagination from "@/components/Pagination";
 import StyledSelect from "@/components/StyledSelect";
 import SortHead, { nextSort, type SortDir } from "./SortHead";
@@ -337,7 +338,9 @@ export default function AudiencePlayers({ data, page, onPage, loading, showMarke
 // "Customer.io emailed: Your deposit has been received · opened", "Logged in"), two sources told apart
 // by colour (Voizo, Customer.io) with the money and the first-contact pin standing out. Balance-update
 // events and our own deposit hooks are left out: they repeat what the deposit line already says.
-type CrmState = { status: "loading" } | { status: "none" } | { status: "ready"; data: PlayerCrmResponse[] } | { status: "error"; message: string };
+// `message` is for the operator, in plain words; `detail` is the technical reason, hover-only.
+type CrmState = { status: "loading" } | { status: "none" } | { status: "ready"; data: PlayerCrmResponse[] } | { status: "error"; message: string; detail: string };
+type CrmFetchError = Error & { detail?: string };
 type Source = "voizo" | "cio" | "dep" | "pin";
 const SOURCE_COLOR: Record<Source, string> = { voizo: ROW_COLOR.neutral, cio: ROW_COLOR.voicemail, dep: "var(--color-primary)", pin: "var(--text-3)" };
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -389,7 +392,21 @@ const crmStates = (m: CrmMsg): { word: string; at: string | null; hot: boolean }
   return [m.deliveredAt ? { word: "delivered", at: m.deliveredAt, hot: false } : m.sentAt ? { word: "sent", at: m.sentAt, hot: false } : { word: "queued", at: m.createdAt, hot: false }];
 };
 
-function CrmMessagesModal({ messages, pulledAt, onClose }: { messages: CrmMsg[]; pulledAt: string | null; onClose: () => void }) {
+function CrmMessagesModal({ messages, pulledAt, phone, onClose }: { messages: CrmMsg[]; pulledAt: string | null; phone: string; onClose: () => void }) {
+  // Per-player export (Jasiel 2026-09-08: "can those data be extracted too?"): the same rows the
+  // popup shows, one line per message, every timestamp as a column so a spreadsheet can pivot by
+  // subject. Client-side from the data already in hand; the shared csvCell guards quoting and
+  // formula injection, the BOM keeps Excel's encoding detection honest.
+  const exportCsv = () => {
+    const head = ["day_utc", "time_utc", "type", "subject", "created_at", "sent_at", "delivered_at", "opened_at", "clicked_at", "failed_at", "interaction"];
+    const rows = messages.map((m) => [
+      (m.createdAt ?? "").slice(0, 10), m.createdAt ? hhmm(m.createdAt) : "", CRM_TYPE[m.type] ?? m.type, m.name,
+      m.createdAt, m.sentAt, m.deliveredAt, m.openedAt, m.clickedAt, m.failedAt,
+      m.failedAt ? "failed" : m.clickedAt ? "clicked" : m.openedAt ? "opened" : "",
+    ]);
+    const csv = CSV_BOM + [head, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n");
+    triggerDownload(new Blob([csv], { type: "text/csv;charset=utf-8;" }), `crm-messages_${phone.replace(/\D/g, "")}_${new Date().toISOString().slice(0, 10)}.csv`);
+  };
   useEffect(() => {
     // The players list closes the DRAWER on Escape from a window listener; document listeners run
     // first in the bubble, so stopping here makes Escape close only this popup. Second Escape, drawer.
@@ -422,7 +439,13 @@ function CrmMessagesModal({ messages, pulledAt, onClose }: { messages: CrmMsg[];
               Everything Customer.io sent this player{byType ? ` (${byType})` : ""}, newest first, read live{pulledAt ? ` at ${hhmm(pulledAt)} UTC` : ""}. Opened and clicked count people; opens by mail scanners never count.
             </p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="text-[var(--text-3)] hover:text-[var(--text-1)] transition-colors shrink-0"><X size={18} /></button>
+          <div className="flex items-center gap-3 shrink-0">
+            <button type="button" onClick={exportCsv} aria-label="Export CRM messages as CSV" title="One row per message, every timestamp as a column, opens in Excel"
+              className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-md border border-[var(--border)] text-[var(--text-2)] hover:text-[var(--text-1)] hover:border-[var(--border-2)] transition-colors">
+              <Download size={12} /> Export CSV
+            </button>
+            <button type="button" onClick={onClose} aria-label="Close" className="text-[var(--text-3)] hover:text-[var(--text-1)] transition-colors"><X size={18} /></button>
+          </div>
         </div>
         <div className="px-5 py-3 overflow-y-auto" aria-label="CRM message list">
           {days.map(({ day, items }) => (
@@ -464,11 +487,28 @@ function PlayerDrawer({ row: open, brandLabel, onClose }: { row: AudiencePlayerR
     Promise.all(
       open.cio.map((c) =>
         fetch(`/api/audience/player-crm?workspace=${encodeURIComponent(c.workspace)}&cio=${encodeURIComponent(c.cioId)}`, { cache: "no-store", signal: ctrl.signal })
-          .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() as Promise<PlayerCrmResponse>; }),
+          .then(async (r) => {
+            if (!r.ok) {
+              // Operator words, never a status code (Jasiel 2026-09-08: "we don't want the operator's
+              // panic because something they thought is breaking"). A 503 is OUR route saying it holds no
+              // Customer.io key for this brand; anything else is Customer.io not answering right now.
+              // Neither touches the calls, texts or deposits above. The technical reason rides along in
+              // `detail` for whoever debugs it, shown on hover only.
+              const b = (await r.json().catch(() => null)) as { error?: unknown } | null;
+              const err: CrmFetchError = new Error(r.status === 503 ? "Customer.io is not connected for this brand yet" : "Customer.io did not answer just now");
+              err.detail = b?.error ? String(b.error) : `HTTP ${r.status}`;
+              throw err;
+            }
+            return r.json() as Promise<PlayerCrmResponse>;
+          }),
       ),
     )
       .then((all) => setCrm({ status: "ready", data: all }))
-      .catch((e: unknown) => { if (!(e instanceof Error && e.name === "AbortError")) setCrm({ status: "error", message: e instanceof Error ? e.message : "Customer.io did not answer" }); });
+      .catch((e: unknown) => {
+        if (e instanceof Error && e.name === "AbortError") return;
+        const err = e as CrmFetchError;
+        setCrm({ status: "error", message: e instanceof Error ? e.message : "Customer.io did not answer just now", detail: err?.detail ?? (e instanceof Error ? e.message : String(e)) });
+      });
     return () => ctrl.abort();
   }, [open.cio]);
 
@@ -517,7 +557,9 @@ function PlayerDrawer({ row: open, brandLabel, onClose }: { row: AudiencePlayerR
             <div className="text-[11px] mt-[6px] flex flex-col gap-px" aria-label="Customer.io identity">
               {crm.status === "loading" && <span className="text-[var(--text-4)]">Customer.io…</span>}
               {crm.status === "none" && <span className="text-[var(--text-4)]">no Customer.io record</span>}
-              {crm.status === "error" && <span className="text-amber-400 font-mono">Customer.io not pulled: {crm.message}</span>}
+              {/* Muted like the other neutral states, never amber: nothing on this page is broken, one
+                  source is missing. The technical reason sits on hover for whoever debugs it. */}
+              {crm.status === "error" && <span className="text-[var(--text-4)]" title={crm.detail}>{crm.message}; the calls, texts and deposits here are unaffected.</span>}
               {crm.status === "ready" && (
                 <>
                   <span className="text-[12px] text-[var(--text-1)]">{profile?.name ?? open.name ?? "Name not on the profile"}</span>
@@ -555,7 +597,7 @@ function PlayerDrawer({ row: open, brandLabel, onClose }: { row: AudiencePlayerR
               </button>
             ) : (
               <div className="font-mono text-[12px] text-right text-[var(--text-4)]" aria-label="CRM messages">
-                {crm.status === "ready" ? (partial ? "not pulled" : "none") : crm.status === "none" ? "no record" : crm.status === "error" ? "not pulled" : "…"}
+                {crm.status === "ready" ? (partial ? "not available" : "none") : crm.status === "none" ? "no record" : crm.status === "error" ? "not available" : "…"}
               </div>
             )}
           </div>
@@ -596,7 +638,7 @@ function PlayerDrawer({ row: open, brandLabel, onClose }: { row: AudiencePlayerR
           </dl>
         </div>
       </aside>
-      {crmOpen && <CrmMessagesModal messages={messages} pulledAt={pulledAt} onClose={() => setCrmOpen(false)} />}
+      {crmOpen && <CrmMessagesModal messages={messages} pulledAt={pulledAt} phone={open.phone} onClose={() => setCrmOpen(false)} />}
     </>
   );
 }
