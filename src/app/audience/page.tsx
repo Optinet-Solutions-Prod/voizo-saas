@@ -35,7 +35,6 @@ import type { DayCount } from "@/lib/connectRateHero";
 import type { RangeKey } from "@/lib/rangeWindow";
 import { addDays } from "@/lib/rangeCalendar";
 import { triggerDownload } from "@/lib/download";
-import { SectionTick } from "../analytics/SectionIsland";
 import ConnectRateHero from "../analytics/ConnectRateHero";
 import GlobalExport from "../analytics/GlobalExport";
 import RangeCalendar from "../analytics/RangeCalendar";
@@ -258,17 +257,17 @@ export default function AudiencePage() {
   return (
     <div className="px-[30px] pt-4 pb-16 w-full max-w-[1680px] mx-auto grid gap-4">
       {/* ONE toolbar row (Jasiel 2026-09-11, from the mockup: layout only, not its type or colour).
-          Left, what is being looked at: the title and the market tabs. Right, how it is being cut:
+          Left, what is being looked at: the market tabs. Right, how it is being cut:
           the range presets, the window picker, the export. Two rows put the title on one line and
           the controls on another, which cost a band of vertical space above the fold and read as
-          two unrelated toolbars. Markets stay with the content they filter; brand is the sidebar
-          switcher. One control still drives the hero, the deposits, the player query and both
+          two unrelated toolbars. The page's own "Audience" heading and its blue tick went with them
+          (Jasiel 2026-09-11): the app's top bar already names the page 57px above, and two of the
+          same word that close together is one too many. The shell keeps the title rather than this
+          row, because four pages (dashboard, workers, analytics, settings) carry no heading of
+          their own and would be left unlabelled. Markets stay with the content they filter; brand
+          is the sidebar switcher. One control still drives the hero, the deposits, the player query and both
           exports; a page range and a card range that can disagree is a bug generator. */}
       <div className="flex items-center gap-[13px] flex-wrap">
-        <div className="flex items-center gap-2.5">
-          <SectionTick color="#5b9bf0" />
-          <h1 className="text-lg font-semibold tracking-tight">Audience</h1>
-        </div>
         <div role="tablist" aria-label="Markets" className="inline-flex items-center gap-0.5 p-0.5 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)]">
           {[{ value: "", label: "All markets" }, ...markets].map((m) => {
             const on = market === m.value;

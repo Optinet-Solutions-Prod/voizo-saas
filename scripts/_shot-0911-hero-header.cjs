@@ -52,10 +52,13 @@ const check = (name, ok, detail) => { console.log((ok ? '  PASS  ' : '  FAIL  ')
       const tabs = document.querySelector('[role="tablist"][aria-label="Markets"]');
       if (!tabs) return 'no market tablist';
       const row = tabs.parentElement;
+      // No page-level <h1> any more (2026-09-11): the shell's top bar names the page, and two
+      // "Audience" 57 px apart was one too many. The row must NOT carry one, nor the blue tick.
       const h1 = row.querySelector('h1');
+      if (h1) return 'the page still carries its own <h1> next to the shell title';
       const presets = [...row.querySelectorAll('button')].filter((b) => /^(7d|14d|30d|60d|90d|All)$/.test(b.textContent.trim()));
       const exp = [...row.querySelectorAll('button')].filter((b) => /Export/.test(b.textContent));
-      const missing = [!h1 && 'title', presets.length < 6 && 'presets(' + presets.length + ')', !exp.length && 'export'].filter(Boolean);
+      const missing = [presets.length < 6 && 'presets(' + presets.length + ')', !exp.length && 'export'].filter(Boolean);
       if (missing.length) return 'not in the row: ' + missing.join(', ');
       // and the row really is one line: its height is a single control's, not two stacked
       return row.getBoundingClientRect().height < 60 ? 'ok' : 'row is ' + row.getBoundingClientRect().height.toFixed(0) + 'px tall, looks stacked';

@@ -67,26 +67,31 @@ export function MembersStat({ reach, families, lanes, unavailable }: {
   );
 }
 
-const TRACK = "grid grid-cols-[132px_1fr_62px_74px] items-center gap-[11px] max-[820px]:grid-cols-[104px_1fr_54px_62px] max-[820px]:gap-[7px]";
-// A one-line caption under a row, in the LABEL column, so it reads as a note on the row above and
-// never as another bar (Jasiel 2026-09-08: the full-width texts bar under Texted was the widest
-// thing on the card, in a different unit, and its yellow meant something else one row up).
-const NOTE = "font-mono text-[10.5px] text-[var(--text-4)] leading-snug -mt-[3px] mb-[7px]";
+// A one-line caption under a row, so it reads as a note on the row above and never as another
+// bar (Jasiel 2026-09-08: the full-width texts bar under Texted was the widest thing on the card,
+// in a different unit, and its yellow meant something else one row up).
+const NOTE = "font-mono text-[10.5px] text-[var(--text-4)] leading-snug mt-1";
 
-// Seven rows now instead of five, so the row is a little tighter than the mockup's 30 px; the card
-// still stands where two cards stood before.
-function Row({ label, n, members, color, note, ariaLabel }: { label: string; n: number; members: number; color: string; note: string; ariaLabel?: string }) {
-  const p = members ? (100 * n) / members : 0;
+// The call group's row: label and figures on one line, the bar full width beneath. The first cut of
+// the two-group card kept the old four-column row (label · bar · % · count) and put three of them
+// beside four tall tiles; the left half was three thin lines over a block of nothing (Jasiel
+// 2026-09-11: "looks a little bit funny"). Label-above-bar makes each row about 44 px, so the three
+// of them stand as tall as the tile grid and the two halves read as one card.
+function VoiceRow({ label, n, base, color, note, children }: {
+  label: string; n: number; base: number; color: string; note: string; children?: React.ReactNode;
+}) {
+  const p = base ? (100 * n) / base : 0;
   return (
-    <div className={`${TRACK} py-[3.5px] text-[12px]`} role="row" aria-label={ariaLabel ?? label}>
-      <span className="text-[var(--text-2)] flex items-center gap-[5px]">
-        {label} <Info text={note} />
-      </span>
-      <span className="h-[7px] rounded-[4px] bg-[var(--bg-elevated)] overflow-hidden">
+    <div role="row" aria-label={label} className="py-1.5">
+      <div className="flex items-center gap-1.5 text-[12.5px] text-[var(--text-2)]">
+        <span className="flex items-center gap-1.5">{label} <Info text={note} /></span>
+        <span className="ml-auto font-mono text-[14px] font-medium leading-none text-[var(--text-1)]">{fmt(n)}</span>
+        <span className="font-mono text-[11.5px] text-[var(--text-3)] w-[54px] text-right">{p.toFixed(1)}%</span>
+      </div>
+      <div className="mt-1.5 h-[7px] rounded-[4px] bg-[var(--bg-elevated)] overflow-hidden">
         <span className="block h-full rounded-[4px]" style={{ width: `${Math.max(p, n ? 0.6 : 0).toFixed(2)}%`, background: color }} />
-      </span>
-      <span className="font-mono text-[13px] text-right text-[var(--text-1)]">{p.toFixed(1)}%</span>
-      <span className="font-mono text-[11.5px] text-right text-[var(--text-3)]">{fmt(n)}</span>
+      </div>
+      {children}
     </div>
   );
 }
@@ -119,35 +124,27 @@ function Row({ label, n, members, color, note, ariaLabel }: { label: string; n: 
 // is a strict subset of the table's, which scripts/_gate-0911-reach-window.cjs proves player by
 // player rather than asserting an equality that is not true.
 //
-// STILL NOT A FUNNEL. The bars share one denominator and overlap; most texted players were never
-// spoken to. The texts sub-line counts TEXTS, never people, and never gets a bar of its own
-// (2026-09-08: a full-width texts bar under Texted was the widest thing on the card, in a different
-// unit, and its colour meant something else one row up).
+// TWO GROUPS, not seven rows on one list (Jasiel 2026-09-11). The seven shared a denominator and
+// a bar column, so the four small ones — texted, delivered, emailed, deposited — drew slivers of
+// 1 to 4% that carried no shape and left the right half of the card empty. They are also a
+// different KIND of fact from the call rows: the calls are one channel narrowing, the rest is what
+// happened afterwards across other channels. Splitting them says that without a word of prose, and
+// gives the four numbers a form that suits a small share: a figure, not a bar.
+//
+// STILL NOT A FUNNEL. The groups share one denominator and overlap; most texted players were never
+// spoken to. The texts sub-line counts TEXTS, never people, and never gets a bar of its own.
 //
 // "Deposited after" and the money strip above it are two legitimate and different questions, so
 // both name their rule: the strip is money DATED in the window after any earlier contact (an August
-// player depositing this week counts); this row is players touched THIS week who deposited after
+// player depositing this week counts); this tile is players touched THIS week who deposited after
 // that touch. Order, not cause — a holdout answers cause.
-const REACH_ROWS: {
-  key: "dialled" | "answered" | "spoke" | "texted" | "textDelivered" | "emailed" | "depositors";
-  label: string;
-  color: string;
-  note: string;
-}[] = [
+const VOICE_ROWS: { key: "dialled" | "answered" | "spoke"; label: string; color: string; note: string }[] = [
   { key: "dialled", label: "Dialled", color: ROW_COLOR.unreachable,
     note: "At least one call attempt inside this window. Whether it connected is the next row." },
   { key: "answered", label: "Answered", color: ROW_COLOR.reached,
     note: "The call connected and was not voicemail. A pickup with nobody talking still counts here, which is why the row below is smaller. The same rule the connect rate above uses." },
   { key: "spoke", label: "Spoke with them", color: ROW_COLOR.positive,
     note: "Somebody talked back: the call connected, was not voicemail, and the transcript holds at least one thing the player said, or they turned the offer down outright. The same rule as the Spoke with them filter on the table below, applied to calls inside this window." },
-  { key: "texted", label: "Texted", color: ROW_COLOR.neutral,
-    note: "At least one text sent inside this window. Not a subset of Answered: most texted players were never spoken to. The line below counts texts, not people; unconfirmed means no delivery receipt came back." },
-  { key: "textDelivered", label: "Text delivered", color: ROW_COLOR.voicemail,
-    note: "The handset confirmed at least one text inside this window." },
-  { key: "emailed", label: "Email follow-up sent", color: ROW_COLOR.agent_timeout,
-    note: "The follow-up trigger reached Customer.io for this player inside this window. Whether the email then went out, landed and was opened is the CRM's record, and it is in the player's drawer." },
-  { key: "depositors", label: "Deposited after", color: "var(--color-primary)",
-    note: "Players touched inside this window who deposited at or after that touch. A narrower question than the money strip above, which counts every deposit dated in the window however long ago the player was first contacted. Order, not cause: there is no comparison group here, and only a holdout would show whether contact changed anything." },
 ];
 
 /** "3 Sep → 10 Sep", or "all time" for the lifetime range, whose start is the epoch. */
@@ -168,14 +165,38 @@ export function ReachCard({ reach, from, to, unavailable, filterWords }: {
   const base = m?.contacted ?? 0;
   const tp = (n: number) => (m && m.msgs ? `${((100 * n) / m.msgs).toFixed(1)}%` : "—");
   const notAnswered = m && m.texted ? Math.round((100 * m.textedNotAnswered) / m.texted) : null;
+  // The one figure the old card could not show: of the people who picked up, how many actually
+  // talked. 31 of 285 on 10 Sep. Against the contacted denominator it reads 4.6% and looks like
+  // nothing; against the people who answered it is 10.9%, which is the number worth acting on.
+  const spokeOfAnswered = m && m.answered ? (100 * m.spoke) / m.answered : null;
   const when = windowWords(from, to);
   const who = filterWords ? ` · ${filterWords}` : "";
+
+  const tiles = m
+    ? [
+        { key: "texted", label: "Texted", aria: "Texted", n: m.texted,
+          sub: m.msgs ? `${fmt(m.msgs)} texts sent` : "no texts sent",
+          note: "Players sent at least one text inside this window. Not a subset of Answered: most texted players were never spoken to. Unconfirmed means no delivery receipt came back." },
+        { key: "delivered", label: "Text delivered", aria: "Text delivered", n: m.textDelivered,
+          sub: m.msgs ? `${tp(m.msgsDelivered)} of texts confirmed` : "nothing to confirm",
+          note: "Players whose handset confirmed at least one text inside this window. The line below counts TEXTS, not people: what share of the texts sent came back with a delivery receipt." },
+        { key: "emailed", label: "Email follow-up sent", aria: "Email follow-up sent", n: m.emailed,
+          sub: "reached Customer.io",
+          note: "The follow-up trigger reached Customer.io for this player inside this window. Whether the email then went out, landed and was opened is the CRM's record, and it is in the player's drawer." },
+        { key: "deposited", label: "Deposited after", aria: "Deposited after contact", n: m.depositors,
+          sub: m.deposits ? `${fmt(m.deposits)} deposits · ${money0("EUR", m.amountEur)}` : "no deposit yet",
+          note: "Players touched inside this window who deposited at or after that touch. A narrower question than the money strip above, which counts every deposit dated in the window however long ago the player was first contacted. Order, not cause: there is no comparison group here, and only a holdout would show whether contact changed anything." },
+      ]
+    : [];
+
+  const groupLabel = "text-[10px] uppercase tracking-[.07em] text-[var(--text-4)] mb-2";
+
   return (
     <section className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl px-[18px] py-4" aria-label="Reach">
-      <div className="flex items-baseline gap-2.5 mb-1">
-        <h2 className="text-[12.5px] font-medium text-[var(--text-2)] flex items-center gap-[5px]">
+      <div className="flex items-baseline gap-2.5 mb-3">
+        <h2 className="text-[15px] font-semibold text-[var(--text-1)] flex items-center gap-1.5">
           Reach
-          <Info text="How far each channel got with the players called or texted inside this window. Bars count people, not attempts, and they overlap: one player can be in several. It follows the window and the filters on the table below." />
+          <Info text="How far each channel got with the players called or texted inside this window. Counts people, not attempts, and they overlap: one player can be in several. It follows the window and the filters on the table below." />
         </h2>
         <span className="ml-auto font-mono text-[10.5px] text-[var(--text-4)] text-right">
           {m ? `${fmt(base)} players contacted${when ? ` · ${when}` : ""}${who}` : ""}
@@ -184,44 +205,74 @@ export function ReachCard({ reach, from, to, unavailable, filterWords }: {
       {!m && unavailable ? (
         <p className="text-[11.5px] text-[var(--text-4)] py-3">Not available yet.</p>
       ) : !m ? (
-        <div aria-label="Loading reach" aria-busy="true">
-          {REACH_ROWS.map((r) => (
-            <div key={r.key} className={`${TRACK} py-[3.5px] text-[12px]`}>
-              <span className="text-[var(--text-3)]">{r.label}</span>
-              <span className="h-[7px] rounded-[4px] bg-[var(--bg-elevated)] overflow-hidden animate-pulse" />
-              <span className="text-right"><Pulse w="w-9" /></span>
-              <span className="text-right"><Pulse w="w-12" /></span>
-            </div>
-          ))}
+        <div className="grid grid-cols-2 gap-6 max-[980px]:grid-cols-1" aria-label="Loading reach" aria-busy="true">
+          <div>
+            {VOICE_ROWS.map((r) => (
+              <div key={r.key} className="py-1.5">
+                <div className="flex items-center text-[12.5px] text-[var(--text-3)]">{r.label}<span className="ml-auto"><Pulse w="w-16" /></span></div>
+                <div className="mt-1.5 h-[7px] rounded-[4px] bg-[var(--bg-elevated)] animate-pulse" />
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {["Texted", "Text delivered", "Email follow-up sent", "Deposited after"].map((l) => (
+              <div key={l} className="rounded-lg border border-[var(--border)] px-3 py-2">
+                <div className="text-[11px] text-[var(--text-3)]">{l}</div>
+                <div className="mt-1.5"><Pulse w="w-14" h="h-4" /></div>
+                <div className="mt-1.5"><Pulse w="w-20" h="h-2.5" /></div>
+              </div>
+            ))}
+          </div>
         </div>
       ) : base === 0 ? (
         <p className="text-[11.5px] text-[var(--text-4)] py-3">Nobody was called or texted in this window.</p>
       ) : (
         <>
-          {REACH_ROWS.map((r) => (
-            <div key={r.key}>
-              <Row label={r.label} n={m[r.key]} members={base} color={r.color} note={r.note}
-                ariaLabel={r.key === "depositors" ? "Deposited after contact" : undefined} />
-              {r.key === "texted" && m.msgs > 0 && (
-                <p className={NOTE}>{fmt(m.msgs)} texts · {tp(m.msgsDelivered)} delivered · {tp(m.msgsFailed)} failed · {tp(m.msgsUnconfirmed)} unconfirmed</p>
-              )}
-              {r.key === "depositors" && (
-                <p className={NOTE} aria-label="Gross deposited after contact">
-                  {m.deposits
-                    ? `${fmt(m.deposits)} deposits · ${money0("EUR", m.amountEur)} · after a touch in this window`
-                    : "no deposit after a touch in this window"}
-                </p>
-              )}
+          <div className="grid grid-cols-2 gap-6 items-stretch max-[980px]:grid-cols-1">
+            {/* The calls, narrowing. These three DO belong on one denominator, and the rows are spread
+                over the group's full height so the half stands as tall as the tiles beside it. */}
+            <div className="flex flex-col min-w-0">
+              <h3 className={groupLabel}>Calls</h3>
+              <div className="flex-1 flex flex-col justify-between">
+                {VOICE_ROWS.map((r) => (
+                  <VoiceRow key={r.key} label={r.label} n={m[r.key]} base={base} color={r.color} note={r.note}>
+                    {r.key === "spoke" && spokeOfAnswered != null && (
+                      <p className={NOTE}>{spokeOfAnswered.toFixed(1)}% of the {fmt(m.answered)} who answered</p>
+                    )}
+                  </VoiceRow>
+                ))}
+              </div>
             </div>
-          ))}
-          {/* The footer's job is to stop a reader treating seven overlapping bars as a funnel. At
-              0% the old wording ("0% of texted players were never answered") reads like a broken
-              number rather than the fact it is, so the zero case says it in words instead. */}
-          <p className="mt-[9px] pt-2.5 border-t border-[var(--border)] text-[11.5px] text-[var(--text-3)] leading-normal">
+
+            {/* What followed, across the other channels. A share of 1 to 4% is a figure, not a bar. */}
+            <div className="min-w-0">
+              <h3 className={groupLabel}>What followed</h3>
+              <div className="grid grid-cols-2 gap-2 max-[560px]:grid-cols-1">
+                {tiles.map((t) => (
+                  <div key={t.key} className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)]/40 px-3 py-2 min-w-0" aria-label={t.aria}>
+                    <div className="flex items-center gap-1.5 text-[11.5px] text-[var(--text-2)] min-w-0">
+                      <span className="truncate">{t.label}</span>
+                      <Info text={t.note} />
+                    </div>
+                    <div className="mt-1.5 flex items-baseline gap-1.5">
+                      <span className="font-mono text-[17px] font-medium leading-none tracking-[-0.02em] text-[var(--text-1)]">{fmt(t.n)}</span>
+                      <span className="font-mono text-[11px] text-[var(--text-3)]">{((100 * t.n) / base).toFixed(1)}%</span>
+                    </div>
+                    <div className="mt-1 font-mono text-[10.5px] text-[var(--text-4)] truncate" title={t.sub}>{t.sub}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* The footer's job is to stop a reader treating the card as a funnel. At 0% the old
+              wording ("0% of texted players were never answered") reads like a broken number
+              rather than the fact it is, so the zero case says it in words instead. */}
+          <p className="mt-3.5 pt-2.5 border-t border-[var(--border)] text-[11.5px] text-[var(--text-3)] leading-normal">
             {notAnswered == null
-              ? "Not a funnel: the bars overlap and one player can be in several."
+              ? "Not a funnel: the groups overlap and one player can be in several."
               : notAnswered === 0
-                ? "Not a funnel: the bars overlap. In this window every texted player was answered too."
+                ? "Not a funnel: the groups overlap. In this window every texted player was answered too."
                 : `Not a funnel: ${notAnswered}% of texted players were never answered.`}
           </p>
         </>
@@ -356,7 +407,7 @@ export function DepositsByDay({ deposits, unavailable, filterWords }: { deposits
       )}
       <div className="px-[18px] py-4">
         <div className="flex items-baseline gap-2.5 mb-0.5">
-          <h2 className="text-[12.5px] font-medium text-[var(--text-2)] flex items-center gap-[5px]">
+          <h2 className="text-[15px] font-semibold text-[var(--text-1)] flex items-center gap-1.5">
             Deposits by {weekly ? "week" : "day"}
             <Info text={`Deposits made after the first call or text, counted on the ${weekly ? "week" : "day"} each deposit happened. ${weekly ? "Weeks run Sunday to Saturday. The window is too long for a bar a day. " : ""}Days marked not captured are outside the records${coverageWords ? `, which cover ${coverageWords}` : ""}.`} />
           </h2>

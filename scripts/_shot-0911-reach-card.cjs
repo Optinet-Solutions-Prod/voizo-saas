@@ -36,15 +36,19 @@ const ROWS = ['Dialled', 'Answered', 'Spoke with them', 'Texted', 'Text delivere
   await send('Page.enable'); await send('Runtime.enable'); await send('Network.enable');
   await send('Network.setExtraHTTPHeaders', { headers: { Authorization: auth } });
 
-  /** The card's header and its seven rows, straight out of the rendered DOM. */
+  /** The card's header and its seven measures, straight out of the rendered DOM. Since the two-group
+   *  layout (2026-09-11) three are bar rows and four are tiles, so each is found by its aria-label
+   *  and its count and share are the first two monospace spans inside it, in both shapes. */
   const readCard = () => evalJs(`(() => {
     const s = document.querySelector('section[aria-label="Reach"]');
     if (!s) return null;
     const head = s.querySelector('h2')?.parentElement?.textContent || '';
     const rows = {};
-    for (const r of s.querySelectorAll('[role="row"]')) {
-      const cells = [...r.children].map((c) => c.textContent.trim());
-      rows[r.getAttribute('aria-label')] = { pct: cells[2], n: cells[3] };
+    for (const label of ${JSON.stringify(ROWS)}) {
+      const el = s.querySelector('[aria-label="' + label + '"]');
+      if (!el) continue;
+      const mono = [...el.querySelectorAll('span')].filter((x) => /font-mono/.test(x.className)).map((x) => x.textContent.trim());
+      rows[label] = { n: mono[0], pct: mono[1] };
     }
     const notes = [...s.querySelectorAll('p')].map((p) => p.textContent.trim());
     return { head: head.replace(/\\s+/g, ' ').trim(), rows, notes, text: s.textContent };
@@ -70,7 +74,7 @@ const ROWS = ['Dialled', 'Answered', 'Spoke with them', 'Texted', 'Text delivere
       await wait(1200);
     }
     check(name + ': the Reach card rendered its numbers',
-      await until(`(() => { const s = document.querySelector('section[aria-label="Reach"]'); return !!s && /players contacted/.test(s.textContent) && s.querySelectorAll('[role="row"]').length === 7; })()`));
+      await until(`(() => { const s = document.querySelector('section[aria-label="Reach"]'); return !!s && /players contacted/.test(s.textContent) && ["Dialled","Answered","Spoke with them","Texted","Text delivered","Email follow-up sent","Deposited after contact"].every((l) => !!s.querySelector('[aria-label="' + l + '"]')); })()`));
     const card = await readCard();
     if (!card) { check(name + ': card present', false); continue; }
     console.log('  header: ' + card.head);
