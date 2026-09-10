@@ -42,7 +42,7 @@ import RangeCalendar from "../analytics/RangeCalendar";
 import { CardGridSkeleton } from "../analytics/loadingSkeletons";
 import AudiencePlayers, { PlayerDrawerByPhone, type PlayerFilters, DEFAULT_FILTERS, CONTACT_OPTIONS, DEPOSITED_OPTIONS } from "./AudiencePlayers";
 import AudienceFamilies from "./AudienceFamilies";
-import { ContactWindowCard, DepositsByDay, MembersStat, ReachCard } from "./AudienceReach";
+import { DepositsByDay, MembersStat, ReachCard } from "./AudienceReach";
 import type { AudiencePlayersResponse } from "../api/audience/players/route";
 import type { AudienceReachResponse } from "../api/audience/reach/route";
 import type { AudienceDepositsResponse } from "../api/audience/deposits/route";
@@ -216,7 +216,7 @@ export default function AudiencePage() {
       .then(() => fetch(`/api/audience/deposits?${depQs}`, { cache: "no-store", signal: ctrl.signal }))
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((j: AudienceDepositsResponse) => { setDeps(j); saveSnapshot(`audience.deposits:${depQs}`, j); })
-      .catch((e: unknown) => { if (!(e instanceof Error && e.name === "AbortError")) setDeps({ scopeCampaigns: 0, deposits: null, unavailable: e instanceof Error ? e.message : "Failed to load" }); });
+      .catch((e: unknown) => { if (!(e instanceof Error && e.name === "AbortError")) setDeps({ scopeCampaigns: 0, deposits: null, reach: null, from: "", to: "", unavailable: e instanceof Error ? e.message : "Failed to load" }); });
     return () => ctrl.abort();
   }, [depQs]);
 
@@ -349,8 +349,7 @@ export default function AudiencePage() {
       {/* Order (Jasiel 2026-09-07): the money, the channels, the players, and the campaign families last;
           the mockup had the families above the players, and they read as a wall between the two. */}
       <DepositsByDay deposits={deps?.deposits ?? null} unavailable={deps?.unavailable} filterWords={filterWords} />
-      <ReachCard reach={agg?.reach ?? null} deposited={agg?.deposited ?? null} unavailable={agg?.unavailable.reach} />
-      <ContactWindowCard work={agg?.contactWindow ?? null} unavailable={agg?.unavailable.contactWindow} />
+      <ReachCard reach={deps?.reach ?? null} from={deps?.from} to={deps?.to} unavailable={deps?.unavailableReach} filterWords={filterWords} />
 
       {playersError && <p className="text-[11px] text-amber-400 font-mono px-1">{playersError}</p>}
       <AudiencePlayers

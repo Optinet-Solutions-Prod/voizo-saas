@@ -70,6 +70,95 @@ export async function depositCoverage(supabase: SupabaseClient): Promise<Audienc
   return { captureFrom, captureTo, liveFrom };
 }
 
+/** The page fetches the strip, the Reach card, the reach route and the players list together.
+ *  Alone the all-time rollup answers in about 1.3 s (measured 2026-09-10); fired beside the reach
+ *  route's forty-odd calls it once crossed the 8 s statement limit and the card went blank. One
+ *  retry after the contention has passed turns that into a slower answer instead of a blank card.
+ *  A timeout ONLY: a missing function or a bad argument must surface at once, or a paste that never
+ *  happened would look like a slow database. */
+async function retryOnceOnTimeout<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (e) {
+    if (!(e instanceof Error && /statement timeout|57014/i.test(e.message))) throw e;
+    await new Promise((r) => setTimeout(r, 1500));
+    return await run();
+  }
+}
+
+/** The merged Reach card's one row (2026-09-11): for the players contacted inside the window and
+ *  matching the Depositors table's filters, how far each channel got and whether money followed.
+ *  `answered` is the dashboard's LEAN rule, `spoke` the STRICT voizo_spoke_with() the "Spoke with
+ *  them" filter uses; the card shows both and names each. */
+export interface LaneReachWindow {
+  contacted: number;
+  dialled: number;
+  answered: number;
+  spoke: number;
+  texted: number;
+  textDelivered: number;
+  textedNotAnswered: number;
+  msgs: number;
+  msgsDelivered: number;
+  msgsFailed: number;
+  msgsUnconfirmed: number;
+  emailed: number;
+  depositors: number;
+  deposits: number;
+  amountEur: number;
+}
+
+type ReachWindowRow = Record<string, number | string | null>;
+
+/** No row is null, not a card of zeros: a zero card states "nobody was contacted", a missing
+ *  answer states nothing, and the page renders those two differently. */
+export function mapReachWindow(rows: ReachWindowRow[]): LaneReachWindow | null {
+  const r = rows[0];
+  if (!r) return null;
+  const n = (k: string) => Number(r[k]) || 0;
+  return {
+    contacted: n("contacted"),
+    dialled: n("dialled"),
+    answered: n("answered"),
+    spoke: n("spoke"),
+    texted: n("texted"),
+    textDelivered: n("text_delivered"),
+    textedNotAnswered: n("texted_not_answered"),
+    msgs: n("msgs"),
+    msgsDelivered: n("msgs_delivered"),
+    msgsFailed: n("msgs_failed"),
+    msgsUnconfirmed: n("msgs_unconfirmed"),
+    emailed: n("emailed"),
+    depositors: n("depositors"),
+    deposits: n("deposits"),
+    amountEur: n("amount_eur"),
+  };
+}
+
+/** One RPC, the same filters the strip and the table are given, so the three describe one
+ *  population. Same retry rule as the strip; the route decides what a failure means to the page. */
+export async function loadReachWindow(
+  supabase: SupabaseClient,
+  campaignIds: string[],
+  fromIso: string,
+  toIso: string,
+  f: DepositFilters,
+): Promise<LaneReachWindow | null> {
+  return retryOnceOnTimeout(async () => {
+    const { data, error } = await supabase.rpc("audience_lane_reach_window", {
+      p_campaign_ids: campaignIds,
+      p_from: fromIso,
+      p_to: toIso,
+      p_deposited: f.deposited,
+      p_contact: f.contact,
+      p_family_ids: f.familyIds,
+      p_q: f.q,
+    });
+    if (error) throw new Error(error.message);
+    return mapReachWindow((data ?? []) as ReachWindowRow[]);
+  });
+}
+
 export async function loadDeposits(
   supabase: SupabaseClient,
   campaignIds: string[],
@@ -90,21 +179,6 @@ export async function loadDeposits(
     if (error) throw new Error(error.message);
     return mapRollup((data ?? []) as RollupRow[]);
   };
-  const [rollup, coverage] = await Promise.all([
-    (async () => {
-      try {
-        return await rollupOnce();
-      } catch (e) {
-        // The page fetches this, the reach route and the players list together. Alone the all-time,
-        // all-brands call answers in about 1.3 s (measured 2026-09-10); fired beside the reach route's
-        // nine calls it once crossed the 8 s statement limit. One retry after the contention has
-        // passed turns that into a slower answer instead of a blank card. Anything else rethrows.
-        if (!(e instanceof Error && /statement timeout|57014/i.test(e.message))) throw e;
-        await new Promise((r) => setTimeout(r, 1500));
-        return await rollupOnce();
-      }
-    })(),
-    depositCoverage(supabase),
-  ]);
+  const [rollup, coverage] = await Promise.all([retryOnceOnTimeout(rollupOnce), depositCoverage(supabase)]);
   return { from: fromIso, to: toIso, days: rollup.days, totals: rollup.totals, depositors: rollup.depositors, coverage };
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { loadDeposits, mapRollup } from "./audienceDeposits";
+import { loadDeposits, loadReachWindow, mapReachWindow, mapRollup } from "./audienceDeposits";
 
 // The mapper is the one piece of logic between the database function and the strip. The
 // arithmetic lives in SQL and is proved by scripts/_gate-0910-deposit-rollup.cjs against the two
@@ -98,5 +98,58 @@ describe("loadDeposits — retries a statement timeout ONCE and nothing else", (
     ]);
     await expect(loadDeposits(client, ["c1"], "2026-09-03T00:00:00Z", "2026-09-10T00:00:00Z", F)).rejects.toThrow(/Could not find/);
     expect(calls.filter((c) => c === "audience_lane_deposit_rollup")).toHaveLength(1);
+  });
+});
+
+// ── The merged Reach card (2026-09-11) ──
+// Same division of labour as the strip: the arithmetic is SQL's and is proved against
+// audience_lane_reach by scripts/_gate-0911-reach-window.cjs. This pins the mapping, the numeric
+// coercion PostgREST forces on a numeric column, and the empty case.
+describe("mapReachWindow", () => {
+  const row = {
+    contacted: 674, dialled: 666, answered: 297, spoke: 35, texted: 27, text_delivered: 26,
+    texted_not_answered: 17, msgs: 27, msgs_delivered: 26, msgs_failed: 1, msgs_unconfirmed: 0,
+    emailed: 18, depositors: 10, deposits: 12, amount_eur: "422.5242531149",
+  };
+
+  it("maps every column and turns the numeric EUR string into a number", () => {
+    const out = mapReachWindow([row])!;
+    expect(out.contacted).toBe(674);
+    expect(out.textDelivered).toBe(26);
+    expect(out.textedNotAnswered).toBe(17);
+    expect(out.msgsUnconfirmed).toBe(0);
+    expect(out.emailed).toBe(18);
+    expect(out.amountEur).toBeCloseTo(422.5242531149, 6);
+  });
+
+  it("fails SAFE on nothing: no row is null, never a card full of zeros", () => {
+    // A zero card states "nobody was contacted"; a missing answer states nothing. The page shows
+    // "Not available yet" for null, so the two must not collapse into each other.
+    expect(mapReachWindow([])).toBeNull();
+  });
+
+  it("KNOWN-BAD: a null EUR becomes 0, not NaN", () => {
+    const out = mapReachWindow([{ ...row, amount_eur: null }])!;
+    expect(out.amountEur).toBe(0);
+  });
+});
+
+describe("loadReachWindow — the same retry-once rule as the strip", () => {
+  it("a timeout then an answer → the answer, two rpc calls", async () => {
+    const { client, calls } = fakeSupabase([
+      { data: null, error: { message: "canceling statement due to statement timeout" } },
+      { data: [{ contacted: 5, dialled: 5, answered: 2, spoke: 1, texted: 0, text_delivered: 0, texted_not_answered: 0, msgs: 0, msgs_delivered: 0, msgs_failed: 0, msgs_unconfirmed: 0, emailed: 0, depositors: 0, deposits: 0, amount_eur: "0" }], error: null },
+    ]);
+    const out = await loadReachWindow(client, ["c1"], "2026-09-03T00:00:00Z", "2026-09-10T00:00:00Z", F);
+    expect(out?.contacted).toBe(5);
+    expect(calls.filter((c) => c === "audience_lane_reach_window")).toHaveLength(2);
+  }, 10_000);
+
+  it("KNOWN-BAD: a missing function is NOT retried, it surfaces at once", async () => {
+    const { client, calls } = fakeSupabase([
+      { data: null, error: { message: "Could not find the function public.audience_lane_reach_window" } },
+    ]);
+    await expect(loadReachWindow(client, ["c1"], "2026-09-03T00:00:00Z", "2026-09-10T00:00:00Z", F)).rejects.toThrow(/Could not find/);
+    expect(calls.filter((c) => c === "audience_lane_reach_window")).toHaveLength(1);
   });
 });

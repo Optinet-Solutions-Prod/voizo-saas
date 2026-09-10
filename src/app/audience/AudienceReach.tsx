@@ -7,24 +7,24 @@
 //                  2026-09-01, 76-86% of texted players were never in a conversation, so nested or
 //                  tapering bars would state something false about our own operation. Under Texted,
 //                  the texts themselves by delivery receipt, in TEXTS; players above, texts below,
-//                  the two units never share a bar. Emailed reads "none yet", never 0%. A fifth bar
-//                  since 2026-09-07 (Jasiel: "a summary of gross deposited from players"):
-//                  Deposited after contact, lifetime like the others, with the gross per currency.
+//                  the two units never share a bar. Since 2026-09-11 it follows the WINDOW and the
+//                  Depositors table's filters, and it absorbed Contact this window; see its own
+//                  block below for why three cards became one.
 //   DepositsByDay  `whenMoney()` (VOZ-481): one bar per calendar day on the range control's window,
 //                  weekly bars past 92 days. Bars are DEPOSITS; the tooltip says how many players
 //                  made them, in words. A day outside what the table holds reads "not captured",
 //                  never "no deposits". A money strip at the top (2026-09-07): deposits, depositors,
 //                  gross per currency never summed across currencies, the CRM's EUR-normalised total.
 //
-// "Reached", not the mockup's "Spoke with a person": the RPC behind this card is the dashboard's
-// lean rule (connected and not the voicemail bucket, no transcript), and Reached is the word the
-// dashboard already uses for exactly that predicate. The transcript classifier's "conversation"
-// is a different, smaller number and is never labelled as this one.
+// The word "Reached" is retired from the Reach card (2026-09-11). It named the dashboard's lean
+// rule here and a stricter rule two cards down, on one page. The card now shows both rules and
+// names each: "Answered" for the lean one, "Spoke with them" for the transcript rule.
 import { Download } from "lucide-react";
 import { Info } from "../analytics/ConnectRateHero";
 import { ROW_COLOR } from "../analytics/PerformanceCards";
 import { CSV_BOM, csvCell, triggerDownload } from "@/lib/download";
-import type { AudienceDeposits, ContactWindow, DepositTotal, LaneReach, LifetimeDeposited } from "../api/audience/reach/route";
+import type { AudienceDeposits, LaneReach } from "../api/audience/reach/route";
+import type { LaneReachWindow } from "@/lib/audienceDeposits";
 
 const fmt = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString("en-US"));
 /** A loading placeholder the exact size of what it stands in for: the card keeps its height and the
@@ -37,8 +37,6 @@ const money0 =(cur: string, n: number) => `${cur} ${Math.round(n).toLocaleString
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const mmdd = (iso: string) => iso.slice(5, 10);
 const shortDate = (iso: string) => `${Number(iso.slice(8, 10))} ${MONTHS[Number(iso.slice(5, 7)) - 1]}`;
-/** Per-currency gross, largest first; never a sum across currencies. */
-const grossLine = (totals: DepositTotal[]) => [...totals].filter((t) => t.deposits > 0).sort((a, b) => b.amountEur - a.amountEur).map((t) => money0(t.currency, t.amountLocal)).join(" + ");
 
 export function MembersStat({ reach, families, lanes, unavailable }: {
   reach: LaneReach | null;
@@ -70,67 +68,120 @@ const TRACK = "grid grid-cols-[132px_1fr_62px_74px] items-center gap-[11px] max-
 // thing on the card, in a different unit, and its yellow meant something else one row up).
 const NOTE = "font-mono text-[10.5px] text-[var(--text-4)] leading-snug -mt-[3px] mb-[7px]";
 
-function Row({ label, n, members, color, note, pending, ariaLabel }: { label: string; n: number; members: number; color: string; note: string; pending?: boolean; ariaLabel?: string }) {
+// Seven rows now instead of five, so the row is a little tighter than the mockup's 30 px; the card
+// still stands where two cards stood before.
+function Row({ label, n, members, color, note, ariaLabel }: { label: string; n: number; members: number; color: string; note: string; ariaLabel?: string }) {
   const p = members ? (100 * n) / members : 0;
-  const muted = pending ? "text-[var(--text-4)]" : "";
   return (
-    <div className={`${TRACK} py-[5px] text-[12px]`} role="row" aria-label={ariaLabel ?? label}>
+    <div className={`${TRACK} py-[3.5px] text-[12px]`} role="row" aria-label={ariaLabel ?? label}>
       <span className="text-[var(--text-2)] flex items-center gap-[5px]">
         {label} <Info text={note} />
       </span>
       <span className="h-[7px] rounded-[4px] bg-[var(--bg-elevated)] overflow-hidden">
         <span className="block h-full rounded-[4px]" style={{ width: `${Math.max(p, n ? 0.6 : 0).toFixed(2)}%`, background: color }} />
       </span>
-      <span className={`font-mono text-[13px] text-right ${muted || "text-[var(--text-1)]"}`}>{pending ? "" : `${p.toFixed(1)}%`}</span>
-      <span className={`font-mono text-[11.5px] text-right ${muted || "text-[var(--text-3)]"}`}>{pending ? "none yet" : fmt(n)}</span>
+      <span className="font-mono text-[13px] text-right text-[var(--text-1)]">{p.toFixed(1)}%</span>
+      <span className="font-mono text-[11.5px] text-right text-[var(--text-3)]">{fmt(n)}</span>
     </div>
   );
 }
 
-// ── Contact this window (Jasiel 2026-09-08) ──
-// What Voizo DID in the window and what followed. Replaces "What came before the deposit", whose
-// denominator was every deposit (which Voizo does not control), so its biggest bar was really a
-// statement about contact VOLUME: in 7 days about 950 of 20,425 members get called or texted.
+// ── The merged Reach card (Jasiel 2026-09-10, built 2026-09-11) ──
 //
-// The contacted-vs-not comparison drafted alongside this was NOT shipped, for two measured reasons:
-//   EXPOSURE  contacted players only count from the moment they were called, averaging 4.25 days of
-//             a 7-day window against 7.00 for everyone else. Raw rates read 0.63% vs 0.59%, which
-//             looks like nothing; per 1,000 player-days they are 1.49 vs 0.85. A side-by-side card
-//             would have hidden the only positive signal in the data.
-//   SELECTION the contacted cohort was 634 reactivation plus 315 new registrations, against a
-//             comparison group containing habitual depositors. Different populations.
-// So this card states facts about our own work and makes no causal claim. Cause is a holdout
-// question, designed separately the same day.
-const WORK_ROWS: { key: "spoke" | "texted" | "delivered" | "depositors"; label: string; color: string; note: string }[] = [
-  { key: "spoke", label: "Spoke", color: ROW_COLOR.reached,
-    note: "Of those players, how many had a call that connected and lasted 30 seconds or more." },
+// One card, one window, one population. Until today the tab carried THREE cards with three windows
+// and three different meanings of the word "reached": Reach (all time, lean), Contact this window
+// (the window, a completed call of 30 seconds or more) and the Depositors filter (the window,
+// strict). Jasiel, reading the money strip — which has followed the window and the table's filters
+// since b188855 — above a filter-blind Reach card: "if we're looking at 7d it should be accurate to
+// tell the players we reached, dialled, texted, emailed, deposited. maybe the other card that
+// complements these is now redundant?" It was. Contact this window is gone; its SQL function stays
+// in the database, unused, until a cleanup paste.
+//
+// The denominator is the players CONTACTED INSIDE THE WINDOW, matching the table's filters, and it
+// is deliberately the union of the Dialled and Texted rows, so no bar can ever be wider than the
+// card it sits in. "All" gives back the all-time view the old card showed.
+//
+// TWO REACH RULES, NAMED, SIDE BY SIDE. "Answered" is the dashboard's lean rule (connected, not
+// voicemail — a pickup with nobody talking still counts). "Spoke with them" is the strict
+// voizo_spoke_with() the Depositors filter uses. The word "Reached" is retired from this card on
+// purpose: it is the loaded word, it meant two different things on the same page, and a reader is
+// better served by both numbers and the gap between them. Measured 7d on 10 Sep: 285 answered,
+// 31 spoke.
+//
+// The card's `spoke` and the table's "Spoke with them" total are NOT the same number and must not
+// be expected to match: the card counts players spoken to INSIDE the window, the table counts
+// players spoken to EVER whose last touch falls in the window (31 and 35 on 10 Sep). The card's set
+// is a strict subset of the table's, which scripts/_gate-0911-reach-window.cjs proves player by
+// player rather than asserting an equality that is not true.
+//
+// STILL NOT A FUNNEL. The bars share one denominator and overlap; most texted players were never
+// spoken to. The texts sub-line counts TEXTS, never people, and never gets a bar of its own
+// (2026-09-08: a full-width texts bar under Texted was the widest thing on the card, in a different
+// unit, and its colour meant something else one row up).
+//
+// "Deposited after" and the money strip above it are two legitimate and different questions, so
+// both name their rule: the strip is money DATED in the window after any earlier contact (an August
+// player depositing this week counts); this row is players touched THIS week who deposited after
+// that touch. Order, not cause — a holdout answers cause.
+const REACH_ROWS: {
+  key: "dialled" | "answered" | "spoke" | "texted" | "textDelivered" | "emailed" | "depositors";
+  label: string;
+  color: string;
+  note: string;
+}[] = [
+  { key: "dialled", label: "Dialled", color: ROW_COLOR.unreachable,
+    note: "At least one call attempt inside this window. Whether it connected is the next row." },
+  { key: "answered", label: "Answered", color: ROW_COLOR.reached,
+    note: "The call connected and was not voicemail. A pickup with nobody talking still counts here, which is why the row below is smaller. The same rule the connect rate above uses." },
+  { key: "spoke", label: "Spoke with them", color: ROW_COLOR.positive,
+    note: "Somebody talked back: the call connected, was not voicemail, and the transcript holds at least one thing the player said, or they turned the offer down outright. The same rule as the Spoke with them filter on the table below, applied to calls inside this window." },
   { key: "texted", label: "Texted", color: ROW_COLOR.neutral,
-    note: "Of those players, how many were sent at least one text." },
-  { key: "delivered", label: "Text delivered", color: ROW_COLOR.voicemail,
-    note: "Of those texts, how many the phone confirmed it received." },
-  { key: "depositors", label: "Deposited after", color: ROW_COLOR.declined,
-    note: "Of the players contacted inside this window, how many deposited at or after that contact. A narrower population "
-      + "than the money strip above, which counts every deposit made in the window whenever the player was first contacted. "
-      + "Order, not cause: this card has no comparison group, and only a holdout would show whether contact changed anything." },
+    note: "At least one text sent inside this window. Not a subset of Answered: most texted players were never spoken to. The line below counts texts, not people; unconfirmed means no delivery receipt came back." },
+  { key: "textDelivered", label: "Text delivered", color: ROW_COLOR.voicemail,
+    note: "The handset confirmed at least one text inside this window." },
+  { key: "emailed", label: "Email follow-up sent", color: ROW_COLOR.agent_timeout,
+    note: "The follow-up trigger reached Customer.io for this player inside this window. Whether the email then went out, landed and was opened is the CRM's record, and it is in the player's drawer." },
+  { key: "depositors", label: "Deposited after", color: "var(--color-primary)",
+    note: "Players touched inside this window who deposited at or after that touch. A narrower question than the money strip above, which counts every deposit dated in the window however long ago the player was first contacted. Order, not cause: there is no comparison group here, and only a holdout would show whether contact changed anything." },
 ];
 
-export function ContactWindowCard({ work, unavailable }: { work: ContactWindow | null; unavailable?: string }) {
-  const base = work?.contacted ?? 0;
+/** "3 Sep → 10 Sep", or "all time" for the lifetime range, whose start is the epoch. */
+function windowWords(from?: string | null, to?: string | null) {
+  if (!from || !to) return "";
+  return from < "2000" ? "all time" : `${shortDate(from)} → ${shortDate(to)}`;
+}
+
+export function ReachCard({ reach, from, to, unavailable, filterWords }: {
+  reach: LaneReachWindow | null;
+  from?: string | null;
+  to?: string | null;
+  unavailable?: string;
+  /** The table's active filters in words, so the header says who is being counted. */
+  filterWords?: string;
+}) {
+  const m = reach;
+  const base = m?.contacted ?? 0;
+  const tp = (n: number) => (m && m.msgs ? `${((100 * n) / m.msgs).toFixed(1)}%` : "—");
+  const notAnswered = m && m.texted ? Math.round((100 * m.textedNotAnswered) / m.texted) : null;
+  const when = windowWords(from, to);
+  const who = filterWords ? ` · ${filterWords}` : "";
   return (
-    <section className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl px-[18px] py-4" aria-label="Contact this window">
-      <div className="flex items-baseline gap-2.5 mb-0.5">
+    <section className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl px-[18px] py-4" aria-label="Reach">
+      <div className="flex items-baseline gap-2.5 mb-1">
         <h2 className="text-[12.5px] font-medium text-[var(--text-2)] flex items-center gap-[5px]">
-          Contact this window
-          <Info text="Players called or texted inside the window, and what followed for them. Counts players, not attempts. It says what was done, never what it caused." />
+          Reach
+          <Info text="How far each channel got with the players called or texted inside this window. Bars count people, not attempts, and they overlap: one player can be in several. It follows the window and the filters on the table below." />
         </h2>
-        <span className="ml-auto font-mono text-[10.5px] text-[var(--text-4)]">{work ? `${fmt(base)} contacted` : ""}</span>
+        <span className="ml-auto font-mono text-[10.5px] text-[var(--text-4)] text-right">
+          {m ? `${fmt(base)} players contacted${when ? ` · ${when}` : ""}${who}` : ""}
+        </span>
       </div>
-      {!work && unavailable ? (
+      {!m && unavailable ? (
         <p className="text-[11.5px] text-[var(--text-4)] py-3">Not available yet.</p>
-      ) : !work ? (
-        <div aria-label="Loading contact this window" aria-busy="true">
-          {WORK_ROWS.map((r) => (
-            <div key={r.key} className={`${TRACK} py-[5px] text-[12px]`}>
+      ) : !m ? (
+        <div aria-label="Loading reach" aria-busy="true">
+          {REACH_ROWS.map((r) => (
+            <div key={r.key} className={`${TRACK} py-[3.5px] text-[12px]`}>
               <span className="text-[var(--text-3)]">{r.label}</span>
               <span className="h-[7px] rounded-[4px] bg-[var(--bg-elevated)] overflow-hidden animate-pulse" />
               <span className="text-right"><Pulse w="w-9" /></span>
@@ -142,76 +193,31 @@ export function ContactWindowCard({ work, unavailable }: { work: ContactWindow |
         <p className="text-[11.5px] text-[var(--text-4)] py-3">Nobody was called or texted in this window.</p>
       ) : (
         <>
-          {WORK_ROWS.map((r) => (
-            <Row key={r.key} label={r.label} n={work[r.key]} members={base} color={r.color} note={r.note} />
-          ))}
-          <p className="mt-2 font-mono text-[10.5px] text-[var(--text-4)]">
-            {work.depositors > 0
-              ? `${fmt(work.depositors)} of the ${fmt(base)} players contacted in this window deposited after that contact, ${money0("EUR", work.amountEur)}. Order, not cause.`
-              : `None of the ${fmt(base)} players contacted in this window deposited after that contact.`}
-          </p>
-        </>
-      )}
-    </section>
-  );
-}
-
-export function ReachCard({ reach, deposited, unavailable }: { reach: LaneReach | null; deposited: LifetimeDeposited | null; unavailable?: string }) {
-  const m = reach;
-  const tp = (n: number) => (m && m.msgs ? `${((100 * n) / m.msgs).toFixed(1)}%` : "—");
-  const notReached = m && m.texted ? Math.round((100 * m.texted_not_spoken) / m.texted) : null;
-  const depTotals = deposited?.totals ?? [];
-  const depCount = depTotals.reduce((a, t) => a + t.deposits, 0);
-  const depEur = depTotals.reduce((a, t) => a + t.amountEur, 0);
-  return (
-    <section className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl px-[18px] py-4" aria-label="Reach">
-      <div className="flex items-baseline gap-2.5 mb-0.5">
-        <h2 className="text-[12.5px] font-medium text-[var(--text-2)] flex items-center gap-[5px]">
-          Reach
-          <Info text="How many of those players each channel reached. Bars count people, not attempts, and they overlap: one player can be in several." />
-        </h2>
-        <span className="ml-auto font-mono text-[10.5px] text-[var(--text-4)]">{m ? `of ${fmt(m.members)} players, all time` : ""}</span>
-      </div>
-      {!m && unavailable ? (
-        <p className="text-[11.5px] text-[var(--text-4)] py-3">Not available yet.</p>
-      ) : !m ? (
-        <div aria-label="Loading reach" aria-busy="true">
-          {["Dialled", "Reached", "Texted", "Emailed", "Deposited"].map((label) => (
-            <div key={label} className={`${TRACK} py-[5px] text-[12px]`}>
-              <span className="text-[var(--text-3)]">{label}</span>
-              <span className="h-[7px] rounded-[4px] bg-[var(--bg-elevated)] overflow-hidden animate-pulse" />
-              <span className="text-right"><Pulse w="w-9" /></span>
-              <span className="text-right"><Pulse w="w-12" /></span>
+          {REACH_ROWS.map((r) => (
+            <div key={r.key}>
+              <Row label={r.label} n={m[r.key]} members={base} color={r.color} note={r.note}
+                ariaLabel={r.key === "depositors" ? "Deposited after contact" : undefined} />
+              {r.key === "texted" && m.msgs > 0 && (
+                <p className={NOTE}>{fmt(m.msgs)} texts · {tp(m.msgsDelivered)} delivered · {tp(m.msgsFailed)} failed · {tp(m.msgsUnconfirmed)} unconfirmed</p>
+              )}
+              {r.key === "depositors" && (
+                <p className={NOTE} aria-label="Gross deposited after contact">
+                  {m.deposits
+                    ? `${fmt(m.deposits)} deposits · ${money0("EUR", m.amountEur)} · after a touch in this window`
+                    : "no deposit after a touch in this window"}
+                </p>
+              )}
             </div>
           ))}
-        </div>
-      ) : (
-        <>
-          <Row label="Dialled" n={m.dialled} members={m.members} color={ROW_COLOR.unreachable}
-            note="At least one call attempt. Whether it connected is the connect rate above." />
-          <Row label="Reached" n={m.spoke_lean} members={m.members} color={ROW_COLOR.reached}
-            note="The call connected and was not voicemail. A pickup with nobody talking still counts here." />
-          <Row label="Texted" n={m.texted} members={m.members} color={ROW_COLOR.neutral}
-            note="At least one text sent. Not a subset of Reached: most texted players were never spoken to. The line below counts texts, not people; unconfirmed means no delivery receipt came back. Clicks are not tracked yet." />
-          {m.msgs > 0 && (
-            <p className={NOTE}>{fmt(m.msgs)} texts · {tp(m.msgs_delivered)} delivered · {tp(m.msgs_failed)} failed · {tp(m.msgs_unconfirmed)} unconfirmed</p>
-          )}
-          <Row label="Emailed" n={0} members={m.members} color={ROW_COLOR.voicemail} pending
-            note="Follow-up emails after a call. The trigger is sent, but no Customer.io campaign listens for it yet, so nothing goes out. Shown as none yet, not 0%." />
-          {deposited ? (
-            <>
-              <Row label="Deposited" n={deposited.players} members={m.members} color="var(--color-primary)" ariaLabel="Deposited after contact"
-                note="Players who deposited at or after the first call or text, counted over ALL TIME rather than the window above. Earlier deposits are left out. The widest of the three depositor counts on this tab: the money strip counts deposits made inside the window, and Contact this window counts only players touched inside it. The line below is the money per currency, never added together; EUR is the CRM's conversion. Order, not cause." />
-              <p className={NOTE} aria-label="Gross deposited after contact">
-                {depCount ? <>{fmt(depCount)} deposits, all time · EUR {Math.round(depEur).toLocaleString("en-US")} · {grossLine(depTotals)}</> : "no deposit after contact on record"}
-              </p>
-            </>
-          ) : (
-            <Row label="Deposited" n={0} members={m.members} color="var(--color-primary)" pending ariaLabel="Deposited after contact"
-              note="Players who deposited at or after the first call or text." />
-          )}
-          <p className="mt-[11px] pt-2.5 border-t border-[var(--border)] text-[11.5px] text-[var(--text-3)] leading-normal">
-            Not a funnel: {notReached == null ? "—" : `${notReached}%`} of texted players were never reached.
+          {/* The footer's job is to stop a reader treating seven overlapping bars as a funnel. At
+              0% the old wording ("0% of texted players were never answered") reads like a broken
+              number rather than the fact it is, so the zero case says it in words instead. */}
+          <p className="mt-[9px] pt-2.5 border-t border-[var(--border)] text-[11.5px] text-[var(--text-3)] leading-normal">
+            {notAnswered == null
+              ? "Not a funnel: the bars overlap and one player can be in several."
+              : notAnswered === 0
+                ? "Not a funnel: the bars overlap. In this window every texted player was answered too."
+                : `Not a funnel: ${notAnswered}% of texted players were never answered.`}
           </p>
         </>
       )}
@@ -328,9 +334,9 @@ export function DepositsByDay({ deposits, unavailable, filterWords }: { deposits
             (depCount && d.depositors ? `${(depCount / d.depositors).toFixed(1)} deposits each · deposited in this window` : "deposited in this window") + who,
             "Players who deposited inside this window, counted once each, however long ago they were first contacted. "
             + "Follows the Depositors table's filters: with a filter set, only those players. "
-            + "Two other cards below count depositors on different populations: Contact this window counts only players "
-            + "touched inside the window, and Reach counts all time. All three use the same after-contact rule, so they "
-            + "agree when the window is set to All and no filter is set.")}
+            + "The Reach card below asks a narrower question on the same window: of the players touched INSIDE it, "
+            + "how many deposited after that touch. Both use the same after-contact rule, so a player first contacted "
+            + "inside the window is in both numbers, and one contacted earlier is only in this one.")}
           {stat("Gross", depCount && grossLines.length ? grossLines : "—", depCount ? `EUR ${Math.round(eur).toLocaleString("en-US")} normalised` : undefined,
             "Amounts per currency, never added together. The EUR line is the CRM's own conversion.")}
           {stat("Average", depCount ? `EUR ${(eur / depCount).toFixed(2)}` : "—", depCount ? "per deposit, normalised" : undefined,

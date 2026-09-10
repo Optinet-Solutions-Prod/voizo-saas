@@ -3,7 +3,6 @@ import { supabaseAdmin } from "@/lib/supabaseServer";
 import { fetchAllRows } from "@/lib/supabaseFetchAll";
 import { parseCountryToken } from "@/lib/campaignAnalytics";
 import { deriveDisplayStatus, type DisplayStatus } from "@/lib/dashboardAnalytics";
-import { rangeToWindow } from "@/lib/rangeWindow";
 import { campaignLabeller, familyKeyOf, laneCampaignIds, type FamilyCampaign } from "@/lib/audienceLane";
 
 /**
@@ -87,34 +86,11 @@ export interface AudienceDeposits {
    *  day outside both is "not captured", never "no deposits". */
   coverage: { captureFrom: string | null; captureTo: string | null; liveFrom: string | null };
 }
-/** Players who deposited after contact, LIFETIME, on the Reach card's own denominator (players ever
- *  loaded), with the gross per currency beside them. null when either function is unavailable. */
-export interface LifetimeDeposited {
-  players: number;
-  totals: DepositTotal[];
-}
-/** What Voizo DID in the window and what followed (Jasiel 2026-09-08). Counts of players, no
- *  comparison group and no claim about cause: the contacted cohort is selected (reactivation and new
- *  registrations) and its deposit exposure is shorter than the window, so any side-by-side rate
- *  would mislead. `depositors` are contacted players who deposited at or after their FIRST touch in
- *  the window. Replaces the last-touch bucket card; cause is a holdout question. */
-export interface ContactWindow {
-  contacted: number;
-  spoke: number;
-  texted: number;
-  delivered: number;
-  depositors: number;
-  amountEur: number;
-}
 export interface AudienceReachResponse {
   scopeCampaigns: number;
   reach: LaneReach | null;
-  /** All-time deposits after contact, for the Reach card. Filter-independent by definition, so it
-   *  stays here; the WINDOW deposits moved to /api/audience/deposits (2026-09-10). */
-  deposited: LifetimeDeposited | null;
   families: AudienceFamily[];
-  contactWindow: ContactWindow | null;
-  unavailable: { reach?: string; families?: string; contactWindow?: string };
+  unavailable: { reach?: string; families?: string };
 }
 
 const RANK: Record<DisplayStatus, number> = { running: 0, scheduled: 0, paused: 1, finished: 2 };
@@ -138,9 +114,8 @@ export async function GET(request: NextRequest) {
   const sp = new URL(request.url).searchParams;
   const brand = (sp.get("brand") ?? "").trim().toLowerCase();
   const country = (sp.get("country") ?? "").trim().slice(0, 40);
-  const range = (sp.get("range") ?? "14d").trim().slice(0, 12);
-  const dayIso = (v: string | null) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
-  const from = dayIso(sp.get("from")), to = dayIso(sp.get("to"));
+  // No window is read here any more: every windowed block moved to /api/audience/deposits. The
+  // page still sends range/from/to on this request; they are simply ignored.
 
   try {
     const campaigns = (await fetchAllRows(
@@ -158,7 +133,7 @@ export async function GET(request: NextRequest) {
     const ids = [...laneIds];
     const unavailable: AudienceReachResponse["unavailable"] = {};
     if (ids.length === 0) {
-      return NextResponse.json({ scopeCampaigns: 0, reach: null, deposited: null, families: [], contactWindow: null, unavailable } satisfies AudienceReachResponse);
+      return NextResponse.json({ scopeCampaigns: 0, reach: null, families: [], unavailable } satisfies AudienceReachResponse);
     }
 
     // ── Families: Campaign Performance's rule (the recurring parent, else the run itself). ──
@@ -201,34 +176,10 @@ export async function GET(request: NextRequest) {
     const order = { running: 0, paused: 1, finished: 2 } as const;
     families.sort((a, b) => order[a.status] - order[b.status] || b.runs - a.runs || a.label.localeCompare(b.label));
 
-    // ── The three RPC blocks, independently. ──
-    const { startMs, endMs } = from && to ? rangeToWindow("custom", nowMs, from, to) : rangeToWindow(range, nowMs);
-    const EPOCH = new Date(0).toISOString();
-    const nowIso = new Date(nowMs).toISOString();
-    const totalsRpc = async (fromIso: string, toIso: string) => {
-      const { data, error } = await supabaseAdmin.rpc("audience_lane_deposit_totals", { p_campaign_ids: ids, p_from: fromIso, p_to: toIso });
-      if (error) throw new Error(error.message);
-      return ((data ?? []) as { currency: string; deposits: number; players: number; amount_local: number | string; amount_eur: number | string; deposits_before: number }[])
-        .map((t) => ({ currency: t.currency, deposits: t.deposits, players: t.players, amountLocal: Number(t.amount_local) || 0, amountEur: Number(t.amount_eur) || 0, before: t.deposits_before }));
-    };
-    // Distinct depositors: the players query with the depositor filter, one row, because a player who
-    // deposited in two currencies must count once.
-    const depositorsRpc = async (fromIso: string, toIso: string) => {
-      const { data, error } = await supabaseAdmin.rpc("audience_lane_players", {
-        p_campaign_ids: ids, p_from: fromIso, p_to: toIso,
-        p_deposited: "after", p_contact: "any", p_family_ids: null, p_q: null, p_sort: "last_contact", p_dir: "desc", p_limit: 1, p_offset: 0,
-      });
-      if (error) throw new Error(error.message);
-      const first = ((data ?? []) as { total_count: number | string }[])[0];
-      return first ? Number(first.total_count) : 0;
-    };
-    // The WINDOW deposits (per day, per currency, the depositor count and the coverage) moved to
-    // /api/audience/deposits on 2026-09-10, because the money strip now follows the Depositors
-    // table's filters and this route cannot see them. Leaving the old block here fired the same
-    // heavy work twice on every page load: with four concurrent requests the players RPC crossed
-    // the 8 s statement limit and 3 of 5 loads 500'd. Only the LIFETIME pair stays, for the Reach
-    // card's Deposited row, which is filter-independent by definition.
-    const [reachRes, famRes, lifeTotRes, lifeDepRes, workRes] = await Promise.allSettled([
+    // ── The two remaining blocks, independently. The Reach card, the money strip and the window
+    // deposits all moved to /api/audience/deposits, which follows the Depositors table's filters;
+    // this route now answers only what is filter-independent: the Members tile and the families.
+    const [reachRes, famRes] = await Promise.allSettled([
       laneReach(ids),
       (async () => {
         const out = new Map<string, number>();
@@ -242,40 +193,15 @@ export async function GET(request: NextRequest) {
         }
         return out;
       })(),
-      totalsRpc(EPOCH, nowIso),
-      depositorsRpc(EPOCH, nowIso),
-      (async () => {
-        const { data, error } = await supabaseAdmin.rpc("audience_lane_contact_window", {
-          p_campaign_ids: ids,
-          p_from: new Date(startMs).toISOString(),
-          p_to: new Date(endMs).toISOString(),
-        });
-        if (error) throw new Error(error.message);
-        const r = ((data ?? []) as { contacted: number; spoke: number; texted: number; delivered: number; depositors: number; amount_eur: number | string }[])[0];
-        if (!r) return null;
-        return {
-          contacted: Number(r.contacted) || 0,
-          spoke: Number(r.spoke) || 0,
-          texted: Number(r.texted) || 0,
-          delivered: Number(r.delivered) || 0,
-          depositors: Number(r.depositors) || 0,
-          amountEur: Number(r.amount_eur) || 0,
-        } satisfies ContactWindow;
-      })(),
     ]);
 
     let reach: LaneReach | null = null;
     if (reachRes.status === "fulfilled") reach = reachRes.value;
     else unavailable.reach = reachRes.reason instanceof Error ? reachRes.reason.message : String(reachRes.reason);
-    const deposited: LifetimeDeposited | null =
-      lifeTotRes.status === "fulfilled" && lifeDepRes.status === "fulfilled" ? { players: lifeDepRes.value, totals: lifeTotRes.value } : null;
     if (famRes.status === "fulfilled") for (const f of families) f.members = famRes.value.get(f.key) ?? null;
     else unavailable.families = famRes.reason instanceof Error ? famRes.reason.message : String(famRes.reason);
-    let contactWindow: ContactWindow | null = null;
-    if (workRes.status === "fulfilled") contactWindow = workRes.value;
-    else unavailable.contactWindow = workRes.reason instanceof Error ? workRes.reason.message : String(workRes.reason);
 
-    return NextResponse.json({ scopeCampaigns: ids.length, reach, deposited, families, contactWindow, unavailable } satisfies AudienceReachResponse);
+    return NextResponse.json({ scopeCampaigns: ids.length, reach, families, unavailable } satisfies AudienceReachResponse);
   } catch (err) {
     console.error("[audience/reach] failed:", err);
     return NextResponse.json({ error: "Failed to load audience reach" }, { status: 500 });
