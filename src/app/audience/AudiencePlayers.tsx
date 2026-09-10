@@ -179,7 +179,7 @@ export default function AudiencePlayers({ data, page, onPage, loading, showMarke
   const set = (patch: Partial<PlayerFilters>) => onFilters({ ...filters, ...patch });
   // Column sorting runs in the database: a header click changes the query, never the page in hand.
   const sortBy = (k: PlayerSort) => set(nextSort({ sort: filters.sort, dir: filters.dir }, k, ASC_FIRST));
-  const head = (label: string, k: PlayerSort, right = false, first = false) => <SortHead label={label} k={k} sort={filters.sort} dir={filters.dir} onSort={sortBy} right={right} first={first} />;
+  const head = (label: string, k: PlayerSort, right = false, first = false, title?: string) => <SortHead label={label} k={k} sort={filters.sort} dir={filters.dir} onSort={sortBy} right={right} first={first} title={title} />;
 
   // Escape closes the drawer, as the mockup's key handler does.
   useEffect(() => {
@@ -266,8 +266,8 @@ export default function AudiencePlayers({ data, page, onPage, loading, showMarke
                   <>
                     {th("Attempt")}
                     {head("First contact", "first_contact", true)}
-                    {head("Deposit", "first_deposit", true)}
-                    {head("Days", "lag", true)}
+                    {head("First deposit after contact", "first_deposit", true, false, "The first deposit made at or after the first call or text. Sort by it.")}
+                    {head("Days to deposit", "lag", true, false, "Days from the first contact to the first deposit after it. Sort by it.")}
                     {head("Deposited", "amount", true, true)}
                   </>
                 ) : (
