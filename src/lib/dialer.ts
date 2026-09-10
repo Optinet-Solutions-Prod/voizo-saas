@@ -2,6 +2,7 @@ import { supabaseAdmin } from "./supabaseServer";
 import { originateCall } from "./freeswitch/originate";
 import { resolveFreeswitchCallerId } from "./freeswitch/callerId";
 import { isWithinCallWindowAt } from "./scheduleWindow";
+import { holdoutKey, isHeldOut, HOLDOUT_OUTCOME } from "./holdout";
 
 /**
  * Check if the current time falls within the campaign's call windows.
@@ -189,12 +190,26 @@ async function deferUnverifiableSuppression(
  * Manifesto §6: suppression checked before every calls.create().
  */
 export async function findNextNumber(campaignId: string) {
+  // select("*") not select("max_attempts, holdout_pct"): naming a column that does not
+  // exist yet makes PostgREST fail the whole query, and cErr here returns null, which
+  // every caller reads as "no work left" and completes the campaign. A deploy that
+  // landed before the holdout migration would stop ALL dialling. Reading the column off
+  // a wide row costs nothing and is inert when it is missing.
   const { data: campaign, error: cErr } = await supabaseAdmin
     .from("campaigns_v2")
-    .select("max_attempts")
+    .select("*")
     .eq("id", campaignId)
     .single();
   if (cErr || !campaign) return null;
+
+  // Deposit holdout: a share of this campaign's candidates is withheld from all contact
+  // so the two arms can be compared later. 0 (the column default, and every campaign
+  // today) skips the block entirely — no extra query, no extra write, no behaviour change.
+  const holdoutPct = Number((campaign as { holdout_pct?: unknown }).holdout_pct ?? 0);
+  const holdoutOn = Number.isFinite(holdoutPct) && holdoutPct > 0;
+  const holdoutCampaignKey = holdoutOn
+    ? holdoutKey({ id: campaignId, parent_campaign_id: (campaign as { parent_campaign_id?: string | null }).parent_campaign_id })
+    : campaignId;
 
   // VOZ-365 #2: this was `return findNextNumber(campaignId)` once per suppressed
   // number — every level added a stack frame AND re-ran four queries, so a segment
@@ -238,6 +253,42 @@ export async function findNextNumber(campaignId: string) {
 
     if (candidates.length === 0) return null;
 
+    // ── Holdout gate ──────────────────────────────────────────────────────
+    // Ahead of the suppression lookup on purpose: a withheld player is never dialled,
+    // so checking them against the DNC lists is wasted work and would widen the .in()
+    // batch. Their compliance record still lives in suppression_list itself.
+    let inPlay = candidates;
+    if (holdoutOn) {
+      const held = candidates.filter((c) => isHeldOut(c.phone_e164, holdoutCampaignKey, holdoutPct));
+      inPlay = candidates.filter((c) => !isHeldOut(c.phone_e164, holdoutCampaignKey, holdoutPct));
+      if (held.length > 0) {
+        const { error: heldErr } = await supabaseAdmin
+          .from("campaign_numbers_v2")
+          .update({ outcome: HOLDOUT_OUTCOME })
+          .in(
+            "id",
+            held.map((c) => c.id),
+          );
+        if (heldErr) {
+          // The mark is bookkeeping and the assignment is a hash, so a lost write costs
+          // the record, never the arm — it can be recomputed. Dialling a withheld player
+          // could not be undone, so the skip stands regardless.
+          console.error(
+            `[dialer.findNextNumber] could not mark ${held.length} number(s) held out for campaign ` +
+              `${campaignId} — they stay UNDIALLED; the arm is recoverable by re-hashing:`,
+            heldErr.message,
+          );
+          // Nothing else in this window: re-fetching returns the identical unmarked rows
+          // forever, and a bare null would complete the campaign (see VOZ-364 above).
+          if (inPlay.length === 0) {
+            return deferUnverifiableSuppression(candidates[0], `could not record holdout: ${heldErr.message}`);
+          }
+        }
+      }
+      // Whole window withheld and recorded → next window, same as a fully suppressed one.
+      if (inPlay.length === 0) continue;
+    }
+
     // Suppression check (Manifesto §6: before every calls.create, no exceptions)
     //
     // Two tables coexist during V1→V2 transition (architecture doc §3.8):
@@ -251,7 +302,7 @@ export async function findNextNumber(campaignId: string) {
     // Both have a UNIQUE index on their phone column. They were two sequential
     // awaits per candidate; they are independent, so they now run concurrently
     // and cover the whole window in one round trip each.
-    const phones = [...new Set(candidates.map((c) => c.phone_e164))];
+    const phones = [...new Set(inPlay.map((c) => c.phone_e164))];
     const [supV2, supV1] = await Promise.all([
       supabaseAdmin.from("suppression_list").select("phone_e164").in("phone_e164", phones),
       supabaseAdmin.from("do_not_call").select("phone_number").in("phone_number", phones),
@@ -260,7 +311,7 @@ export async function findNextNumber(campaignId: string) {
     // FAIL CLOSED (VOZ-364): unverifiable is treated as suppressed, never as clean.
     if (supV2.error || supV1.error) {
       return deferUnverifiableSuppression(
-        candidates[0],
+        inPlay[0],
         (supV2.error ?? supV1.error)?.message ?? "unknown suppression lookup error",
       );
     }
@@ -270,10 +321,10 @@ export async function findNextNumber(campaignId: string) {
       ...(supV1.data ?? []).map((r) => r.phone_number),
     ]);
 
-    const firstClean = candidates.findIndex((c) => !blocked.has(c.phone_e164));
+    const firstClean = inPlay.findIndex((c) => !blocked.has(c.phone_e164));
     // Mark exactly the numbers the old code would have marked as it walked past them:
     // everything ahead of the first clean candidate (or the whole window if none is).
-    const toSuppress = firstClean === -1 ? candidates : candidates.slice(0, firstClean);
+    const toSuppress = firstClean === -1 ? inPlay : inPlay.slice(0, firstClean);
 
     if (toSuppress.length > 0) {
       const { error: markErr } = await supabaseAdmin
@@ -291,17 +342,17 @@ export async function findNextNumber(campaignId: string) {
         );
         // Marking is bookkeeping — a number we positively verified as clean is still
         // safe to dial, so don't stall the campaign over a failed write.
-        if (firstClean !== -1) return candidates[firstClean];
+        if (firstClean !== -1) return inPlay[firstClean];
         // Nothing clean AND the suppressions didn't record: re-fetching would return
         // the identical window forever (the old recursion did exactly that). Defer.
         return deferUnverifiableSuppression(
-          candidates[0],
+          inPlay[0],
           `could not record suppression: ${markErr.message}`,
         );
       }
     }
 
-    if (firstClean !== -1) return candidates[firstClean];
+    if (firstClean !== -1) return inPlay[firstClean];
     // Whole window suppressed AND recorded → loop to fetch the next window.
   }
 

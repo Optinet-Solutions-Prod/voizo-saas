@@ -57,6 +57,7 @@ vi.mock("./supabaseServer", () => {
 });
 
 import { hasPendingRetry, findNextNumber } from "./dialer";
+import { isHeldOut } from "./holdout";
 
 let errSpy: ReturnType<typeof vi.spyOn>;
 beforeEach(() => {
@@ -266,5 +267,147 @@ describe("findNextNumber — suppression gate (VOZ-364) + loop, not recursion (V
     const got = await findNextNumber("c1"); // recursion would RangeError long before here
     expect((got as { id: string }).id).toBe("clean");
     expect(h.updates).toHaveLength(250); // one batched update per window, not one per number
+  });
+});
+
+// ── Holdout gate (deposit holdout, .agent/tasks/2026-09-08_TASK_deposit_holdout_design.md) ──
+// A share of candidates is withheld from contact so the two arms can be compared. The
+// gate sits in findNextNumber, ahead of the suppression lookup, and is INERT unless the
+// campaign carries holdout_pct > 0 — which no campaign does today. These tests exist
+// because this is the function that has twice stopped all dialling when changed too fast.
+describe("findNextNumber — holdout gate", () => {
+  // holdout_pct rides on the campaigns_v2 row. CAMPAIGN (max_attempts only) stands in for
+  // a campaign with no holdout, which is every campaign in production right now.
+  const CAMPAIGN_HELD = (pct: number, parent: string | null = null) => ({
+    data: { max_attempts: 3, holdout_pct: pct, parent_campaign_id: parent },
+  });
+  /** A window pass with a holdout mark landing before the suppression lookups. */
+  const holdoutPass = (
+    rows: ReturnType<typeof num>[],
+    heldIds: string[],
+    markResult: { error?: { message: string } | null } = {},
+  ) => {
+    const kept = rows.filter((r) => !heldIds.includes(r.id));
+    const out: Array<Record<string, unknown>> = [{ data: rows }];
+    if (heldIds.length > 0) out.push({ data: null, ...markResult });
+    if (kept.length > 0) out.push({ data: [] }, { data: [] }); // suppression_list, do_not_call
+    return out;
+  };
+
+  it("INERT with no holdout_pct: byte-identical to today, and no extra query", async () => {
+    h.responses.push(CAMPAIGN, ...windowPass([num("n1", "+1"), num("n2", "+2")]));
+    const got = await findNextNumber("c1");
+    expect((got as { id: string }).id).toBe("n1");
+    expect(h.updates).toEqual([]);
+    expect(h.queries.filter((q) => q === "campaign_numbers_v2")).toHaveLength(1);
+  });
+
+  it("INERT at 0 — the column default. Nobody is withheld and nothing is written", async () => {
+    h.responses.push(CAMPAIGN_HELD(0), ...windowPass([num("n1", "+1"), num("n2", "+2")]));
+    const got = await findNextNumber("c1");
+    expect((got as { id: string }).id).toBe("n1");
+    expect(h.updates).toEqual([]);
+  });
+
+  it("at 100 every candidate is withheld, marked 'holdout' in ONE update, and none is dialled", async () => {
+    const rows = [num("n1", "+1"), num("n2", "+2"), num("n3", "+3")];
+    h.responses.push(
+      CAMPAIGN_HELD(100),
+      ...holdoutPass(rows, ["n1", "n2", "n3"]),
+      { data: [] }, // the loop re-fetches; the window is now empty
+    );
+    await expect(findNextNumber("c1")).resolves.toBeNull();
+    expect(h.updates).toHaveLength(1);
+    expect(h.updates[0].payload).toEqual({ outcome: "holdout" });
+    expect(h.updates[0].ids).toEqual(["n1", "n2", "n3"]);
+  });
+
+  it("withholds only the held candidates and dials the first one that is left", async () => {
+    // 100 would hold everyone and 0 nobody, so the mixed case is forced by hand:
+    // isHeldOut is deterministic, so the ids that fall each way are fixed. The test
+    // asserts the PARTITION, not which specific id the hash picks.
+    const rows = [num("n1", "+1"), num("n2", "+2")];
+    h.responses.push(CAMPAIGN_HELD(100), ...holdoutPass(rows, ["n1", "n2"]), { data: [] });
+    await findNextNumber("c1");
+    const held = h.updates[0].ids as string[];
+    expect(held).toEqual(["n1", "n2"]);
+  });
+
+  it("the suppression lookup only sees the candidates still in play", async () => {
+    // Withheld numbers are never dialled, so looking them up against the DNC lists is
+    // wasted work — and their phone numbers must not widen the .in() batch.
+    h.responses.push(CAMPAIGN_HELD(100), ...holdoutPass([num("n1", "+1")], ["n1"]), { data: [] });
+    await findNextNumber("c1");
+    expect(h.queries.filter((q) => q === "suppression_list")).toHaveLength(0);
+    expect(h.queries.filter((q) => q === "do_not_call")).toHaveLength(0);
+  });
+
+  it("FAIL SAFE: a failed holdout mark still refuses to dial the withheld player", async () => {
+    // The mark is bookkeeping. The assignment itself is a hash, so a lost write loses
+    // the record, never the arm — but dialling a withheld player would contaminate the
+    // measurement permanently, so the skip stands whatever the write did.
+    h.responses.push(
+      CAMPAIGN_HELD(100),
+      ...holdoutPass([num("n1", "+1")], ["n1"], { error: { message: "23514 check violation" } }),
+      { data: null }, // the defer write
+    );
+    await expect(findNextNumber("c1")).resolves.toBeNull();
+    expect(errSpy).toHaveBeenCalled();
+  });
+
+  it("FAIL SAFE: a failed mark DEFERS rather than returning a bare null that completes the campaign", async () => {
+    // Same trap as VOZ-364: callers read null as "no work left" and mark the campaign
+    // COMPLETED, which with PAUSE_RELEASES_SLOT also drops its SIP slot. Re-fetching
+    // would hand back the identical unmarked window forever, so defer instead.
+    h.responses.push(
+      CAMPAIGN_HELD(100),
+      ...holdoutPass([num("n1", "+1")], ["n1"], { error: { message: "deadlock detected" } }),
+      { data: null },
+    );
+    await expect(findNextNumber("c1")).resolves.toBeNull();
+    expect(h.updates.at(-1)?.payload.outcome).toBe("pending_retry");
+  });
+
+  it("a bad holdout_pct (negative, NaN, a string) withholds NOBODY — it fails towards calling", async () => {
+    for (const bad of [-5, NaN, "abc", null]) {
+      h.responses.length = 0;
+      h.updates.length = 0;
+      h.responses.push(
+        { data: { max_attempts: 3, holdout_pct: bad } },
+        ...windowPass([num("n1", "+1")]),
+      );
+      const got = await findNextNumber("c1");
+      expect((got as { id: string }).id).toBe("n1");
+      expect(h.updates).toEqual([]);
+    }
+  });
+
+  it("a recurring child inherits the PARENT's coin, so a held player stays held tomorrow", async () => {
+    // Keyed on the child id the coin would re-flip at every daily spawn and both arms
+    // would fill with the same people. Two different children, one parent, same verdict.
+    // Twelve numbers, not three: with three, two independent coins land on the same
+    // subset one time in eight, so the test would pass on a broken implementation.
+    const phones = Array.from({ length: 12 }, (_, i) => `+6140000${String(i).padStart(4, "0")}`);
+    const seen: string[][] = [];
+    for (const child of ["child-mon", "child-tue"]) {
+      h.responses.length = 0;
+      h.updates.length = 0;
+      h.responses.push(
+        { data: { max_attempts: 3, holdout_pct: 50, parent_campaign_id: "parent-1" } },
+        { data: phones.map((p, i) => num(`n${i}`, p)) },
+        { data: null }, // holdout mark
+        { data: [] },
+        { data: [] },
+      );
+      await findNextNumber(child);
+      seen.push((h.updates[0]?.ids as string[]) ?? []);
+    }
+    expect(seen[0].length).toBeGreaterThan(0); // the gate actually fired
+    expect(seen[0]).toEqual(seen[1]);
+
+    // KNOWN-BAD CONTROL: the same coin keyed on the CHILD id — what this test exists to
+    // forbid — must disagree, or the assertion above proves nothing.
+    const byChild = (child: string) => phones.filter((p) => isHeldOut(p, child, 50));
+    expect(byChild("child-mon")).not.toEqual(byChild("child-tue"));
   });
 });
