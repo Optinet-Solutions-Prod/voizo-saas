@@ -53,31 +53,50 @@ function sameDeposits(a, b) {
   if (sameDeposits(base, { ...base, days: [] }).length === 0) throw new Error('SELF-TEST: a missing day must differ');
   log('self-test OK\n');
 
-  log('=== 1. KNOWN-GOOD: filters at any, new route == old route ===');
+  log('=== 1. KNOWN-GOOD: filters at any, against two references that do not use the new function ===');
   // The page's market token is the full NAME ("Australia"), not the ISO code: "AU" resolves to zero
-  // campaigns and both routes answer null, which the first run of this gate read as a comparison.
+  // campaigns, which the first run of this gate read as a null-vs-null comparison.
+  //
+  // Two references. (a) ALL TIME: the reach route still serves `deposited` from the two ORIGINAL
+  // functions (per-currency totals + the depositor count), because the Reach card needs them; the
+  // new route at range=lifetime must equal it to the row. (b) THE WINDOW: the reach route's window
+  // deposits block was removed on 2026-09-10 (it duplicated this route's work and the page 500'd),
+  // so the 7d reference is a recount over the Depositors table's own rows, the same technique as
+  // part 2 and independent of every SQL function.
   const scopes = [['', ''], ['fortuneplay', 'Australia'], ['lucky7even', 'Australia']];
   let unavailable = null;
   for (const [brand, country] of scopes) {
-    for (const range of ['7d', 'lifetime']) {
-      const qs = 'range=' + range + (brand ? '&brand=' + brand : '') + (country ? '&country=' + encodeURIComponent(country) : '');
-      // Sequential on purpose. Fired together, the new function and the old route's nine calls
-      // contend for the database and the all-time case hit the 8 s statement limit (first run of
-      // this gate); a timeout would then mask the comparison this part exists to make. Part 4 times
-      // the worst case on its own.
-      const nu = await get('/api/audience/deposits?' + qs);
-      const old = await get('/api/audience/reach?' + qs);
-      if (!(nu.json.scopeCampaigns > 0) || !(old.json.scopeCampaigns > 0)) { check('scope resolves to campaigns (' + qs + ')', false, 'new ' + nu.json.scopeCampaigns + ', old ' + old.json.scopeCampaigns + ' — a null-vs-null comparison proves nothing'); continue; }
-      if (nu.json.unavailable) {
-        // Only a MISSING function stops the gate; any other reason (a timeout, say) is a finding
-        // to count and keep going, so the remaining parts still report.
-        if (/Could not find the function/.test(nu.json.unavailable)) unavailable = nu.json.unavailable;
-        check('new route available (' + qs + ')', false, nu.json.unavailable + '   (' + nu.ms + ' ms)');
-        continue;
-      }
-      const diffs = sameDeposits(nu.json.deposits, old.json.deposits);
-      check((brand || 'all brands') + ' ' + (country || 'all markets') + ' ' + range + ': ' + (nu.json.deposits?.depositors ?? '?') + ' depositors, ' + (nu.json.deposits?.days.length ?? '?') + ' days, ' + (nu.json.deposits?.totals?.length ?? '?') + ' currencies', diffs.length === 0, diffs.slice(0, 3).join(' | '));
+    const scopeQs = (brand ? '&brand=' + brand : '') + (country ? '&country=' + encodeURIComponent(country) : '');
+    const name = (brand || 'all brands') + ' ' + (country || 'all markets');
+    // Sequential on purpose: fired together the statements contend and a timeout would mask the
+    // comparison. Part 4 times the worst case on its own.
+    const life = await get('/api/audience/deposits?range=lifetime' + scopeQs);
+    if (!(life.json.scopeCampaigns > 0)) { check('scope resolves to campaigns (' + name + ')', false, 'new ' + life.json.scopeCampaigns); continue; }
+    if (life.json.unavailable) {
+      if (/Could not find the function/.test(life.json.unavailable)) unavailable = life.json.unavailable;
+      check('new route available (' + name + ' lifetime)', false, life.json.unavailable + '   (' + life.ms + ' ms)');
+      continue;
     }
+    const old = await get('/api/audience/reach?range=lifetime' + scopeQs);
+    const ref = old.json.deposited; // { players, totals } from the two ORIGINAL functions
+    if (!ref) { check(name + ' lifetime: the old functions answered', false, 'reach.deposited is null: ' + JSON.stringify(old.json.unavailable)); }
+    else {
+      const d = life.json.deposits;
+      const diffs = sameDeposits({ depositors: d.depositors, days: [], totals: d.totals }, { depositors: ref.players, days: [], totals: ref.totals });
+      check(name + ' all time: ' + d.depositors + ' depositors, ' + d.totals.length + ' currencies == the original functions', diffs.length === 0, diffs.slice(0, 3).join(' | '));
+    }
+    // (b) the window, against the table's rows
+    const win = await get('/api/audience/deposits?range=7d' + scopeQs);
+    if (win.json.unavailable) { check('new route available (' + name + ' 7d)', false, win.json.unavailable); continue; }
+    const rows = [];
+    for (let p = 1; p < 60; p++) { const j = (await get('/api/audience/players?range=7d&deposited=after' + scopeQs + '&page=' + p)).json; rows.push(...j.rows); if (rows.length >= j.total || !j.rows.length) break; }
+    const d = win.json.deposits;
+    const inWin = (x) => x.afterContact && x.at >= d.from && x.at < d.to;
+    let deps = 0, eur = 0; const ppl = new Set();
+    for (const r of rows) for (const x of r.deposits.filter(inWin)) { deps++; eur += x.amountEur || 0; ppl.add(r.phone); }
+    const stripDeps = d.totals.reduce((a, t) => a + t.deposits, 0), stripEur = d.totals.reduce((a, t) => a + t.amountEur, 0);
+    check(name + ' 7d: ' + d.depositors + ' depositors / ' + stripDeps + ' deposits / EUR ' + stripEur.toFixed(2) + ' == the table\'s rows ' + ppl.size + ' / ' + deps + ' / ' + eur.toFixed(2),
+      d.depositors === ppl.size && stripDeps === deps && near(stripEur, eur));
   }
   if (unavailable) { log('\nGATE FAILED — the function is not applied: ' + unavailable); process.exit(1); }
 

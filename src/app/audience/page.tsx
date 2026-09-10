@@ -26,7 +26,7 @@
 // families) and /api/audience/players (the filtered, paged player query), all scoped by the sidebar
 // brand, the market tab and the window. Read-only, no provider spend, nothing near the call or SMS path.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { loadSnapshot, saveSnapshot } from "@/lib/sessionSnapshot";
 import { useBrandScope } from "@/lib/brandScope";
 import { brandLabel } from "@/lib/campaignDisplay";
@@ -173,14 +173,20 @@ export default function AudiencePage() {
   })();
   const [prevPlayersQs, setPrevPlayersQs] = useState(playersQs);
   if (prevPlayersQs !== playersQs) { setPrevPlayersQs(playersQs); setPage(1); }
+  // The in-flight players request, so the strip's request below can wait for it. Four heavy requests
+  // fired together on load pushed the players statement over the database's 8 s limit and the table
+  // 500'd on three loads out of five (2026-09-10, 20:10 UTC). The table is the thing being filtered;
+  // the strip above it can arrive a moment later.
+  const playersInFlight = useRef<Promise<unknown> | null>(null);
   useEffect(() => {
     const ctrl = new AbortController();
     setPlayersLoading(true);
-    fetch(`/api/audience/players?${playersQs}&page=${page}`, { cache: "no-store", signal: ctrl.signal })
+    const p = fetch(`/api/audience/players?${playersQs}&page=${page}`, { cache: "no-store", signal: ctrl.signal })
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((j: AudiencePlayersResponse) => { setPlayers(j); setPlayersError(null); })
       .catch((e: unknown) => { if (!(e instanceof Error && e.name === "AbortError")) setPlayersError(e instanceof Error ? e.message : "Failed to load players"); })
       .finally(() => setPlayersLoading(false));
+    playersInFlight.current = p;
     return () => ctrl.abort();
   }, [playersQs, page]);
 
@@ -203,7 +209,11 @@ export default function AudiencePage() {
     const ctrl = new AbortController();
     const snap = loadSnapshot<AudienceDepositsResponse>(`audience.deposits:${depQs}`);
     setDeps(snap ?? null);
-    fetch(`/api/audience/deposits?${depQs}`, { cache: "no-store", signal: ctrl.signal })
+    // After the table's request settles, whatever its outcome: one fewer heavy statement in flight
+    // at the moment the page loads. The effects run in declaration order, so the players effect
+    // above has already set the ref for this same change of filters.
+    Promise.resolve(playersInFlight.current).catch(() => undefined)
+      .then(() => fetch(`/api/audience/deposits?${depQs}`, { cache: "no-store", signal: ctrl.signal }))
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((j: AudienceDepositsResponse) => { setDeps(j); saveSnapshot(`audience.deposits:${depQs}`, j); })
       .catch((e: unknown) => { if (!(e instanceof Error && e.name === "AbortError")) setDeps({ scopeCampaigns: 0, deposits: null, unavailable: e instanceof Error ? e.message : "Failed to load" }); });

@@ -10,11 +10,15 @@ import { campaignLabeller, familyKeyOf, laneCampaignIds, type FamilyCampaign } f
  * GET /api/audience/reach?brand=&country=&range=
  *
  * The Audience tab's aggregate blocks (mockup 2026-08-25, slices 2, 3 and 5 of the wire), one
- * request: the Members tile and the Reach card (audience_lane_reach), the campaign families with
- * their run and member counts (the same RPC per family), and Deposits by day for the range bar's
- * window (audience_lane_deposits). Every headline here is a count of DISTINCT PLAYERS, which
- * nothing in the database answered until those two functions existed; see the two migration files
- * at the repo root for the definitions, which are copied from the dashboard's rollup, not invented.
+ * request: the Members tile and the Reach card (audience_lane_reach, plus the all-time deposited
+ * pair), and the campaign families with their run and member counts (the same RPC per family).
+ * Every headline here is a count of DISTINCT PLAYERS, which nothing in the database answered until
+ * those functions existed; see the migration files at the repo root for the definitions, which are
+ * copied from the dashboard's rollup, not invented.
+ *
+ * The WINDOW deposits (Deposits by day, the money strip, the depositor count and the coverage) left
+ * this route on 2026-09-10 for /api/audience/deposits, because they now follow the Depositors
+ * table's filters and this route does not see them. Everything here is filter-independent.
  *
  * Lane scope and family labels come from lib/audienceLane.ts, shared with /api/audience/players.
  *
@@ -105,14 +109,14 @@ export interface ContactWindow {
 export interface AudienceReachResponse {
   scopeCampaigns: number;
   reach: LaneReach | null;
+  /** All-time deposits after contact, for the Reach card. Filter-independent by definition, so it
+   *  stays here; the WINDOW deposits moved to /api/audience/deposits (2026-09-10). */
   deposited: LifetimeDeposited | null;
   families: AudienceFamily[];
-  deposits: AudienceDeposits | null;
   contactWindow: ContactWindow | null;
-  unavailable: { reach?: string; families?: string; deposits?: string; contactWindow?: string };
+  unavailable: { reach?: string; families?: string; contactWindow?: string };
 }
 
-const CAPTURE_SOURCE = "activities_capture_2026-08-25";
 const RANK: Record<DisplayStatus, number> = { running: 0, scheduled: 0, paused: 1, finished: 2 };
 
 async function laneReach(ids: string[]): Promise<LaneReach | null> {
@@ -154,7 +158,7 @@ export async function GET(request: NextRequest) {
     const ids = [...laneIds];
     const unavailable: AudienceReachResponse["unavailable"] = {};
     if (ids.length === 0) {
-      return NextResponse.json({ scopeCampaigns: 0, reach: null, deposited: null, families: [], deposits: null, contactWindow: null, unavailable } satisfies AudienceReachResponse);
+      return NextResponse.json({ scopeCampaigns: 0, reach: null, deposited: null, families: [], contactWindow: null, unavailable } satisfies AudienceReachResponse);
     }
 
     // ── Families: Campaign Performance's rule (the recurring parent, else the run itself). ──
@@ -218,7 +222,13 @@ export async function GET(request: NextRequest) {
       const first = ((data ?? []) as { total_count: number | string }[])[0];
       return first ? Number(first.total_count) : 0;
     };
-    const [reachRes, famRes, depRes, covRes, totRes, depositorsRes, lifeTotRes, lifeDepRes, workRes] = await Promise.allSettled([
+    // The WINDOW deposits (per day, per currency, the depositor count and the coverage) moved to
+    // /api/audience/deposits on 2026-09-10, because the money strip now follows the Depositors
+    // table's filters and this route cannot see them. Leaving the old block here fired the same
+    // heavy work twice on every page load: with four concurrent requests the players RPC crossed
+    // the 8 s statement limit and 3 of 5 loads 500'd. Only the LIFETIME pair stays, for the Reach
+    // card's Deposited row, which is filter-independent by definition.
+    const [reachRes, famRes, lifeTotRes, lifeDepRes, workRes] = await Promise.allSettled([
       laneReach(ids),
       (async () => {
         const out = new Map<string, number>();
@@ -232,35 +242,6 @@ export async function GET(request: NextRequest) {
         }
         return out;
       })(),
-      (async () => {
-        const { data, error } = await supabaseAdmin.rpc("audience_lane_deposits", {
-          p_campaign_ids: ids,
-          p_from: new Date(startMs).toISOString(),
-          p_to: new Date(endMs).toISOString(),
-        });
-        if (error) throw new Error(error.message);
-        return ((data ?? []) as { day: string; deposits: number; players: number; amount_eur: number | string; deposits_before: number }[]).map((d) => ({
-          day: d.day,
-          deposits: d.deposits,
-          players: d.players,
-          amountEur: Number(d.amount_eur) || 0,
-          depositsBefore: d.deposits_before,
-        }));
-      })(),
-      (async () => {
-        const one = async (col: string, asc: boolean, captured: boolean) => {
-          let q = supabaseAdmin.from("cio_events").select(col).eq("event_name", "deposit_made");
-          q = captured ? q.eq("payload->>source", CAPTURE_SOURCE) : q.filter("payload->>source", "is", null);
-          const { data, error } = await q.order(col, { ascending: asc }).limit(1);
-          if (error) throw new Error(error.message);
-          const row = (data as unknown as Record<string, string>[] | null)?.[0];
-          return row ? row[col] : null;
-        };
-        const [captureFrom, captureTo, liveFrom] = await Promise.all([one("occurred_at", true, true), one("occurred_at", false, true), one("received_at", true, false)]);
-        return { captureFrom, captureTo, liveFrom };
-      })(),
-      totalsRpc(new Date(startMs).toISOString(), new Date(endMs).toISOString()),
-      depositorsRpc(new Date(startMs).toISOString(), new Date(endMs).toISOString()),
       totalsRpc(EPOCH, nowIso),
       depositorsRpc(EPOCH, nowIso),
       (async () => {
@@ -290,27 +271,11 @@ export async function GET(request: NextRequest) {
       lifeTotRes.status === "fulfilled" && lifeDepRes.status === "fulfilled" ? { players: lifeDepRes.value, totals: lifeTotRes.value } : null;
     if (famRes.status === "fulfilled") for (const f of families) f.members = famRes.value.get(f.key) ?? null;
     else unavailable.families = famRes.reason instanceof Error ? famRes.reason.message : String(famRes.reason);
-    let deposits: AudienceDeposits | null = null;
-    if (depRes.status === "fulfilled" && covRes.status === "fulfilled") {
-      deposits = {
-        from: new Date(startMs).toISOString(),
-        to: new Date(endMs).toISOString(),
-        days: depRes.value,
-        coverage: covRes.value,
-        totals: totRes.status === "fulfilled" ? totRes.value : null,
-        depositors: depositorsRes.status === "fulfilled" ? depositorsRes.value : null,
-      };
-      if (totRes.status === "rejected") unavailable.deposits = totRes.reason instanceof Error ? totRes.reason.message : String(totRes.reason);
-    } else {
-      const why = depRes.status === "rejected" ? depRes.reason : covRes.status === "rejected" ? covRes.reason : null;
-      unavailable.deposits = why instanceof Error ? why.message : String(why);
-    }
-
     let contactWindow: ContactWindow | null = null;
     if (workRes.status === "fulfilled") contactWindow = workRes.value;
     else unavailable.contactWindow = workRes.reason instanceof Error ? workRes.reason.message : String(workRes.reason);
 
-    return NextResponse.json({ scopeCampaigns: ids.length, reach, deposited, families, deposits, contactWindow, unavailable } satisfies AudienceReachResponse);
+    return NextResponse.json({ scopeCampaigns: ids.length, reach, deposited, families, contactWindow, unavailable } satisfies AudienceReachResponse);
   } catch (err) {
     console.error("[audience/reach] failed:", err);
     return NextResponse.json({ error: "Failed to load audience reach" }, { status: 500 });
