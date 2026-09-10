@@ -3,7 +3,7 @@ import { supabaseAdmin } from "@/lib/supabaseServer";
 import { formatCampaign } from "@/lib/campaignDisplay";
 import { deriveAttemptTag, type AttemptTag } from "@/lib/dashboardAnalytics";
 import { decideSmsDispatch, resolveSmsConsentMode, type SmsConsentMode } from "@/lib/smsDispatchDecision";
-import { agentMentionedSms, customerDeclinedSms, customerRiskDisclosure, hasGenuineCustomerConsent, hasRealConversation } from "@/lib/transcriptClassify";
+import { agentMentionedSms, agentSpokeOffer, customerDeclinedSms, customerRiskDisclosure, hasGenuineCustomerConsent, hasRealConversation } from "@/lib/transcriptClassify";
 
 /**
  * GET /api/audience/player-sms?phone=+E164
@@ -99,6 +99,8 @@ async function whyNoText(phone: string): Promise<SmsWhy | null> {
     agentAnnouncedSms: text ? agentMentionedSms(text) : false,
     customerDeclinedSms: text ? customerDeclinedSms(text) : false,
     humanConversation: text ? hasRealConversation(text) : false,
+    // Same input the webhook passes, so the drawer's "why no text" can never disagree with dispatch.
+    agentSpokeOffer: text ? agentSpokeOffer(text) : false,
     lastResortMode: typeof camp?.sms_last_resort_template === "string" && camp.sms_last_resort_template.trim().length > 0,
   });
   return { configured, attempt: decision.attempt, reason: decision.reason, mode, tag, lastCallAt: (call.created_at as string | null) ?? null };

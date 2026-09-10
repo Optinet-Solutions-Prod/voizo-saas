@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   isVoicemail, isConclusiveVoicemail, hasRealConversation, hasGenuineCustomerConsent,
   agentMentionedSms, customerDeclinedSms, substantiveUserTurnCount, customerRequestedCallback,
-  customerRiskDisclosure, type RiskDisclosureCategory,
+  customerRiskDisclosure, agentSpokeOffer, type RiskDisclosureCategory,
 } from "./transcriptClassify";
 
 // Real AU "message bank" voicemails the filter MISSED (campaign 9df71cd3, 2026-06-03).
@@ -1052,5 +1052,49 @@ describe("customerRiskDisclosure — responsible-gambling signals (2026-08-28)",
     const filler = `${RG_OPENER}\nUser: ok.\n`.repeat(2000);
     expect(filler.length).toBeGreaterThan(32_000);
     expect(customerRiskDisclosure(filler + "\nUser: I am self excluded.")).toBeNull();
+  });
+});
+
+// ── agentSpokeOffer (Jasiel 2026-09-10: text an early hang-up only if the offer was spoken) ──
+// The sentences below are the ones prod agents actually say, taken from the 1,048 early hang-ups on
+// optin_reached_only campaigns between 11 Aug and 10 Sep. 757 of those calls end on the greeting
+// ("have you had a chance to log in?"), which must NOT read as the offer.
+describe("agentSpokeOffer (did the AGENT get the offer out before the player hung up)", () => {
+  const GREETING = "AI: Hey, Victor here from Lucky Seven dot com. Quick question. Have you had a chance to log in to your account recently?";
+  const OFFER_L7 = "AI: Got it. The reason I'm calling is I was just going over your account, and I've actually added twenty free spins for you. Just wanted to make sure you knew they were there since they do have an expiry date on them.";
+  const OFFER_SHORT = "AI: I'm Victor from Lucky Seven, and I was calling because I added twenty free spins to your account.";
+
+  it("detects the free-spins offer, in both shapes the scripts use", () => {
+    expect(agentSpokeOffer(`${GREETING}\nUser: three four four five.\n${OFFER_L7}\nUser: Bye.`)).toBe(true);
+    expect(agentSpokeOffer(`${OFFER_SHORT}\nUser: No.`)).toBe(true);
+  });
+
+  it("detects the other offer words the brands use: a bonus, a deposit match, something credited", () => {
+    expect(agentSpokeOffer("AI: There's a three hundred percent deposit match waiting for you.\nUser: Ok.")).toBe(true);
+    expect(agentSpokeOffer("AI: I've put a welcome bonus on your account.\nUser: Right.")).toBe(true);
+    expect(agentSpokeOffer("AI: We've credited your account with a little something.\nUser: Cheers.")).toBe(true);
+  });
+
+  it("KNOWN-BAD: the greeting alone is NOT the offer, however the call ends", () => {
+    // Two thirds of early hang-ups look exactly like this. Texting them would be the old policy.
+    expect(agentSpokeOffer(`${GREETING}\nUser: Who is this?\nAI: Goodbye.`)).toBe(false);
+    expect(agentSpokeOffer(`${GREETING}\nAI: Are you still with me?\nAI: Can you hear me okay?\nUser: Hello?`)).toBe(false);
+    expect(agentSpokeOffer(`${GREETING}\nUser: Yeah.\nAI: Okay. So I didn't catch that. Was that you?`)).toBe(false);
+  });
+
+  it("KNOWN-BAD: the CUSTOMER saying the offer words does not count, AI turns only", () => {
+    expect(agentSpokeOffer(`${GREETING}\nUser: Is this about the free spins bonus? Not interested.`)).toBe(false);
+  });
+
+  it("KNOWN-BAD: 'spin' or 'match' on their own are not the offer", () => {
+    // Guards the lexicon against loosening into single words that show up in ordinary speech.
+    expect(agentSpokeOffer("AI: Give it a spin whenever you like.\nUser: Ok.")).toBe(false);
+    expect(agentSpokeOffer("AI: Did you catch the match on the weekend?\nUser: Yeah.")).toBe(false);
+  });
+
+  it("fails SAFE on nothing: null, undefined and an empty transcript are not the offer", () => {
+    expect(agentSpokeOffer(null)).toBe(false);
+    expect(agentSpokeOffer(undefined)).toBe(false);
+    expect(agentSpokeOffer("")).toBe(false);
   });
 });

@@ -442,6 +442,26 @@ export function agentMentionedSms(transcript: string | null | undefined): boolea
   return turns.some((t) => t.speaker === "ai" && AGENT_SMS_ANNOUNCE.test(t.text));
 }
 
+// The OFFER, as the agents actually say it (Jasiel 2026-09-10: text an early hang-up only if the
+// offer was spoken). Built from the 1,048 early hang-ups on optin_reached_only campaigns, 11 Aug
+// to 10 Sep: the offer sentence is "I've actually added twenty free spins for you" (L7 and FP) or
+// "I added twenty free spins to your account"; the brands' other offers are a bonus, a deposit
+// match ("three hundred percent deposit match") and something credited. Deliberately NOT single
+// words: "spin" and "match" alone occur in ordinary speech, so they need their qualifier.
+// ponytail: a fixed lexicon, so a script rewritten around a new offer word stops matching and
+// early hang-ups quietly drop back to no text. The dispatch reason (early_hangup_offer_spoken vs
+// early_hangup) is logged per send, which is where that would show; widen the lexicon there.
+const AGENT_OFFER =
+  /\b(?:free spins?|bonus(?:es)?|deposit match|(?:percent|%)\s*(?:deposit\s*)?match|credited|added\b[^.?!]{0,40}\b(?:to|for|on) your?\b)/i;
+
+/** Did the AGENT get the offer out? AI turns only — a customer saying "is this about the free
+ *  spins?" is not the agent making the offer. */
+export function agentSpokeOffer(transcript: string | null | undefined): boolean {
+  if (!transcript) return false;
+  const turns = parseTranscriptTurns(transcript.slice(0, TRANSCRIPT_CAP));
+  return turns.some((t) => t.speaker === "ai" && AGENT_OFFER.test(t.text));
+}
+
 // Explicit, text-directed refusals ONLY. Deliberately narrow: a generic "no"
 // is an offer-decline (verbal_yes mode / outcome territory), not an SMS veto,
 // and AU grant-idioms ("yeah no worries", "no problem") must never match.
