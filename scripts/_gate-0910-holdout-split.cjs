@@ -133,7 +133,14 @@ const check = (name, ok, detail) => {
 
   if (process.argv.includes('--probe-write')) {
     log('\n=== 5. the CHECK constraint, probed for real (writes then reverts one row) ===');
-    const target = nums.find((n) => n.phone_e164);
+    // Pick a row the dialer cannot be touching: a terminal outcome on a campaign that is neither
+    // running nor paused. Flipping a live `pending` row for even a second could let findNextNumber
+    // skip it, or make the end-of-call webhook's "still in_progress?" guard drop a real outcome.
+    const quiet = new Set((Array.isArray(camps) ? camps : []).filter((c) => !['running', 'paused'].includes(c.status)).map((c) => c.id));
+    const allNums = await pageAll('campaign_numbers_v2', 'id,phone_e164,campaign_id,outcome', '&outcome=eq.unreached');
+    const target = allNums.find((n) => quiet.has(n.campaign_id));
+    if (!target) { check('a safe probe row exists (terminal outcome, finished campaign)', false); }
+    else log('  probe row ' + target.id + ' (outcome ' + target.outcome + ', campaign not running)');
     const put = async (outcome) => {
       const r = await fetch(env.NEXT_PUBLIC_SUPABASE_URL + '/rest/v1/campaign_numbers_v2?id=eq.' + target.id, {
         method: 'PATCH', headers: { ...h, 'Content-Type': 'application/json', Prefer: 'return=representation' },
@@ -141,13 +148,17 @@ const check = (name, ok, detail) => {
       });
       return { ok: r.ok, status: r.status, body: (await r.text()).slice(0, 120) };
     };
-    const before = (await pageAll('campaign_numbers_v2', 'id,outcome', '&id=eq.' + target.id))[0];
-    const junk = await put('definitely_not_an_outcome');
-    check('the constraint REJECTS a junk outcome (known-bad)', !junk.ok, 'HTTP ' + junk.status);
-    const good = await put('holdout');
-    check("the constraint ACCEPTS 'holdout'", good.ok, 'HTTP ' + good.status + ' ' + (good.ok ? '' : good.body));
-    const back = await put(before.outcome);
-    check('reverted to ' + before.outcome, back.ok, 'HTTP ' + back.status);
+    if (target) {
+      const before = (await pageAll('campaign_numbers_v2', 'id,outcome', '&id=eq.' + target.id))[0];
+      const junk = await put('definitely_not_an_outcome');
+      check('the constraint REJECTS a junk outcome (known-bad)', !junk.ok, 'HTTP ' + junk.status);
+      const good = await put('holdout');
+      check("the constraint ACCEPTS 'holdout'", good.ok, 'HTTP ' + good.status + ' ' + (good.ok ? '' : good.body));
+      const back = await put(before.outcome);
+      check('reverted to ' + before.outcome, back.ok, 'HTTP ' + back.status);
+      const after = (await pageAll('campaign_numbers_v2', 'id,outcome', '&id=eq.' + target.id))[0];
+      check('the row reads exactly as before', after.outcome === before.outcome, after.outcome);
+    }
   } else {
     log('\n=== 5. skipped (pass --probe-write to probe the CHECK constraint on one row, reverted) ===');
   }
