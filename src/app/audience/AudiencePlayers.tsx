@@ -202,8 +202,16 @@ export default function AudiencePlayers({ data, page, onPage, loading, showMarke
   // Column total, per currency, over the PAGE, and it says so: a footer total that silently means
   // something other than the rows above it is a trap. The window's total sits on the money strip.
   const withDep = rows.filter((r) => depState(r) === "after");
-  const totals = sums(withDep.flatMap((r) => r.deposits.filter((d) => d.afterContact)));
+  const pageDeps = withDep.flatMap((r) => r.deposits.filter((d) => d.afterContact));
+  const totals = sums(pageDeps);
   const totalsText = totals.length ? " · " + totals.map(([c, n]) => money(c, n)).join(" + ") : "";
+  // One EUR figure beside the per-currency sums (Jasiel 2026-09-10: the footer left the reader to
+  // convert three currencies by hand). The CRM's own normalisation at deposit time, the same basis
+  // as the strip's "EUR … normalised", so the two never disagree on the rate. Every deposit_made row
+  // carries it today (0 of 13,192 null); if one ever did not, the count says so rather than letting
+  // the total quietly understate.
+  const pageEur = pageDeps.reduce((a, d) => a + (d.amountEur ?? 0), 0);
+  const pageEurMissing = pageDeps.filter((d) => d.amountLocal != null && d.amountEur == null).length;
   const th = (label: string, right = false, extra?: string) => (
     <th className={`${right ? "text-right" : "text-left"} px-3 py-2 font-semibold ${extra ?? ""}`}>{label}</th>
   );
@@ -362,6 +370,17 @@ export default function AudiencePlayers({ data, page, onPage, loading, showMarke
           ))}
           <span className="text-[var(--text-3)]">
             {rows.length ? (onlyDep ? `${withDep.length} on this page${totalsText}` : `${withDep.length} of ${rows.length} on this page deposited after contact${totalsText}`) : ""}
+            {totals.length > 0 && (
+              <>
+                {" · "}
+                <span
+                  aria-label="EUR total for this page"
+                  title={`The CRM's EUR conversion of the amounts on this line, at deposit time, added across currencies. Same basis as the strip above. All time after contact for the players on this page, not just this window.${pageEurMissing ? ` ${pageEurMissing} deposit${pageEurMissing === 1 ? "" : "s"} carry no conversion and are left out.` : ""}`}
+                >
+                  EUR {Math.round(pageEur).toLocaleString("en-US")} normalised{pageEurMissing ? ` (${pageEurMissing} not converted)` : ""}
+                </span>
+              </>
+            )}
           </span>
           <span className="ml-auto">
             <Pagination currentPage={Math.min(page, pages)} totalPages={pages} totalItems={total} pageSize={pageSize} onPageChange={onPage} noun={onlyDep ? "depositors" : "players"} />
