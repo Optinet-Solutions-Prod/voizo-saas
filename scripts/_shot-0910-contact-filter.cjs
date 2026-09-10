@@ -100,6 +100,17 @@ function findChrome() {
     console.log('PAGE DID NOT REACH THE FILTER. First 400 chars:\n' + head);
   }
 
+  // The money strip and both reach cards render SKELETONS until their queries return, and the
+  // skeleton branch emits none of the aria-labels the copy check reads — so a check that runs too
+  // early reports copy as missing when it is present. Wait for the loaded Depositors stat itself.
+  let loaded = false;
+  for (let i = 0; i < 120; i++) {
+    loaded = await evalJs(`!!document.querySelector('[aria-label="Depositors"]')`);
+    if (loaded) break;
+    await wait(500);
+  }
+  if (!loaded) console.log('THE MONEY STRIP NEVER LEFT ITS SKELETON — the copy check below would read as missing.');
+
   // Open the Contact select and prove the new options are really in the DOM.
   const opened = await evalJs(`(() => {
     const card = document.querySelector('section[aria-label="Player activity"], section[aria-label="Depositors"]');
@@ -116,6 +127,46 @@ function findChrome() {
   await wait(700);
   const optionText = await evalJs(`document.body.innerText.match(/Spoke with them[\\s\\S]{0,80}/)?.[0] ?? '(not in the DOM)'`);
 
+  // VOZ-512: each depositor number must NAME its population, on screen and in the hover.
+  // Info renders its text into aria-label on a role="note", not a native title, so a source grep
+  // misses it entirely — read the rendered DOM instead (08 Sep lesson).
+  const pops = await evalJs(`(() => {
+    const notes = [...document.querySelectorAll('[role="note"][aria-label]')].map((n) => n.getAttribute('aria-label'));
+    return {
+      depositorsStat: (document.querySelector('[aria-label="Depositors"]')?.textContent || '(no Depositors stat)').trim(),
+      contactSub: (document.querySelector('section[aria-label="Contact this window"] p.font-mono')?.textContent || '(none)').trim(),
+      reachSub: (document.querySelector('[aria-label="Gross deposited after contact"]')?.textContent || '(none)').trim(),
+      hoverWindow: notes.some((t) => /deposited inside this window/i.test(t)),
+      hoverContacted: notes.some((t) => /players contacted inside this window/i.test(t)),
+      hoverAllTime: notes.some((t) => /over ALL TIME/i.test(t)),
+    };
+  })()`);
+  console.log('depositors stat:   ' + JSON.stringify(pops.depositorsStat));
+  console.log('contact sub-line:  ' + JSON.stringify(pops.contactSub));
+  console.log('reach sub-line:    ' + JSON.stringify(pops.reachSub));
+  console.log('hovers name their population — in-window ' + pops.hoverWindow +
+    ', contacted-in-window ' + pops.hoverContacted + ', all-time ' + pops.hoverAllTime);
+
+  // Second shot: the three depositor cards themselves, which is what VOZ-512 changed.
+  await evalJs(`document.querySelector('[aria-label="Money in the window"]')?.scrollIntoView({ block: 'start' })`);
+  await wait(400);
+  const cardsShot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+  if (cardsShot.result?.data) {
+    const p2 = OUT.replace(/\.png$/, '-cards.png');
+    fs.mkdirSync(path.dirname(p2), { recursive: true });
+    fs.writeFileSync(p2, Buffer.from(cardsShot.result.data, 'base64'));
+    console.log('cards screenshot: ' + p2);
+  }
+
+  // Back to the filter for the primary shot.
+  await evalJs(`(() => {
+    const card = document.querySelector('section[aria-label="Player activity"], section[aria-label="Depositors"]');
+    if (!card) return;
+    card.scrollIntoView({ block: 'start' });
+    const el = [...card.querySelectorAll('button,[role="combobox"],select')].find((b) => /Contact:/.test(b.textContent || ''));
+    if (el && !/Spoke with them/.test(document.body.innerText)) el.click();
+  })()`);
+  await wait(600);
   const shot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
   const b64 = shot.result?.data;
   if (b64) {

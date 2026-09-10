@@ -107,7 +107,9 @@ const WORK_ROWS: { key: "spoke" | "texted" | "delivered" | "depositors"; label: 
   { key: "delivered", label: "Text delivered", color: ROW_COLOR.voicemail,
     note: "Of those texts, how many the phone confirmed it received." },
   { key: "depositors", label: "Deposited after", color: ROW_COLOR.declined,
-    note: "Of those players, how many deposited at or after the first call or text in this window. Order, not cause: this card has no comparison group, and only a holdout would show whether contact changed anything." },
+    note: "Of the players contacted inside this window, how many deposited at or after that contact. A narrower population "
+      + "than the money strip above, which counts every deposit made in the window whenever the player was first contacted. "
+      + "Order, not cause: this card has no comparison group, and only a holdout would show whether contact changed anything." },
 ];
 
 export function ContactWindowCard({ work, unavailable }: { work: ContactWindow | null; unavailable?: string }) {
@@ -143,8 +145,8 @@ export function ContactWindowCard({ work, unavailable }: { work: ContactWindow |
           ))}
           <p className="mt-2 font-mono text-[10.5px] text-[var(--text-4)]">
             {work.depositors > 0
-              ? `${fmt(work.depositors)} of ${fmt(base)} contacted players deposited after, ${money0("EUR", work.amountEur)}. Order, not cause.`
-              : `None of the ${fmt(base)} contacted players deposited after.`}
+              ? `${fmt(work.depositors)} of the ${fmt(base)} players contacted in this window deposited after that contact, ${money0("EUR", work.amountEur)}. Order, not cause.`
+              : `None of the ${fmt(base)} players contacted in this window deposited after that contact.`}
           </p>
         </>
       )}
@@ -197,9 +199,9 @@ export function ReachCard({ reach, deposited, unavailable }: { reach: LaneReach 
           {deposited ? (
             <>
               <Row label="Deposited" n={deposited.players} members={m.members} color="var(--color-primary)" ariaLabel="Deposited after contact"
-                note="Players who deposited at or after the first call or text. Earlier deposits are left out. The line below is the money per currency, never added together; EUR is the CRM's conversion. Order, not cause." />
+                note="Players who deposited at or after the first call or text, counted over ALL TIME rather than the window above. Earlier deposits are left out. The widest of the three depositor counts on this tab: the money strip counts deposits made inside the window, and Contact this window counts only players touched inside it. The line below is the money per currency, never added together; EUR is the CRM's conversion. Order, not cause." />
               <p className={NOTE} aria-label="Gross deposited after contact">
-                {depCount ? <>{fmt(depCount)} deposits · EUR {Math.round(depEur).toLocaleString("en-US")} · {grossLine(depTotals)}</> : "no deposit after contact on record"}
+                {depCount ? <>{fmt(depCount)} deposits, all time · EUR {Math.round(depEur).toLocaleString("en-US")} · {grossLine(depTotals)}</> : "no deposit after contact on record"}
               </p>
             </>
           ) : (
@@ -293,8 +295,12 @@ export function DepositsByDay({ deposits, unavailable }: { deposits: AudienceDep
         <div className="grid grid-cols-4 max-[820px]:grid-cols-2 border-b border-[var(--border)]" aria-label="Money in the window">
           {stat("Deposits", fmt(depCount), before ? `${fmt(before)} more before contact, not counted` : "after contact, in this window",
             "Deposits made at or after the first call or text, inside the window. Earlier ones are named below, never counted.")}
-          {stat("Depositors", d.depositors == null ? "—" : fmt(d.depositors), depCount && d.depositors ? `${(depCount / d.depositors).toFixed(1)} deposits each` : undefined,
-            "How many different players made those deposits, counted once each.")}
+          {stat("Depositors", d.depositors == null ? "—" : fmt(d.depositors),
+            depCount && d.depositors ? `${(depCount / d.depositors).toFixed(1)} deposits each · deposited in this window` : "deposited in this window",
+            "Players who deposited inside this window, counted once each, however long ago they were first contacted. "
+            + "Two other cards below count depositors on different populations: Contact this window counts only players "
+            + "touched inside the window, and Reach counts all time. All three use the same after-contact rule, so they "
+            + "agree when the window is set to All.")}
           {stat("Gross", depCount && grossLines.length ? grossLines : "—", depCount ? `EUR ${Math.round(eur).toLocaleString("en-US")} normalised` : undefined,
             "Amounts per currency, never added together. The EUR line is the CRM's own conversion.")}
           {stat("Average", depCount ? `EUR ${(eur / depCount).toFixed(2)}` : "—", depCount ? "per deposit, normalised" : undefined,
