@@ -13,8 +13,9 @@
 // agree on what a family is. Members are DISTINCT PHONES across the family's campaigns, from the
 // same RPC the Reach card uses; null until that function exists in the database.
 import { useEffect, useState } from "react";
-import { ChevronRight, CalendarDays, Search, X } from "lucide-react";
+import { ChevronRight, CalendarDays, Download, Search, X } from "lucide-react";
 import { loadSnapshot, saveSnapshot } from "@/lib/sessionSnapshot";
+import { CSV_BOM, csvCell, triggerDownload } from "@/lib/download";
 import Pagination from "@/components/Pagination";
 import StyledSelect from "@/components/StyledSelect";
 import SortHead, { SortButton, nextSort, type SortDir } from "./SortHead";
@@ -130,11 +131,34 @@ export default function AudienceFamilies({ families, loading, showMarket, unavai
   };
   const toggle = (key: string) => { setOpenKey((k) => (k === key ? null : key)); ensureCamps(); };
 
+  // Export (Jasiel 2026-09-10). `families` is the WHOLE set for the lane and window: the pages of
+  // ten are cut client-side, so this is the full filtered list, not the visible page. One row per
+  // family; the runs are counted here and listed one per row in each run's own export below.
+  const exportFamilies = () => {
+    const head = ["family", "market", "runs", "members", "status", "newest_run", "newest_run_started", "campaign_ids"];
+    const rows = families.map((f) => [
+      f.label, f.market, f.runs, f.members, f.status,
+      f.runList[0]?.name ?? "", f.runList[0]?.startAt ?? "", f.campaignIds.join(" "),
+    ]);
+    const csv = CSV_BOM + [head, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n");
+    triggerDownload(new Blob([csv], { type: "text/csv;charset=utf-8;" }), "audience-campaign-families.csv");
+  };
+
   return (
     <section className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl overflow-hidden" aria-label="Campaign families">
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[var(--border)]">
         <h2 className="text-[12.5px] font-medium text-[var(--text-2)]">Campaign families</h2>
         <span className="ml-auto font-mono text-[11px] text-[var(--text-4)]" aria-label="Families">{loading && families.length === 0 ? "" : families.length}</span>
+        <button
+          type="button"
+          onClick={exportFamilies}
+          disabled={families.length === 0}
+          aria-label="Export campaign families"
+          title={`Export all ${families.length} families in this scope, one row each. Opens in Excel.`}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium border border-[var(--border)] text-[var(--text-2)] hover:text-[var(--text-1)] hover:border-[var(--border-2)] transition disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Download size={12} /> Export
+        </button>
       </div>
       {loading && families.length === 0 ? (
         // Placeholders the shape of the rows they stand in for, so the panel keeps its height and
@@ -386,26 +410,52 @@ function WeekPicker({ runs, openRun, onPick }: { runs: FamilyRun[]; openRun: Fam
 }
 
 // ── the numbers table inside a run: ten to a page, paged by the server ──
+type RunSort = "last_contact" | "amount" | "phone" | "calls";
+
+// One builder for the run table's fetch AND its export, so the export can never drift from the
+// table (Jasiel 2026-09-08: an export is the same query, the whole filtered set). Module scope, not a
+// closure inside the component, so the effect's dependency list stays honest. `page` is the only
+// difference: the export has none.
+function runParams(o: { campaignId: string; page?: number; needle: string; deposited: string; contact: string; rSort: { sort: RunSort; dir: SortDir } }) {
+  const sp = new URLSearchParams({ campaign: o.campaignId });
+  if (o.page !== undefined) sp.set("page", String(o.page));
+  if (o.needle) sp.set("q", o.needle);
+  if (o.deposited !== "any") sp.set("deposited", o.deposited);
+  if (o.contact !== "any") sp.set("contact", o.contact);
+  if (o.rSort.sort !== "last_contact") sp.set("sort", o.rSort.sort);
+  if (o.rSort.dir !== "desc") sp.set("dir", o.rSort.dir);
+  return sp;
+}
+
 function RunNumbers({ campaignId, onOpenPlayer }: { campaignId: string; onOpenPlayer?: (phone: string) => void }) {
   const [q, setQ] = useState("");
   const [needle, setNeedle] = useState("");
   const [deposited, setDeposited] = useState("any");
   const [contact, setContact] = useState("any");
-  type RunSort = "last_contact" | "amount" | "phone" | "calls";
   const [rSort, setRSort] = useState<{ sort: RunSort; dir: SortDir }>({ sort: "last_contact", dir: "desc" });
   const sortBy = (k: RunSort) => { setRSort(nextSort(rSort, k, ["phone"])); setPage(1); };
   const [page, setPage] = useState(1);
   const [data, setData] = useState<RunNumbersResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => { const t = setTimeout(() => { setNeedle(q.trim()); setPage(1); }, 300); return () => clearTimeout(t); }, [q]);
+  const [exporting, setExporting] = useState(false);
+  const exportCsv = async () => {
+    setExporting(true);
+    try {
+      const sp = runParams({ campaignId, needle, deposited, contact, rSort });
+      sp.set("format", "csv");
+      const r = await fetch(`/api/audience/run-numbers?${sp}`, { cache: "no-store" });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      triggerDownload(await r.blob(), `audience-run-numbers_${campaignId.slice(0, 8)}.csv`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Export failed");
+    } finally {
+      setExporting(false);
+    }
+  };
   useEffect(() => {
     const ctrl = new AbortController();
-    const sp = new URLSearchParams({ campaign: campaignId, page: String(page) });
-    if (needle) sp.set("q", needle);
-    if (deposited !== "any") sp.set("deposited", deposited);
-    if (contact !== "any") sp.set("contact", contact);
-    if (rSort.sort !== "last_contact") sp.set("sort", rSort.sort);
-    if (rSort.dir !== "desc") sp.set("dir", rSort.dir);
+    const sp = runParams({ campaignId, page, needle, deposited, contact, rSort });
     fetch(`/api/audience/run-numbers?${sp}`, { cache: "no-store", signal: ctrl.signal })
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((j: RunNumbersResponse) => { setData(j); setError(null); })
@@ -436,6 +486,16 @@ function RunNumbers({ campaignId, onOpenPlayer }: { campaignId: string; onOpenPl
         <StyledSelect size="sm" prefix="Contact:" options={RUN_CONTACT} value={contact} onChange={(v) => { setContact(v); setPage(1); }} placeholder="Any" />
         {error && <span className="text-[11px] text-amber-400 font-mono">{error}</span>}
         <span className="ml-auto font-mono text-[11px] text-[var(--text-4)]" aria-label="Numbers on this run">{data ? data.total.toLocaleString("en-US") : ""}</span>
+        <button
+          type="button"
+          onClick={exportCsv}
+          disabled={exporting || !data || total === 0}
+          aria-label="Export this run's numbers"
+          title={data ? `Export all ${total.toLocaleString("en-US")} numbers on this run with these filters, not just this page. Opens in Excel.` : "Loading…"}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium border border-[var(--border)] text-[var(--text-2)] hover:text-[var(--text-1)] hover:border-[var(--border-2)] transition disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Download size={12} /> {exporting ? "Exporting…" : "Export"}
+        </button>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-[12px] border-collapse">

@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabaseServer";
 import { fetchRowsIn } from "@/lib/supabaseFetchAll";
 import { deriveAttemptTag, type DashCallRow } from "@/lib/dashboardAnalytics";
 import { DOT_OF, type Dot } from "@/lib/audienceLane";
+import { CSV_BOM, csvCell } from "@/lib/download";
 
 /**
  * GET /api/audience/run-numbers?campaign=&page=&q=&deposited=&contact=&sort=&dir=
@@ -23,6 +24,12 @@ import { DOT_OF, type Dot } from "@/lib/audienceLane";
  * the same PII the campaign detail page already lists behind the same gate.
  */
 const PAGE_SIZE = 10;
+// `?format=csv` exports the WHOLE filtered set, not the page (Jasiel 2026-09-10: every table
+// exports, for reporting). PostgREST clamps any response at 1,000 rows, an RPC's included, so the
+// export pages the function in that step; CSV_CAP bounds a runaway loop if total_count ever
+// disagreed with the rows returned. Same numbers as the players export.
+const RPC_PAGE = 1_000;
+const CSV_CAP = 20_000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DEPOSITED = new Set(["any", "after", "before", "none", "unknown"]);
 const CONTACT = new Set(["any", "reached", "texted", "delivered", "never"]);
@@ -74,6 +81,7 @@ export async function GET(request: NextRequest) {
   const contact = CONTACT.has(sp.get("contact") ?? "") ? (sp.get("contact") as string) : "any";
   const sort = SORT.has(sp.get("sort") ?? "") ? (sp.get("sort") as string) : "last_contact";
   const dir = sp.get("dir") === "asc" ? "asc" : "desc";
+  const csv = sp.get("format") === "csv";
 
   try {
     const { data: camp, error: campErr } = await supabaseAdmin
@@ -86,23 +94,39 @@ export async function GET(request: NextRequest) {
     const from = new Date(camp.start_at ?? camp.created_at ?? 0).toISOString();
     const to = new Date().toISOString();
 
-    const { data, error } = await supabaseAdmin.rpc("audience_lane_players", {
-      p_campaign_ids: [campaign],
-      p_from: from,
-      p_to: to,
-      p_deposited: deposited,
-      p_contact: contact,
-      p_family_ids: null,
-      p_q: q || null,
-      p_sort: sort,
-      p_dir: dir,
-      p_limit: PAGE_SIZE,
-      p_offset: (page - 1) * PAGE_SIZE,
-    });
-    if (error) throw new Error(error.message);
-    const rpcRows = (data ?? []) as RpcRow[];
+    const callRpc = async (limit: number, offset: number): Promise<RpcRow[]> => {
+      const { data, error } = await supabaseAdmin.rpc("audience_lane_players", {
+        p_campaign_ids: [campaign],
+        p_from: from,
+        p_to: to,
+        p_deposited: deposited,
+        p_contact: contact,
+        p_family_ids: null,
+        p_q: q || null,
+        p_sort: sort,
+        p_dir: dir,
+        p_limit: limit,
+        p_offset: offset,
+      });
+      if (error) throw new Error(error.message);
+      return (data ?? []) as RpcRow[];
+    };
+
+    let rpcRows: RpcRow[];
+    if (csv) {
+      rpcRows = [];
+      let expected = 0;
+      for (let offset = 0; offset < CSV_CAP; offset += RPC_PAGE) {
+        const chunk = await callRpc(RPC_PAGE, offset);
+        if (chunk.length) expected = Number(chunk[0].total_count);
+        rpcRows.push(...chunk);
+        if (chunk.length < RPC_PAGE || rpcRows.length >= expected) break;
+      }
+    } else {
+      rpcRows = await callRpc(PAGE_SIZE, (page - 1) * PAGE_SIZE);
+    }
     const total = rpcRows.length ? Number(rpcRows[0].total_count) : 0;
-    if (rpcRows.length === 0) return NextResponse.json({ rows: [], total, page, pageSize: PAGE_SIZE, from } satisfies RunNumbersResponse);
+    if (rpcRows.length === 0 && !csv) return NextResponse.json({ rows: [], total, page, pageSize: PAGE_SIZE, from } satisfies RunNumbersResponse);
 
     // The last call per player IN THIS RUN, for the outcome chip.
     const phones = rpcRows.map((r) => r.phone_e164);
@@ -139,6 +163,24 @@ export async function GET(request: NextRequest) {
         cioKnown: r.cio_known,
       };
     });
+    if (csv) {
+      // Same rows and the same filters as the table, every one of them. `outcome` is the table's
+      // four-word vocabulary from the last call in this run; empty = never dialled.
+      const head = ["phone", "name", "calls", "last_contact", "outcome", "deposits_after_this_run", "gross_eur_after_this_run", "first_deposit_after_this_run", "crm_record"];
+      const lines = rows.map((r) => [
+        r.phone, r.name ?? "", r.calls, r.lastAt ?? "", r.outcome ?? "",
+        r.depositsAfter, r.depositsAfterEur.toFixed(2), r.firstDepositAfterAt ?? "", r.cioKnown ? "yes" : "no",
+      ]);
+      const body = CSV_BOM + [head, ...lines].map((l) => l.map(csvCell).join(",")).join("\r\n");
+      return new NextResponse(body, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": `attachment; filename="audience-run-numbers_${campaign}.csv"`,
+          "Cache-Control": "no-store",
+        },
+      });
+    }
     return NextResponse.json({ rows, total, page, pageSize: PAGE_SIZE, from } satisfies RunNumbersResponse);
   } catch (err) {
     console.error("[audience/run-numbers] failed:", err);

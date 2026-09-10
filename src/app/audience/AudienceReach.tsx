@@ -20,8 +20,10 @@
 // lean rule (connected and not the voicemail bucket, no transcript), and Reached is the word the
 // dashboard already uses for exactly that predicate. The transcript classifier's "conversation"
 // is a different, smaller number and is never labelled as this one.
+import { Download } from "lucide-react";
 import { Info } from "../analytics/ConnectRateHero";
 import { ROW_COLOR } from "../analytics/PerformanceCards";
+import { CSV_BOM, csvCell, triggerDownload } from "@/lib/download";
 import type { AudienceDeposits, ContactWindow, DepositTotal, LaneReach, LifetimeDeposited } from "../api/audience/reach/route";
 
 const fmt = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString("en-US"));
@@ -278,6 +280,26 @@ export function DepositsByDay({ deposits, unavailable }: { deposits: AudienceDep
     </div>
   );
   const grossLines = [...totals].filter((t) => t.deposits > 0).sort((a, b) => b.amountEur - a.amountEur).map((t) => money0(t.currency, t.amountLocal));
+  // Export (Jasiel 2026-09-10: every card exports). One flat file a spreadsheet can pivot: the
+  // strip's numbers as `currency_total` rows, then one `day` row per day of the window, always
+  // DAILY even when the chart has bucketed into weeks, because the weekly bars are a display
+  // choice and the data underneath is daily. Days outside the records say captured=no so an
+  // empty day cannot be read as a day with no deposits. Client-side from the data in hand; the
+  // shared csvCell guards quoting and formula injection, the BOM keeps Excel's encoding honest.
+  const exportCsv = () => {
+    if (!d) return;
+    const head = ["row", "key", "deposits", "players", "amount_local", "amount_eur", "deposits_before_contact", "captured"];
+    const rows: (string | number | null)[][] = [];
+    rows.push(["depositors_in_window", "", "", d.depositors, "", "", "", ""]);
+    for (const t of totals) rows.push(["currency_total", t.currency, t.deposits, t.players, t.amountLocal, t.amountEur, t.before, ""]);
+    for (const day of days) {
+      const x = byDay.get(day);
+      rows.push(["day", day, x?.deposits ?? 0, x?.players ?? 0, "", x?.amountEur ?? 0, x?.depositsBefore ?? 0, covered(day) ? "yes" : "no"]);
+    }
+    const csv = CSV_BOM + [head, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n");
+    const stem = days.length ? `${days[0]}_${days[days.length - 1]}` : d.to.slice(0, 10);
+    triggerDownload(new Blob([csv], { type: "text/csv;charset=utf-8;" }), `audience-deposits_${stem}.csv`);
+  };
   return (
     <section className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl overflow-hidden" aria-label="Deposits by day">
       {!d && !unavailable && (
@@ -316,6 +338,16 @@ export function DepositsByDay({ deposits, unavailable }: { deposits: AudienceDep
           <span className="ml-auto font-mono text-[10.5px] text-[var(--text-4)]">
             {d && days.length ? `${mmdd(days[0])} → ${mmdd(days[days.length - 1])} · ${fmt(total)} deposit${total === 1 ? "" : "s"}` : ""}
           </span>
+          <button
+            type="button"
+            onClick={exportCsv}
+            disabled={!d}
+            aria-label="Export deposits"
+            title="The four numbers above, per currency, and the deposits for every day in the window, one row per day. Opens in Excel."
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium border border-[var(--border)] text-[var(--text-2)] hover:text-[var(--text-1)] hover:border-[var(--border-2)] transition disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Download size={12} /> Export
+          </button>
         </div>
         {!d && unavailable ? (
           <p className="text-[11.5px] text-[var(--text-4)] py-3">Not available yet.</p>

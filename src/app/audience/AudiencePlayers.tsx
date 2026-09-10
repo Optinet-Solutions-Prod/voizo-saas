@@ -771,6 +771,41 @@ function PlayerDrawer({ row: open, brandLabel, onClose }: { row: AudiencePlayerR
     if (last && last.day === key) last.items.push(e); else days.push({ day: key, items: [e] });
   }
 
+  // Export the journey (Jasiel 2026-09-10). NOT the 30-entry timeline above, which is a display cut:
+  // this takes the FULL lists the drawer holds — every deposit, every text once the texts have
+  // loaded, every CRM message and event once Customer.io has answered. Calls are the exception: the
+  // route sends the last 6 (the drawer timelines keep only a tail, 03 Sep lesson), so the file says
+  // so in a final note row rather than passing a tail off as a history. Client-side, same helpers.
+  const textsLoaded = sms.status === "ready";
+  const crmLoaded = crm.status === "ready";
+  const exportJourney = () => {
+    const callEvents = open.events.filter((e) => e.kind === "call");
+    const rows: { at: string; source: string; kind: string; detail: string }[] = [
+      ...callEvents.map((e) => ({ at: e.at, source: "voizo", kind: "call", detail: callLine(e) })),
+      ...(textsLoaded
+        ? sms.data.texts.map((t) => ({ at: t.at, source: "voizo", kind: "sms", detail: `We texted · ${t.status}${t.error ? ` · ${t.error}` : ""}` }))
+        : open.events.filter((e) => e.kind === "sms").map((e) => ({ at: e.at, source: "voizo", kind: "sms", detail: smsLine(e) }))),
+      ...open.deposits.map((d) => ({
+        at: d.at, source: "deposit", kind: "deposit",
+        detail: `Deposited ${d.currency ?? ""} ${d.amountLocal == null ? "" : d.amountLocal.toFixed(2)}`.trim() + (d.afterContact ? "" : " · before we contacted them"),
+      })),
+      ...(open.firstAt ? [{ at: open.firstAt, source: "voizo", kind: "first_contact", detail: "First contact" }] : []),
+      ...(crmLoaded ? messages.map((m) => ({ at: m.sentAt ?? m.createdAt ?? "", source: "crm", kind: m.type, detail: crmMessageLine(m) })) : []),
+      ...(crmLoaded ? crmEvents.map((e) => ({ at: e.at, source: "crm", kind: "event", detail: crmEventLine(e.name) })) : []),
+    ].filter((r) => r.at).sort((a, b) => (a.at < b.at ? 1 : -1));
+    const note = [
+      `calls: the last ${callEvents.length} of ${open.calls} on record`,
+      textsLoaded ? `texts: all ${sms.data.texts.length}` : "texts: the last few only, the full list had not loaded",
+      `deposits: all ${open.deposits.length}`,
+      crmLoaded ? `crm: ${messages.length} messages, ${crmEvents.length} events` : "crm: not loaded",
+    ].join("; ");
+    downloadCsv(
+      ["day_utc", "time_utc", "at_utc", "source", "kind", "detail"],
+      [...rows.map((r) => [r.at.slice(0, 10), r.at.slice(11, 19), r.at, r.source, r.kind, r.detail]), ["", "", "", "note", "", note]],
+      `audience-journey_${open.phone.replace(/[^\d]/g, "")}.csv`,
+    );
+  };
+
   return (
     <>
       <button type="button" aria-label="Close" onClick={onClose} className="fixed inset-0 z-[90] bg-black/50 cursor-default" />
@@ -805,7 +840,19 @@ function PlayerDrawer({ row: open, brandLabel, onClose }: { row: AudiencePlayerR
               )}
             </div>
           </div>
-          <button type="button" aria-label="Close" onClick={onClose} className="ml-auto text-[var(--text-3)] hover:text-[var(--text-1)]">
+          <button
+            type="button"
+            onClick={exportJourney}
+            disabled={sms.status === "loading" || crm.status === "loading"}
+            aria-label="Export this player's journey"
+            title={sms.status === "loading" || crm.status === "loading"
+              ? "Loading the texts and the Customer.io record first"
+              : "Every deposit, every text, the Customer.io messages and events, and the last calls, one row each, oldest at the bottom. The last row says what is complete. Opens in Excel."}
+            className="ml-auto inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium border border-[var(--border)] text-[var(--text-2)] hover:text-[var(--text-1)] hover:border-[var(--border-2)] transition disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+          >
+            <Download size={12} /> Export
+          </button>
+          <button type="button" aria-label="Close" onClick={onClose} className="text-[var(--text-3)] hover:text-[var(--text-1)] shrink-0">
             <X size={15} />
           </button>
         </div>
