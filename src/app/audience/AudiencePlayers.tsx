@@ -21,7 +21,7 @@
 //   after    credited, with the date        before   greyed, "not counted"; hiding it would be a lie
 //   none     a dash, never 0.00             no record  we hold no CRM identity, so we cannot say
 import { useEffect, useState, type ReactNode } from "react";
-import { Download, Mail, MessageSquare, Search, X } from "lucide-react";
+import { Download, Mail, MessageSquare, PhoneCall, Search, Wallet, X } from "lucide-react";
 import { CSV_BOM, csvCell, triggerDownload } from "@/lib/download";
 import Pagination from "@/components/Pagination";
 import StyledSelect from "@/components/StyledSelect";
@@ -33,6 +33,7 @@ import type { Dot } from "@/lib/audienceLane";
 import type { AudiencePlayerRow, AudiencePlayersResponse, Contact, Deposited, PlayerDeposit, PlayerEvent, PlayerSort } from "../api/audience/players/route";
 import type { PlayerCrmResponse } from "../api/audience/player-crm/route";
 import type { PlayerSmsResponse, PlayerSmsText } from "../api/audience/player-sms/route";
+import type { PlayerCall, PlayerCallsResponse } from "../api/audience/player-calls/route";
 
 export interface PlayerFilters {
   deposited: Deposited;
@@ -82,17 +83,36 @@ const DOT_COLOR: Record<Dot, string> = {
 // The attempt chip of the depositor view: funnel-furthest of the player's last calls.
 const ATTEMPT_LADDER: Dot[] = ["spoke", "silent", "voicemail", "never"];
 
-// The mockup's mmddhm / mmdd, UTC.
+// Dates read as words, UTC (Jasiel 2026-09-11: "instead of saying 07-29 let's say AUG 29"). The
+// mockup's numeric mm-dd made a reader parse which half was the month, and it read as a US date to
+// half the team. Day-then-month is the order the rest of the tab already uses ("3 Sep → 10 Sep" on
+// the Reach card and the hero), so the whole page speaks one dialect.
 const p2 = (n: number) => String(n).padStart(2, "0");
+const MONTHS3 = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** A single-digit day or hour padded to two columns with a NON-BREAKING space, so a column of
+ *  stamps lines up instead of fraying ("1 Aug · 2:38 am" beside "29 Jul · 9:16 pm" put the dots and
+ *  the times in different places, Jasiel 2026-09-11). A plain leading space collapses in HTML and
+ *  a leading ZERO would read as a 24-hour clock, which is the thing we just moved away from; nbsp
+ *  is exactly one character wide in the monospace these columns already use. */
+const padL = (n: number) => (n < 10 ? ` ${n}` : String(n));
 const mmdd = (iso: string | null) => {
   if (!iso) return "—";
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "—" : `${p2(d.getUTCMonth() + 1)}-${p2(d.getUTCDate())}`;
+  return Number.isNaN(d.getTime()) ? "—" : `${padL(d.getUTCDate())} ${MONTHS3[d.getUTCMonth()]}`;
+};
+/** 12-hour UTC clock (Jasiel 2026-09-11: "pls 12hr format"). Midnight reads 12:00 am and noon
+ *  12:00 pm; a bare 0 or a bare 12 would be ambiguous in one direction or the other. Lower-case
+ *  am/pm so the meridiem never competes with the figure beside it. */
+const clock12 = (d: Date) => {
+  const h = d.getUTCHours();
+  return `${padL(h % 12 === 0 ? 12 : h % 12)}:${p2(d.getUTCMinutes())} ${h < 12 ? "am" : "pm"}`;
 };
 const mmddhm = (iso: string | null) => {
   if (!iso) return "—";
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "—" : `${mmdd(iso)} ${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}`;
+  // A middle dot between the date and the clock (Jasiel 2026-09-11): "29 Jul 9:16 pm" ran the two
+  // together, and with a 12-hour clock the eye has to find where one ends and the other starts.
+  return Number.isNaN(d.getTime()) ? "—" : `${mmdd(iso)} · ${clock12(d)}`;
 };
 const money = (cur: string, n: number) => `${cur} ${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 /** Sums per currency, sorted largest first. Money is never added across currencies. */
@@ -407,7 +427,7 @@ const SOURCE_COLOR: Record<Source, string> = { voizo: ROW_COLOR.neutral, cio: RO
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const dayLabel = (iso: string) => { const d = new Date(iso); return `${DOW[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`; };
-const hhmm = (iso: string) => { const d = new Date(iso); return `${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}`; };
+const hhmm = (iso: string) => clock12(new Date(iso));
 const secs = (n: number | null | undefined) => (!n ? "" : n >= 60 ? `${Math.floor(n / 60)} min ${n % 60} s` : `${n} s`);
 // The lean attempt tag in the operator's words. "spoke" never becomes "said yes": goal_reached is not agreement.
 const callLine = (e: PlayerEvent) => {
@@ -599,7 +619,7 @@ function SmsMessagesModal({ texts, pulledAt, phone, onClose }: { texts: PlayerSm
           {items.map((t) => {
             const st = smsState(t);
             return (
-              <div key={t.id} role="row" className={`grid grid-cols-[44px_1fr_auto] items-start gap-x-3 py-[7px] border-t border-[var(--border)] text-[12px] ${st.hot ? "" : "text-[var(--text-3)]"}`}>
+              <div key={t.id} role="row" className={`grid grid-cols-[62px_1fr_auto] items-start gap-x-3 py-[7px] border-t border-[var(--border)] text-[12px] ${st.hot ? "" : "text-[var(--text-3)]"}`}>
                 <span className="font-mono text-[10.5px] text-[var(--text-4)] pt-px">{hhmm(t.at)}</span>
                 <span className="min-w-0">
                   <span className="flex items-center gap-2 mb-[3px]">
@@ -626,6 +646,128 @@ function SmsMessagesModal({ texts, pulledAt, phone, onClose }: { texts: PlayerSm
     </PopupShell>
   );
 }
+
+// ── Calls, every one of them (Jasiel 2026-09-11: "make the calls clickable too pls? so that we
+// can track which campaign they're in and whatnot") ──
+// Read lazily by /api/audience/player-calls when the popup opens, never on page load. The row's
+// count and the journey's six-call tail are not enough to list from: measured across the lane,
+// 14.9% of players have more than six calls (max 55), and a truncated list read as complete is
+// exactly the VOZ-482 defect.
+const CALL_TAG_WORDS: Record<string, string> = {
+  positive: "spoke, goal reached",
+  neutral: "spoke",
+  declined: "declined the offer",
+  early_hangup: "hung up early",
+  silent_pickup: "answered, nobody spoke",
+  agent_timeout: "agent timed out",
+  voicemail: "voicemail",
+  unreachable: "never connected",
+};
+const CALL_TAG_TONE: Record<string, "good" | "bad" | "flat"> = {
+  positive: "good", neutral: "good", declined: "bad", early_hangup: "bad",
+  silent_pickup: "flat", agent_timeout: "flat", voicemail: "flat", unreachable: "bad",
+};
+
+function CallsModal({ calls, pulledAt, truncated, phone, onClose }: {
+  calls: PlayerCall[]; pulledAt: string | null; truncated: boolean; phone: string; onClose: () => void;
+}) {
+  const connected = calls.filter((c) => c.status === "completed" || c.status === "answered").length;
+  const talk = calls.reduce((a, c) => a + (c.durationSeconds ?? 0), 0);
+  // One row per call, the same fields the list shows, so a spreadsheet can pivot by campaign.
+  const exportCsv = () => downloadCsv(
+    ["day_utc", "time_utc", "campaign", "outcome", "status", "duration_seconds", "ended_reason", "goal_reached", "voicemail", "at"],
+    calls.map((c) => [(c.at ?? "").slice(0, 10), hhmm(c.at), c.campaign, CALL_TAG_WORDS[c.tag] ?? c.tag, c.status, c.durationSeconds, c.endedReason, c.goalReached ? "yes" : "no", c.voicemail ? "yes" : "no", c.at]),
+    `calls_${phone.replace(/\D/g, "")}_${new Date().toISOString().slice(0, 10)}.csv`,
+  );
+  const days = groupByDay(calls, (c) => c.at);
+  return (
+    <PopupShell label="Calls" icon={<PhoneCall size={15} className="shrink-0" />}
+      title={`${calls.length} ${calls.length === 1 ? "call" : "calls"}`}
+      meta={`· ${connected} connected${talk ? ` · ${secs(talk)} talking` : ""}`}
+      subtitle={`${truncated ? "The newest 200 only. " : ""}${pulledAt ? `Read at ${hhmm(pulledAt)} UTC.` : ""}`}
+      onExport={exportCsv} exportLabel="Export calls as CSV" onClose={onClose}>
+      {days.map(({ day, items }) => (
+        <section key={day || "undated"} className="mb-3">
+          <DayHead day={day} />
+          {items.map((c) => {
+            const tone = CALL_TAG_TONE[c.tag] ?? "flat";
+            const colour = tone === "good" ? ROW_COLOR.reached : tone === "bad" ? ROW_COLOR.declined : undefined;
+            return (
+              <div key={c.id} role="row" className="grid grid-cols-[62px_1fr_auto] items-start gap-x-3 py-[7px] border-t border-[var(--border)] text-[12px]">
+                <span className="font-mono text-[10.5px] text-[var(--text-4)] pt-px">{hhmm(c.at)}</span>
+                <span className="min-w-0">
+                  <span className="block text-[10.5px] text-[var(--text-4)] truncate" title={c.campaign || undefined}>{c.campaign || "—"}</span>
+                  <span className="block leading-snug text-[var(--text-1)]">
+                    {CALL_TAG_WORDS[c.tag] ?? c.tag}
+                    {c.durationSeconds ? <span className="text-[var(--text-3)]"> · {secs(c.durationSeconds)}</span> : null}
+                  </span>
+                </span>
+                <span className="flex flex-col items-end gap-1 whitespace-nowrap pt-px">
+                  <span aria-label={c.tag} title={c.endedReason ?? undefined}
+                    className={`text-[10px] px-[7px] py-px rounded-full border ${colour ? "" : "border-[var(--border-2)] text-[var(--text-4)]"}`}
+                    style={colour ? { color: colour, borderColor: colour } : undefined}>
+                    {c.status}
+                  </span>
+                </span>
+              </div>
+            );
+          })}
+        </section>
+      ))}
+    </PopupShell>
+  );
+}
+
+// ── Deposits, every one we hold (Jasiel 2026-09-11: "is there a way we can also show their
+// lifetime deposits? ... same mechanism on SMS and CRM messages, underlined, if clicked shows
+// summary") ──
+// No route: the players row already carries the player's FULL deposit list (only the journey
+// timeline is capped, at four). So this popup is pure rendering of data already in hand.
+//
+// "Lifetime" is the word to be careful with. cio_events holds a one-off capture from 26 Jul to
+// 25 Aug and the live webhook from 2 Sep, with 26 Aug to 1 Sep in NEITHER. So the total below is
+// every deposit WE HOLD, not the player's history with the brand, and the label and hover say so.
+function DepositsModal({ deposits, phone, onClose }: { deposits: PlayerDeposit[]; phone: string; onClose: () => void }) {
+  const after = deposits.filter((d) => d.afterContact);
+  const exportCsv = () => downloadCsv(
+    ["day_utc", "time_utc", "currency", "amount_local", "amount_eur", "after_contact", "at"],
+    deposits.map((d) => [(d.at ?? "").slice(0, 10), hhmm(d.at), d.currency, d.amountLocal, d.amountEur, d.afterContact ? "yes" : "no", d.at]),
+    `deposits_${phone.replace(/\D/g, "")}_${new Date().toISOString().slice(0, 10)}.csv`,
+  );
+  const days = groupByDay(deposits, (d) => d.at);
+  const line = (list: PlayerDeposit[]) => (sums(list).length ? sums(list).map(([c, n]) => money(c, n)).join(" + ") : "none");
+  return (
+    <PopupShell label="Deposits" icon={<Wallet size={15} className="shrink-0" />}
+      title={`${deposits.length} ${deposits.length === 1 ? "deposit" : "deposits"}`}
+      meta={`· ${after.length} after contact`}
+      subtitle="Every deposit on record for this player. Our records run from 26 Jul, with a gap from 26 Aug to 1 Sep, so this is not their whole history with the brand."
+      onExport={exportCsv} exportLabel="Export deposits as CSV" onClose={onClose}>
+      <div className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 pb-2.5 mb-1 border-b border-[var(--border)] text-[12px]">
+        <span className="text-[var(--text-3)]">After contact</span>
+        <span className="font-mono text-right text-[var(--text-1)]">{line(after)}</span>
+        <span className="text-[var(--text-3)]">Total on record</span>
+        <span className="font-mono text-right text-[var(--text-1)]">{line(deposits)}</span>
+      </div>
+      {days.map(({ day, items }) => (
+        <section key={day || "undated"} className="mb-3">
+          <DayHead day={day} />
+          {items.map((d, i) => (
+            <div key={`${d.at}-${i}`} role="row" className="grid grid-cols-[62px_1fr_auto] items-center gap-x-3 py-[7px] border-t border-[var(--border)] text-[12px]">
+              <span className="font-mono text-[10.5px] text-[var(--text-4)]">{hhmm(d.at)}</span>
+              <span className={`text-[10.5px] ${d.afterContact ? "text-[var(--text-3)]" : "text-[var(--text-4)]"}`}>
+                {d.afterContact ? "after contact" : "before contact, not counted"}
+              </span>
+              <span className={`font-mono text-right ${d.afterContact ? "text-[var(--text-1)]" : "text-[var(--text-4)]"}`}>
+                {d.amountLocal == null ? "—" : money(d.currency ?? "?", d.amountLocal)}
+              </span>
+            </div>
+          ))}
+        </section>
+      ))}
+    </PopupShell>
+  );
+}
+type CallsState = { status: "loading" } | { status: "ready"; data: PlayerCallsResponse } | { status: "error" };
 
 type SmsState = { status: "loading" } | { status: "ready"; data: PlayerSmsResponse } | { status: "error"; message: string; detail: string };
 
@@ -721,6 +863,9 @@ function PlayerDrawer({ row: open, brandLabel, onClose }: { row: AudiencePlayerR
   const [crmOpen, setCrmOpen] = useState(false);
   const [sms, setSms] = useState<SmsState>({ status: "loading" });
   const [smsOpen, setSmsOpen] = useState(false);
+  const [calls, setCalls] = useState<CallsState>({ status: "loading" });
+  const [callsOpen, setCallsOpen] = useState(false);
+  const [depOpen, setDepOpen] = useState(false);
   useEffect(() => {
     const ctrl = new AbortController();
     fetch(`/api/audience/player-sms?phone=${encodeURIComponent(open.phone)}`, { cache: "no-store", signal: ctrl.signal })
@@ -730,6 +875,16 @@ function PlayerDrawer({ row: open, brandLabel, onClose }: { row: AudiencePlayerR
       })
       .then((d) => setSms({ status: "ready", data: d }))
       .catch((e: unknown) => { if (!(e instanceof Error && e.name === "AbortError")) setSms({ status: "error", message: "Text records did not load", detail: e instanceof Error ? e.message : String(e) }); });
+    return () => ctrl.abort();
+  }, [open.phone]);
+  useEffect(() => {
+    // Lazy, like the texts above: every call for this phone, read when the drawer opens. The row
+    // carries a count and the journey a six-call tail, and 14.9% of players have more than six.
+    const ctrl = new AbortController();
+    fetch(`/api/audience/player-calls?phone=${encodeURIComponent(open.phone)}`, { cache: "no-store", signal: ctrl.signal })
+      .then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.json() as Promise<PlayerCallsResponse>; })
+      .then((d) => setCalls({ status: "ready", data: d }))
+      .catch((e: unknown) => { if (!(e instanceof Error && e.name === "AbortError")) setCalls({ status: "error" }); });
     return () => ctrl.abort();
   }, [open.phone]);
   useEffect(() => {
@@ -877,7 +1032,16 @@ function PlayerDrawer({ row: open, brandLabel, onClose }: { row: AudiencePlayerR
         </div>
         <div className="px-[17px] py-[15px] overflow-y-auto">
           <div className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-[7px] mb-5 text-[11.5px]">
-            <div className="text-[var(--text-3)]">Calls</div><div className="font-mono text-[12px] text-right text-[var(--text-1)]">{open.calls}</div>
+            <div className="text-[var(--text-3)]">Calls</div>
+            {calls.status === "ready" && calls.data.calls.length ? (
+              // The summary opens the full list: every call, its campaign, and how it ended.
+              <button type="button" onClick={() => setCallsOpen(true)} aria-label="Calls" aria-haspopup="dialog" title="See every call, its campaign and how it ended"
+                className="font-mono text-[12px] text-right text-[var(--text-1)] underline decoration-dotted decoration-[var(--text-4)] underline-offset-[3px] hover:decoration-[var(--text-2)] cursor-pointer justify-self-end">
+                {calls.data.calls.length}
+              </button>
+            ) : (
+              <div className="font-mono text-[12px] text-right text-[var(--text-1)]" aria-label="Calls">{open.calls}</div>
+            )}
             <div className="text-[var(--text-3)]">SMS</div>
             {sms.status === "ready" && sms.data.texts.length ? (
               // The summary opens the full list: every text we sent, the words, and whether it arrived.
@@ -896,9 +1060,35 @@ function PlayerDrawer({ row: open, brandLabel, onClose }: { row: AudiencePlayerR
               })()
             )}
             <div className="text-[var(--text-3)]">Deposited after contact</div>
-            <div className={`font-mono text-[12px] text-right ${s === "after" ? "text-[var(--text-1)]" : "text-[var(--text-4)]"}`}>
-              {s === "unknown" ? "no record" : s === "none" ? "none" : s === "before" ? "before contact only" : sums(open.deposits.filter((d) => d.afterContact)).map(([c, n]) => money(c, n)).join(" + ")}
-            </div>
+            {open.deposits.length ? (
+              // The summary opens the full list: every deposit, before and after contact.
+              <button type="button" onClick={() => setDepOpen(true)} aria-label="Deposited after contact" aria-haspopup="dialog" title="See every deposit on record for this player"
+                className={`font-mono text-[12px] text-right underline decoration-dotted decoration-[var(--text-4)] underline-offset-[3px] hover:decoration-[var(--text-2)] cursor-pointer justify-self-end ${s === "after" ? "text-[var(--text-1)]" : "text-[var(--text-4)]"}`}>
+                {s === "after" ? sums(open.deposits.filter((d) => d.afterContact)).map(([c, n]) => money(c, n)).join(" + ") : "before contact only"}
+              </button>
+            ) : (
+              <div className="font-mono text-[12px] text-right text-[var(--text-4)]" aria-label="Deposited after contact">
+                {s === "unknown" ? "no record" : "none"}
+              </div>
+            )}
+            {/* Every deposit we hold, before and after contact (Jasiel 2026-09-11: "is there a way
+                we can also show their lifetime deposits?"). It appears ONLY when the player has a
+                deposit from before we contacted them, because otherwise it repeats the row above to
+                the cent (Jasiel, same day: "it's kind of redundant seeing 2 total"). Not called
+                "lifetime": cio_events runs from 26 Jul with a gap from 26 Aug to 1 Sep, so it is
+                our record, not their history with the brand. */}
+            {open.deposits.some((d) => !d.afterContact) && (
+              <>
+                <div className="text-[var(--text-3)] flex items-center gap-1">
+                  Deposited, total
+                  <Info text="Every deposit we hold for this player, before and after Voizo contacted them. Shown only when some of it came before contact. Our deposit records start 26 Jul and have a gap from 26 Aug to 1 Sep, so this is not their whole history with the brand." />
+                </div>
+                <button type="button" onClick={() => setDepOpen(true)} aria-label="Deposited total" aria-haspopup="dialog" title="See every deposit on record for this player"
+                  className="font-mono text-[12px] text-right text-[var(--text-1)] underline decoration-dotted decoration-[var(--text-4)] underline-offset-[3px] hover:decoration-[var(--text-2)] cursor-pointer justify-self-end">
+                  {sums(open.deposits).map(([c, n]) => money(c, n)).join(" + ")}
+                </button>
+              </>
+            )}
             <div className="text-[var(--text-3)] flex items-center gap-1">CRM messages <Info text="Emails and in-app messages Customer.io sent this player, read when this panel opened. Opens and clicks count people only, never mail scanners." /></div>
             {crm.status === "ready" && messages.length ? (
               // The summary opens the full list: every message, its subject, and what the player did with it.
@@ -950,6 +1140,10 @@ function PlayerDrawer({ row: open, brandLabel, onClose }: { row: AudiencePlayerR
         </div>
       </aside>
       {crmOpen && <CrmMessagesModal messages={messages} pulledAt={pulledAt} phone={open.phone} onClose={() => setCrmOpen(false)} />}
+      {callsOpen && calls.status === "ready" && (
+        <CallsModal calls={calls.data.calls} pulledAt={calls.data.pulledAt} truncated={calls.data.truncated} phone={open.phone} onClose={() => setCallsOpen(false)} />
+      )}
+      {depOpen && <DepositsModal deposits={open.deposits} phone={open.phone} onClose={() => setDepOpen(false)} />}
       {smsOpen && sms.status === "ready" && <SmsMessagesModal texts={sms.data.texts} pulledAt={sms.data.pulledAt} phone={open.phone} onClose={() => setSmsOpen(false)} />}
     </>
   );
