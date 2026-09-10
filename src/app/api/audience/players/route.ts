@@ -43,13 +43,13 @@ const CSV_CAP = 20_000;
 const RPC_PAGE = 1_000;
 const DOTS = 3;
 const DEPOSITED = new Set(["any", "after", "before", "none", "unknown"]);
-const CONTACT = new Set(["any", "reached", "texted", "delivered", "never"]);
+const CONTACT = new Set(["any", "reached", "spoke", "never_spoke", "texted", "delivered", "never"]);
 const SORT = new Set(["last_contact", "first_contact", "last_deposit", "first_deposit", "amount", "lag", "calls", "phone"]);
 const DIR = new Set(["asc", "desc"]);
 
 export type { Dot };
 export type Deposited = "any" | "after" | "before" | "none" | "unknown";
-export type Contact = "any" | "reached" | "texted" | "delivered" | "never";
+export type Contact = "any" | "reached" | "spoke" | "never_spoke" | "texted" | "delivered" | "never";
 export type PlayerSort = "last_contact" | "first_contact" | "last_deposit" | "first_deposit" | "amount" | "lag" | "calls" | "phone";
 export type SortDir = "asc" | "desc";
 
@@ -83,6 +83,9 @@ export interface AudiencePlayerRow {
   dots: Dot[];
   calls: number;
   reached: boolean;
+  /** The strict rule (VOZ-511): somebody actually spoke on the call. `reached` is the older,
+   *  looser one, which counts a line that answered in silence and a four-second hang-up. */
+  spokeWith: boolean;
   smsSent: boolean;
   smsDelivered: number;
   firstAt: string | null;
@@ -113,7 +116,7 @@ type Seen = { phone_e164: string; cio_id: string; parent_campaign_id: string };
 type CioDeposit = { workspace: string; cio_id: string; occurred_at: string; currency: string | null; amount_local: string | null; amount_norm: number | string | null };
 type RpcRow = {
   phone_e164: string; display_name: string | null; last_campaign_id: string | null; first_at: string | null; last_at: string | null;
-  calls: number; reached: boolean; texted: boolean; delivered: boolean; cio_known: boolean;
+  calls: number; reached: boolean; spoke_with?: boolean; texted: boolean; delivered: boolean; cio_known: boolean;
   dep_after: number; dep_after_eur: number | string; dep_before: number; first_dep_after_at: string | null; last_dep_at: string | null;
   dep_after_in_window: number; dep_after_in_window_eur: number | string; total_count: number | string;
 };
@@ -136,6 +139,10 @@ export async function GET(request: NextRequest) {
   const country = (sp.get("country") ?? "").trim().slice(0, 40);
   const deposited = pick<Deposited>(sp.get("deposited"), DEPOSITED, "any");
   const contact = pick<Contact>(sp.get("contact"), CONTACT, "any");
+  // Maria's attribution window (27 Aug): count a deposit as "after contact" only when it lands
+  // within this many days of the player's first contact. 0 keeps the old behaviour, any time after.
+  // Clamped to a year so a typo cannot turn into an unbounded interval in the query.
+  const attribDays = Math.min(365, Math.max(0, Math.trunc(Number(sp.get("attribDays")) || 0)));
   const sort = pick<PlayerSort>(sp.get("sort"), SORT, "last_contact");
   const dir = pick<SortDir>(sp.get("dir"), DIR, "desc");
   const familyKey = (sp.get("family") ?? "").trim().slice(0, 120);
@@ -180,9 +187,22 @@ export async function GET(request: NextRequest) {
         p_dir: dir,
         p_limit: limit,
         p_offset: offset,
+        // Sent ONLY when asked for. PostgREST resolves an RPC by argument NAMES, so passing this
+        // to the v3 function (which has no such parameter) fails to resolve and the whole tab
+        // 404s. Omitting it at the default keeps the page working before the migration lands.
+        ...(attribDays > 0 ? { p_attrib_days: attribDays } : {}),
       });
       if (error) throw new Error(error.message);
-      return (data ?? []) as RpcRow[];
+      const out = (data ?? []) as RpcRow[];
+      // The strict filters are applied INSIDE the function. On v3 there is no 'spoke' branch, so
+      // its CASE falls through to TRUE and every player comes back — a silent wrong answer rather
+      // than an error. Refuse instead of lying about who was spoken to.
+      if ((contact === "spoke" || contact === "never_spoke") && out.length > 0 && out[0].spoke_with === undefined) {
+        throw new Error(
+          "The \"Spoke with them\" filter needs 2026-09-10_audience_lane_players_v4_strict_reached.sql applied to the database.",
+        );
+      }
+      return out;
     };
 
     if (csv) {
@@ -194,13 +214,13 @@ export async function GET(request: NextRequest) {
         all.push(...chunk);
         if (chunk.length < RPC_PAGE || all.length >= total) break;
       }
-      const head = ["phone", "name", "brand", "market", "family", "first_contact", "last_contact", "calls", "reached", "texted", "sms_delivered", "deposits_after_contact", "gross_eur_after_contact", "first_deposit_after_contact", "last_deposit", "crm_record"];
+      const head = ["phone", "name", "brand", "market", "family", "first_contact", "last_contact", "calls", "reached", "spoke_with", "texted", "sms_delivered", "deposits_after_contact", "gross_eur_after_contact", "first_deposit_after_contact", "last_deposit", "crm_record"];
       const lines = all.map((r) => {
         const c = r.last_campaign_id ? labelOf.get(r.last_campaign_id) : undefined;
         return [
           r.phone_e164, r.display_name ?? "", brandLabel(c?.cio_workspace), parseCountryToken(c?.name ?? "") || "",
           r.last_campaign_id ? label(r.last_campaign_id) : "", r.first_at ?? "", r.last_at ?? "", r.calls,
-          r.reached ? "yes" : "no", r.texted ? "yes" : "no", r.delivered ? "yes" : "no",
+          r.reached ? "yes" : "no", r.spoke_with === true ? "yes" : "no", r.texted ? "yes" : "no", r.delivered ? "yes" : "no",
           r.dep_after, Number(r.dep_after_eur).toFixed(2), r.first_dep_after_at ?? "", r.last_dep_at ?? "", r.cio_known ? "yes" : "no record",
         ];
       });
@@ -292,6 +312,9 @@ export async function GET(request: NextRequest) {
         dots: tagged.slice(0, DOTS).map((x) => DOT_OF[x.tag]),
         calls: r.calls,
         reached: r.reached,
+        // Optional on the row so the page still renders against the v3 function, which has no
+        // such column, until 2026-09-10_audience_lane_players_v4_strict_reached.sql is applied.
+        spokeWith: r.spoke_with === true,
         smsSent: group.some((n) => smsSentNumbers.has(n.id)),
         smsDelivered: phoneSms.filter((m) => m.status === "delivered").length,
         firstAt: r.first_at,

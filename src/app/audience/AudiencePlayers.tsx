@@ -55,7 +55,11 @@ const DEPOSITED_OPTIONS: { value: Deposited; label: string }[] = [
 ];
 const CONTACT_OPTIONS: { value: Contact; label: string }[] = [
   { value: "any", label: "Any" },
-  { value: "reached", label: "Reached" },
+  // "Spoke with them" is the strict rule and sits above the older "Reached", which counts a line
+  // that answered in silence and a player who hung up in seconds (VOZ-511, Maria 27 Aug).
+  { value: "spoke", label: "Spoke with them" },
+  { value: "never_spoke", label: "Never spoke with them" },
+  { value: "reached", label: "Reached (answered, spoken to or not)" },
   { value: "texted", label: "Texted" },
   { value: "delivered", label: "SMS delivered" },
   { value: "never", label: "Never reached" },
@@ -217,6 +221,7 @@ export default function AudiencePlayers({ data, page, onPage, loading, showMarke
           <div className="flex items-center gap-2 flex-wrap ml-1" aria-label="Player filters">
             <StyledSelect size="sm" prefix="Deposited:" options={DEPOSITED_OPTIONS} value={filters.deposited} onChange={(v) => set({ deposited: v as Deposited })} placeholder="Any" />
             <StyledSelect size="sm" prefix="Contact:" options={CONTACT_OPTIONS} value={filters.contact} onChange={(v) => set({ contact: v as Contact })} placeholder="Any" />
+            <Info text="Spoke with them: a person answered and said something. Reached is the older, looser count: it also includes a line that picked up in silence and a player who hung up in the first few seconds." />
             <StyledSelect size="sm" prefix="Family:" options={[{ value: "", label: "All" }, ...familyOptions]} value={filters.family} onChange={(v) => set({ family: v })} placeholder="All" />
           </div>
           <div className="ml-auto flex items-center gap-2.5">
