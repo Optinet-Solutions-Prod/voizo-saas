@@ -231,8 +231,12 @@ function axisDays(fromIso: string, toIso: string): string[] {
 const weekOf = (iso: string) => { const d = new Date(iso + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() - d.getUTCDay()); return d.toISOString().slice(0, 10); };
 const MAX_DAY_BARS = 92;
 
-export function DepositsByDay({ deposits, unavailable }: { deposits: AudienceDeposits | null; unavailable?: string }) {
+/** `filterWords` names the Depositors table's active filters (Jasiel 2026-09-10: the strip follows
+ *  them), e.g. "Spoke with them · Fortune Play · RND REG YESTERDAY". Empty when nothing is filtered, and
+ *  then the strip is the whole window for every contacted player, exactly as before. */
+export function DepositsByDay({ deposits, unavailable, filterWords }: { deposits: AudienceDeposits | null; unavailable?: string; filterWords?: string }) {
   const d = deposits;
+  const who = filterWords ? ` · ${filterWords}` : "";
   // A lifetime window starts at the epoch; the axis starts where the data can: the first captured deposit.
   const firstKnown = d?.coverage.captureFrom ?? d?.coverage.liveFrom ?? d?.days[0]?.day ?? null;
   const fromIso = d ? (d.from < "2000" && firstKnown ? firstKnown : d.from) : "";
@@ -298,7 +302,9 @@ export function DepositsByDay({ deposits, unavailable }: { deposits: AudienceDep
     }
     const csv = CSV_BOM + [head, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n");
     const stem = days.length ? `${days[0]}_${days[days.length - 1]}` : d.to.slice(0, 10);
-    triggerDownload(new Blob([csv], { type: "text/csv;charset=utf-8;" }), `audience-deposits_${stem}.csv`);
+    // The file names the filters it was cut with, so two exports from the same window cannot be confused.
+    const tag = filterWords ? "_" + filterWords.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) : "";
+    triggerDownload(new Blob([csv], { type: "text/csv;charset=utf-8;" }), `audience-deposits_${stem}${tag}.csv`);
   };
   return (
     <section className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl overflow-hidden" aria-label="Deposits by day">
@@ -315,14 +321,16 @@ export function DepositsByDay({ deposits, unavailable }: { deposits: AudienceDep
       )}
       {d && d.totals && (
         <div className="grid grid-cols-4 max-[820px]:grid-cols-2 border-b border-[var(--border)]" aria-label="Money in the window">
-          {stat("Deposits", fmt(depCount), before ? `${fmt(before)} more before contact, not counted` : "after contact, in this window",
-            "Deposits made at or after the first call or text, inside the window. Earlier ones are named below, never counted.")}
+          {stat("Deposits", fmt(depCount), (before ? `${fmt(before)} more before contact, not counted` : "after contact, in this window") + who,
+            "Deposits made at or after the first call or text, inside the window. Earlier ones are named below, never counted. "
+            + "This strip follows the filters on the Depositors table below: set one and it counts only those players' deposits.")}
           {stat("Depositors", d.depositors == null ? "—" : fmt(d.depositors),
-            depCount && d.depositors ? `${(depCount / d.depositors).toFixed(1)} deposits each · deposited in this window` : "deposited in this window",
+            (depCount && d.depositors ? `${(depCount / d.depositors).toFixed(1)} deposits each · deposited in this window` : "deposited in this window") + who,
             "Players who deposited inside this window, counted once each, however long ago they were first contacted. "
+            + "Follows the Depositors table's filters: with a filter set, only those players. "
             + "Two other cards below count depositors on different populations: Contact this window counts only players "
             + "touched inside the window, and Reach counts all time. All three use the same after-contact rule, so they "
-            + "agree when the window is set to All.")}
+            + "agree when the window is set to All and no filter is set.")}
           {stat("Gross", depCount && grossLines.length ? grossLines : "—", depCount ? `EUR ${Math.round(eur).toLocaleString("en-US")} normalised` : undefined,
             "Amounts per currency, never added together. The EUR line is the CRM's own conversion.")}
           {stat("Average", depCount ? `EUR ${(eur / depCount).toFixed(2)}` : "—", depCount ? "per deposit, normalised" : undefined,

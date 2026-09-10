@@ -40,11 +40,12 @@ import ConnectRateHero from "../analytics/ConnectRateHero";
 import GlobalExport from "../analytics/GlobalExport";
 import RangeCalendar from "../analytics/RangeCalendar";
 import { CardGridSkeleton } from "../analytics/loadingSkeletons";
-import AudiencePlayers, { PlayerDrawerByPhone, type PlayerFilters, DEFAULT_FILTERS } from "./AudiencePlayers";
+import AudiencePlayers, { PlayerDrawerByPhone, type PlayerFilters, DEFAULT_FILTERS, CONTACT_OPTIONS, DEPOSITED_OPTIONS } from "./AudiencePlayers";
 import AudienceFamilies from "./AudienceFamilies";
 import { ContactWindowCard, DepositsByDay, MembersStat, ReachCard } from "./AudienceReach";
 import type { AudiencePlayersResponse } from "../api/audience/players/route";
 import type { AudienceReachResponse } from "../api/audience/reach/route";
+import type { AudienceDepositsResponse } from "../api/audience/deposits/route";
 
 // The mockup's market allowlist: "AU, CA, NZ. FR, PH and PL are test and trace lanes — excluded
 // from audience surfaces, still visible in the campaign views." Applied as an intersection with
@@ -183,6 +184,32 @@ export default function AudiencePage() {
     return () => ctrl.abort();
   }, [playersQs, page]);
 
+  // The money strip and the Deposits-by-day chart follow the table's filters (Jasiel 2026-09-10: "a
+  // number beside a filter should obey it"). One request keyed on the scope, the window, the three
+  // filters and the search, so "Spoke with them" turns the strip into those players' money. Declared
+  // AFTER `filters` and `needle`, which it reads (a helper hoisted above its state throws at runtime
+  // and tsc is silent). The snapshot key carries the filters, or a stale unfiltered strip would paint
+  // under a filtered table; on a filter change the strip goes to its skeleton until the answer lands.
+  const depQs = (() => {
+    const p = new URLSearchParams(qs);
+    if (filters.deposited !== "any") p.set("deposited", filters.deposited);
+    if (filters.contact !== "any") p.set("contact", filters.contact);
+    if (filters.family) p.set("family", filters.family);
+    if (needle) p.set("q", needle);
+    return p.toString();
+  })();
+  const [deps, setDeps] = useState<AudienceDepositsResponse | null>(null);
+  useEffect(() => {
+    const ctrl = new AbortController();
+    const snap = loadSnapshot<AudienceDepositsResponse>(`audience.deposits:${depQs}`);
+    setDeps(snap ?? null);
+    fetch(`/api/audience/deposits?${depQs}`, { cache: "no-store", signal: ctrl.signal })
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then((j: AudienceDepositsResponse) => { setDeps(j); saveSnapshot(`audience.deposits:${depQs}`, j); })
+      .catch((e: unknown) => { if (!(e instanceof Error && e.name === "AbortError")) setDeps({ scopeCampaigns: 0, deposits: null, unavailable: e instanceof Error ? e.message : "Failed to load" }); });
+    return () => ctrl.abort();
+  }, [depQs]);
+
   // Export players: the whole filtered set as CSV, from the same query, never the page.
   const [exporting, setExporting] = useState(false);
   const exportPlayers = async () => {
@@ -209,6 +236,14 @@ export default function AudiencePage() {
   );
   const runDates = (agg?.families ?? []).flatMap((f) => f.runList.map((r) => (r.startAt ?? "").slice(0, 10))).filter(Boolean);
   const familyOptions = (agg?.families ?? []).map((f) => ({ value: f.key, label: f.label }));
+  // The words the strip prints for the active filters, taken from the same option lists the table's
+  // selects show, so the strip and the select never disagree on a name. Empty when nothing is set.
+  const filterWords = [
+    filters.deposited !== "any" ? DEPOSITED_OPTIONS.find((o) => o.value === filters.deposited)?.label : "",
+    filters.contact !== "any" ? CONTACT_OPTIONS.find((o) => o.value === filters.contact)?.label : "",
+    filters.family ? (familyOptions.find((o) => o.value === filters.family)?.label ?? filters.family) : "",
+    needle ? `search "${needle}"` : "",
+  ].filter(Boolean).join(" · ");
 
   return (
     <div className="px-[30px] pt-4 pb-16 w-full max-w-[1680px] mx-auto grid gap-4">
@@ -303,7 +338,7 @@ export default function AudiencePage() {
 
       {/* Order (Jasiel 2026-09-07): the money, the channels, the players, and the campaign families last;
           the mockup had the families above the players, and they read as a wall between the two. */}
-      <DepositsByDay deposits={agg?.deposits ?? null} unavailable={agg?.unavailable.deposits} />
+      <DepositsByDay deposits={deps?.deposits ?? null} unavailable={deps?.unavailable} filterWords={filterWords} />
       <ReachCard reach={agg?.reach ?? null} deposited={agg?.deposited ?? null} unavailable={agg?.unavailable.reach} />
       <ContactWindowCard work={agg?.contactWindow ?? null} unavailable={agg?.unavailable.contactWindow} />
 

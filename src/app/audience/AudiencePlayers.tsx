@@ -46,14 +46,14 @@ export interface PlayerFilters {
 export const DEFAULT_FILTERS: PlayerFilters = { deposited: "any", contact: "any", family: "", sort: "last_contact", dir: "desc" };
 const ASC_FIRST: PlayerSort[] = ["phone", "first_contact"];
 
-const DEPOSITED_OPTIONS: { value: Deposited; label: string }[] = [
+export const DEPOSITED_OPTIONS: { value: Deposited; label: string }[] = [
   { value: "any", label: "Any" },
   { value: "after", label: "After contact" },
   { value: "before", label: "Before contact only" },
   { value: "none", label: "None on record" },
   { value: "unknown", label: "No CRM record" },
 ];
-const CONTACT_OPTIONS: { value: Contact; label: string }[] = [
+export const CONTACT_OPTIONS: { value: Contact; label: string }[] = [
   { value: "any", label: "Any" },
   // "Spoke with them" is the strict rule and sits above the older "Reached", which counts a line
   // that answered in silence and a player who hung up in seconds (VOZ-511, Maria 27 Aug).
