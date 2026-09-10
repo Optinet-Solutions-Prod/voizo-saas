@@ -71,7 +71,9 @@ const check = (name, ok, detail) => { console.log((ok ? '  PASS  ' : '  FAIL  ')
       if (!box) return 'null';
       const out = [];
       for (const col of box.children) {
-        const t = col.getAttribute('title') || '';
+        // The native title attribute went when the rate moved into a styled hover (2026-09-11);
+        // the tooltip is the column's first child and carries the same sentence.
+        const t = (col.firstElementChild.textContent || '').trim();
         const bar = col.querySelector('span[style*="height"]');
         const m = t.match(/([\\d,]+) of ([\\d,]+) connected \\(([\\d.]+)%\\)/);
         out.push({
@@ -110,9 +112,13 @@ const check = (name, ok, detail) => { console.log((ok ? '  PASS  ' : '  FAIL  ')
     check(name + ': height does NOT follow the rate (the defect this replaces)',
       withCalls.length < 2 || bestRate.terminal === busiest.terminal || bestRate.h < tallest.h - 0.5,
       'best rate ' + bestRate.rate + '% at height ' + bestRate.h.toFixed(1) + '%, tallest ' + tallest.h.toFixed(1) + '%');
-    check(name + ': every drawn bar carries its rate as a label',
-      withCalls.every((b) => b.rateLabel === '' || /^\d+%$/.test(b.rateLabel)) && withCalls.some((b) => /%$/.test(b.rateLabel)),
-      withCalls.map((b) => b.rateLabel).filter(Boolean).join(' '));
+    // The rate moved off the bar and into its hover (Jasiel 2026-09-11). The column's first child
+    // is now that tooltip, so rateLabel holds its text: it must carry the rate, and nothing above
+    // the bars may print a bare percentage any more.
+    const printed = await evalJs(`[...document.querySelector('[aria-label="Calls and connect rate by day"], [aria-label="Calls and connect rate by week"]').children].some((c) => /^\\d+%$/.test((c.firstElementChild.textContent || '').trim()))`);
+    check(name + ': every drawn bar carries its rate in the hover, none printed above it',
+      withCalls.every((b) => /connected \(\d+\.\d%\)/.test(b.rateLabel)) && !printed,
+      withCalls.slice(0, 2).map((b) => b.rateLabel.replace(/^.*: /, '')).join(' | '));
     // The window split moved OUT of the card's foot and UNDER the day bars, where it doubles as
     // their colour key (Jasiel 2026-09-11). It must sit inside the timeline column, and its two
     // counts must appear exactly once on the card.

@@ -177,7 +177,7 @@ export default function ConnectRateHero({
               against 86-457 calls over 4-10 Sep. A dead period keeps its hatch, one with no calls
               is a flat stub, the period holding today is faded. Labels only when they fit: every
               bar for two weeks or less, every 7th day up to a month, the first day when weekly. */}
-          <div className="flex items-end gap-[3px] h-[104px] overflow-hidden" aria-label={weekly ? "Calls and connect rate by week" : "Calls and connect rate by day"}>
+          <div className="flex items-end gap-[3px] h-[92px]" aria-label={weekly ? "Calls and connect rate by week" : "Calls and connect rate by day"}>
             {bars.map((b, i) => {
               const { height, connectedShare } = geo[i];
               const rate = b.terminal ? connectedShare : null;
@@ -192,11 +192,12 @@ export default function ConnectRateHero({
               const holdsToday = weekly ? i === bars.length - 1 && b.label <= todayIso : b.label === todayIso;
               const showLabel = bars.length <= 15 || weekly || i % 7 === 0;
               return (
-                <span key={b.label} className="flex-1 flex flex-col justify-end items-center gap-1 h-full min-w-0" title={title + (holdsToday ? " (includes today, still running)" : "")}>
-                  {/* The rate, in the bar's own column, so the number and the shape read together
-                      instead of the rate living only in a hover a screenshot cannot capture. */}
-                  <span className="font-mono text-[9.5px] text-[var(--text-3)] whitespace-nowrap h-[12px] leading-[12px]">
-                    {showLabel && rate != null ? `${Math.round(rate)}%` : ""}
+                <span key={b.label} className="group relative flex-1 flex flex-col justify-end items-center gap-1 h-full min-w-0">
+                  {/* The rate lives in a hover on the bar (Jasiel 2026-09-11: a row of fourteen
+                      percentages over the bars read as clutter). Same tooltip as Deposits by day,
+                      so the two charts behave alike; the day label under the bar stays printed. */}
+                  <span className="pointer-events-none absolute bottom-[calc(100%+4px)] left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md border border-[var(--border-2)] bg-[var(--bg-elevated)] px-2 py-1 font-mono text-[10.5px] text-[var(--text-2)] opacity-0 transition-opacity group-hover:opacity-100 z-10">
+                    {title}{holdsToday ? " · today, still running" : ""}
                   </span>
                   {/* The bar gets its OWN track. A percentage height resolves against the parent,
                       so while the bar sat directly in the column it was measured against the
