@@ -38,6 +38,11 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 const mmdd = (iso: string) => iso.slice(5, 10);
 const shortDate = (iso: string) => `${Number(iso.slice(8, 10))} ${MONTHS[Number(iso.slice(5, 7)) - 1]}`;
 
+/** ONE horizontal line, sitting above the connect rate rather than in a column of its own (Jasiel
+ *  2026-09-11: "can we just make it 1?"). It was a full tile with a label, a 22 px number and a
+ *  sub-line, which gave the lane size the same weight as the rate and left a band of empty space
+ *  beside it. The campaign-family and market-lane detail is not a headline, so it moved into the
+ *  ⓘ hover, where the house puts descriptions. */
 export function MembersStat({ reach, families, lanes, unavailable }: {
   reach: LaneReach | null;
   families: number;
@@ -45,19 +50,19 @@ export function MembersStat({ reach, families, lanes, unavailable }: {
   lanes: number;
   unavailable?: string;
 }) {
-  const sub = reach
-    ? `${fmt(families)} campaign ${families === 1 ? "family" : "families"}${lanes > 1 ? ` across ${lanes} market lanes` : ""}`
-    : unavailable
-      ? "not available yet"
-      : "";
+  const shape = reach
+    ? ` Loaded from ${fmt(families)} campaign ${families === 1 ? "family" : "families"}${lanes > 1 ? ` across ${lanes} market lanes` : ""}.`
+    : "";
   return (
-    <div className="px-5 py-3.5" aria-label="Members">
-      <div className="flex items-center gap-[5px] text-[10px] uppercase tracking-[.07em] text-[var(--text-4)] mb-1.5">
+    <div className="flex items-baseline gap-2" aria-label="Members">
+      <span className="text-[10px] uppercase tracking-[.07em] text-[var(--text-4)] flex items-center gap-[5px]">
         Members
-        <Info text="Everyone loaded into these campaigns. Counted once per phone, even if they appear in several." />
-      </div>
-      <div className="font-mono text-[22px] font-medium leading-[1.1] tracking-[-0.02em] text-[var(--text-1)]">{reach ? fmt(reach.members) : unavailable ? "—" : <Pulse w="w-24" h="h-5" />}</div>
-      <div className="mt-1 text-[11px] text-[var(--text-3)] min-h-[15px]">{sub}</div>
+        <Info text={`Everyone loaded into these campaigns. Counted once per phone, even if they appear in several.${shape}`} />
+      </span>
+      <span className="font-mono text-[15px] font-medium leading-none tracking-[-0.02em] text-[var(--text-1)]">
+        {reach ? fmt(reach.members) : unavailable ? "—" : <Pulse w="w-16" h="h-3.5" />}
+      </span>
+      {!reach && unavailable && <span className="text-[11px] text-[var(--text-3)]">not available yet</span>}
     </div>
   );
 }
@@ -276,17 +281,16 @@ export function DepositsByDay({ deposits, unavailable, filterWords }: { deposits
     : "";
   // `value` may be several lines (one per currency): money is never summed across currencies, and a
   // truncated third currency (seen 2026-09-07: "NZ…") would read as a rounding of the first two.
-  const stat = (label: string, value: string | string[], sub?: string, note?: string) => (
+  // `breakdown` is an optional quiet line under the sub, for a tile whose hero is one figure that
+  // several others add up to. It WRAPS rather than truncates: on 2026-09-07 a third currency
+  // truncated to "NZ…" on this strip, which reads as a rounding of the first two rather than as a
+  // currency that was cut off.
+  const stat = (label: string, value: string, sub?: string, note?: string, breakdown?: string) => (
     <div className="px-4 py-3 border-l border-[var(--border)] first:border-l-0 min-w-0" aria-label={label}>
       <div className="flex items-center gap-[5px] text-[10px] uppercase tracking-[.07em] text-[var(--text-4)] mb-1">{label}{note && <Info text={note} />}</div>
-      {Array.isArray(value) ? (
-        <div className="font-mono font-medium tracking-[-0.02em] text-[var(--text-1)] leading-[1.15]">
-          {value.map((v, i) => <div key={v} className={i === 0 ? "text-[18px]" : "text-[14px] text-[var(--text-2)]"}>{v}</div>)}
-        </div>
-      ) : (
-        <div className="font-mono text-[18px] font-medium leading-[1.1] tracking-[-0.02em] text-[var(--text-1)] truncate" title={typeof value === "string" ? value : undefined}>{value}</div>
-      )}
-      {sub && <div className="mt-1 text-[11px] text-[var(--text-3)] truncate" title={typeof sub === "string" ? sub : undefined}>{sub}</div>}
+      <div className="font-mono text-[18px] font-medium leading-[1.1] tracking-[-0.02em] text-[var(--text-1)] truncate" title={value}>{value}</div>
+      {sub && <div className="mt-1 text-[11px] text-[var(--text-3)] truncate" title={sub}>{sub}</div>}
+      {breakdown && <div className="mt-1 font-mono text-[11px] text-[var(--text-2)] leading-snug">{breakdown}</div>}
     </div>
   );
   const grossLines = [...totals].filter((t) => t.deposits > 0).sort((a, b) => b.amountEur - a.amountEur).map((t) => money0(t.currency, t.amountLocal));
@@ -337,8 +341,15 @@ export function DepositsByDay({ deposits, unavailable, filterWords }: { deposits
             + "The Reach card below asks a narrower question on the same window: of the players touched INSIDE it, "
             + "how many deposited after that touch. Both use the same after-contact rule, so a player first contacted "
             + "inside the window is in both numbers, and one contacted earlier is only in this one.")}
-          {stat("Gross", depCount && grossLines.length ? grossLines : "—", depCount ? `EUR ${Math.round(eur).toLocaleString("en-US")} normalised` : undefined,
-            "Amounts per currency, never added together. The EUR line is the CRM's own conversion.")}
+          {/* The EUR total is the hero and the currencies sit under it, highest to lowest (Jasiel
+              2026-09-11). It was the other way round: the largest currency read as the headline
+              while the one comparable figure hid in the sub-line, and the Average tile beside it is
+              in EUR, so two tiles on one strip led with different units. The breakdown is still
+              never summed across currencies; the EUR line is the CRM's own conversion, not live FX. */}
+          {stat("Gross", depCount ? `EUR ${Math.round(eur).toLocaleString("en-US")}` : "—",
+            depCount ? "normalised" : undefined,
+            "The EUR figure is the CRM's own conversion at the time of each deposit, not a live rate. The line below is what was actually deposited in each currency, largest first; those are never added together.",
+            depCount && grossLines.length ? grossLines.join(" · ") : undefined)}
           {stat("Average", depCount ? `EUR ${(eur / depCount).toFixed(2)}` : "—", depCount ? "per deposit, normalised" : undefined,
             "The EUR total divided by the number of deposits in the window.")}
         </div>

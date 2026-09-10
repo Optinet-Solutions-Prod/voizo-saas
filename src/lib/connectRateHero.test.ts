@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { summarizeWindow, compareWindows, deltaLabel, baselineSeries, barSeries, OUTAGE_MIN_COMPLETED, type DayCount } from "./connectRateHero";
+import { summarizeWindow, compareWindows, deltaLabel, baselineSeries, barSeries, barGeometry, OUTAGE_MIN_COMPLETED, type DayCount } from "./connectRateHero";
 
 const day = (d: string, terminal: number, connected: number): DayCount => ({ day: d, terminal, connected });
 
@@ -176,5 +176,52 @@ describe("the outage rule has a volume floor (found live 2026-09-03)", () => {
   });
   it("the floor is prod's connect-collapse minimum, not a new number", () => {
     expect(OUTAGE_MIN_COMPLETED).toBe(20);
+  });
+});
+
+// ── barGeometry (2026-09-11) ──
+// Jasiel, looking at the hero: "what is these bars for?" They drew each day's connect RATE against
+// the window's best rate. Measured 7d that week: 87.7 / 91.9 / 75.6 / 82.1 / 81.3 / 83.4 / 84.9%,
+// which renders as seven near-identical bars carrying no readable information. What actually moved
+// was VOLUME: 260 / 457 / 86 / 112 / 160 / 169 / 139 completed calls, a five-fold swing holding the
+// Saturday collapse. So height is now CALLS and the green portion inside is that period's rate.
+describe("barGeometry — height is calls, the green portion is the rate", () => {
+  it("scales height by completed calls against the busiest period", () => {
+    const g = barGeometry([
+      { terminal: 100, connected: 50 },
+      { terminal: 50, connected: 25 },
+      { terminal: 200, connected: 100 },
+    ]);
+    expect(g.map((x) => x.height)).toEqual([50, 25, 100]);
+    expect(g.map((x) => x.connectedShare)).toEqual([50, 50, 50]);
+  });
+
+  it("KNOWN-BAD: the defect this replaces — a flat rate on swinging volume must NOT draw flat bars", () => {
+    // Every period connects at exactly 80%. The old bars (height = rate / peak rate) drew all
+    // three at full height and said nothing. Height must follow the calls instead.
+    const g = barGeometry([
+      { terminal: 400, connected: 320 },
+      { terminal: 100, connected: 80 },
+      { terminal: 200, connected: 160 },
+    ]);
+    expect(g.map((x) => x.connectedShare)).toEqual([80, 80, 80]);
+    expect(g.map((x) => x.height)).toEqual([100, 25, 50]);
+    expect(new Set(g.map((x) => x.height)).size).toBe(3); // three volumes, three heights
+  });
+
+  it("a period with no completed calls has no height and no green", () => {
+    const g = barGeometry([{ terminal: 0, connected: 0 }, { terminal: 80, connected: 40 }]);
+    expect(g[0]).toEqual({ height: 0, connectedShare: 0 });
+  });
+
+  it("an outage period is full-width amber: it has height, and none of it is green", () => {
+    const g = barGeometry([{ terminal: 300, connected: 0 }, { terminal: 300, connected: 300 }]);
+    expect(g[0]).toEqual({ height: 100, connectedShare: 0 });
+    expect(g[1]).toEqual({ height: 100, connectedShare: 100 });
+  });
+
+  it("fails SAFE on an empty series and never divides by zero", () => {
+    expect(barGeometry([])).toEqual([]);
+    expect(barGeometry([{ terminal: 0, connected: 0 }])).toEqual([{ height: 0, connectedShare: 0 }]);
   });
 });

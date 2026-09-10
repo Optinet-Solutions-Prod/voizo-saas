@@ -142,3 +142,25 @@ export function barSeries(days: DayCount[], maxBars = 31): { label: string; term
   }
   return out;
 }
+
+/** Geometry for the hero's day series, as percentages.
+ *
+ *  `height` is the period's COMPLETED CALLS against the busiest period in the window, and
+ *  `connectedShare` is how much of that bar is green: the period's own connect rate.
+ *
+ *  It used to be the other way round — height was the rate against the best rate — and that drew
+ *  seven near-identical bars, because a connect rate sits in a narrow band while volume does not.
+ *  Measured over 4-10 Sep 2026: rates 87.7 to 91.9%, calls 86 to 457. The second series is the one
+ *  worth a chart, and the rate rides inside it rather than being thrown away.
+ *
+ *  Both numbers are safe on an empty or idle period: no completed calls means no bar, never a
+ *  division by zero and never a full-height bar drawn from nothing. */
+export function barGeometry(
+  bars: { terminal: number; connected: number }[],
+): { height: number; connectedShare: number }[] {
+  const peak = Math.max(1, ...bars.map((b) => b.terminal));
+  return bars.map((b) => ({
+    height: (b.terminal / peak) * 100,
+    connectedShare: b.terminal ? (b.connected / b.terminal) * 100 : 0,
+  }));
+}

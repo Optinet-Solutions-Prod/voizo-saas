@@ -51,6 +51,21 @@ const get = async (p) => {
 };
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/** Supabase sits behind Cloudflare and answers a 520 now and then under this much traffic (seen
+ *  twice on 2026-09-11). Every direct REST/RPC call goes through here so a transient blip cannot
+ *  be reported as a gate failure. A 4xx is real and is never retried. */
+async function rest(pathAndQuery, init) {
+  let r = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    r = await fetch(env.NEXT_PUBLIC_SUPABASE_URL + pathAndQuery, init);
+    if (r.ok || r.status < 500) break;
+    await pause(2000 * (attempt + 1));
+  }
+  if (!r.ok) throw new Error(pathAndQuery.split('?')[0] + ' ' + r.status + ' ' + (await r.text()).slice(0, 160));
+  return r.json();
+}
+const rpc = (fn, body) => rest('/rest/v1/rpc/' + fn, { method: 'POST', headers: { ...h, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+
 /** PostgREST caps every read at 1000 and ignores &limit, so page with Range and assert the count. */
 async function pageAll(table, select, extra) {
   const out = []; const step = 1000;
@@ -155,11 +170,8 @@ const leanAnswered = (c) => isConnected(c.status) && !(c.voicemail === true && c
 
   log('\n=== 1. KNOWN-GOOD, ALL TIME: nine columns against audience_lane_reach ===');
   const all = await card('range=lifetime');
-  const lr = await fetch(env.NEXT_PUBLIC_SUPABASE_URL + '/rest/v1/rpc/audience_lane_reach', {
-    method: 'POST', headers: { ...h, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ p_campaign_ids: (await pageAll('campaigns_v2', 'id,source,is_test', '&order=id'))
-      .filter((c) => c.source !== 'ghost_portal' && c.is_test !== true).map((c) => c.id) }),
-  }).then((r) => r.json()).then((x) => x[0]);
+  const lr = (await rpc('audience_lane_reach', { p_campaign_ids: (await pageAll('campaigns_v2', 'id,source,is_test', '&order=id'))
+    .filter((c) => c.source !== 'ghost_portal' && c.is_test !== true).map((c) => c.id) }))[0];
   for (const [w, ref] of [['dialled', 'dialled'], ['answered', 'spoke_lean'], ['texted', 'texted'],
     ['textDelivered', 'text_delivered'], ['textedNotAnswered', 'texted_not_spoken'], ['msgs', 'msgs'],
     ['msgsDelivered', 'msgs_delivered'], ['msgsFailed', 'msgs_failed'], ['msgsUnconfirmed', 'msgs_unconfirmed']]) {
@@ -311,10 +323,7 @@ const leanAnswered = (c) => isConnected(c.status) && !(c.voicemail === true && c
   await pause(3000);
 
   log('\n=== 6. THE OWNER BRIDGE: depositors vs audience_lane_contact_window, the card this replaces ===');
-  const oldFn = await fetch(env.NEXT_PUBLIC_SUPABASE_URL + '/rest/v1/rpc/audience_lane_contact_window', {
-    method: 'POST', headers: { ...h, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ p_campaign_ids: [...liveIds], p_from: FROM, p_to: TO }),
-  }).then((r) => r.json()).then((x) => x[0]);
+  const oldFn = (await rpc('audience_lane_contact_window', { p_campaign_ids: [...liveIds], p_from: FROM, p_to: TO }))[0];
   log('  old function: contacted ' + oldFn.contacted + ' · depositors ' + oldFn.depositors + ' · EUR ' + Number(oldFn.amount_eur).toFixed(2));
   log('  new card:     contacted ' + w7.r.contacted + ' · depositors ' + w7.r.depositors + ' · EUR ' + w7.r.amountEur.toFixed(2));
   check('depositors diverge by no more than a handful (newest-phone vs smallest-phone bridge)',

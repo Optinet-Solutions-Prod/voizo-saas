@@ -257,8 +257,13 @@ export default function AudiencePage() {
 
   return (
     <div className="px-[30px] pt-4 pb-16 w-full max-w-[1680px] mx-auto grid gap-4">
-      {/* The mockup's `.top`: title, market tabs, and the member search at the right. Markets stay
-          with the content they filter; brand is the sidebar switcher. */}
+      {/* ONE toolbar row (Jasiel 2026-09-11, from the mockup: layout only, not its type or colour).
+          Left, what is being looked at: the title and the market tabs. Right, how it is being cut:
+          the range presets, the window picker, the export. Two rows put the title on one line and
+          the controls on another, which cost a band of vertical space above the fold and read as
+          two unrelated toolbars. Markets stay with the content they filter; brand is the sidebar
+          switcher. One control still drives the hero, the deposits, the player query and both
+          exports; a page range and a card range that can disagree is a bug generator. */}
       <div className="flex items-center gap-[13px] flex-wrap">
         <div className="flex items-center gap-2.5">
           <SectionTick color="#5b9bf0" />
@@ -283,44 +288,29 @@ export default function AudiencePage() {
             );
           })}
         </div>
-        {/* The search moved into the Player activity card with the Export button (Jasiel 2026-09-08):
-            it only ever filtered THAT table, so a box in the page header read as a page-wide search. */}
-      </div>
+        {(loading || aggLoading) && <span className="text-[11px] text-[var(--text-3)]">Updating…</span>}
+        {(error || aggError) && <span className="text-[11px] text-amber-400 font-mono">{error ?? aggError}</span>}
 
-      {/* The dashboard's range control (Campaign Performance's toolbar): Export first, then the
-          presets, then the window picker at the right. One control drives the hero, the deposits,
-          the player query and both exports; a page range and a card range that can disagree is a
-          bug generator. A preset lights only while the window equals it. */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <GlobalExport
-          filters={{ range: rangeKey, from: rangeKey === "custom" ? from : undefined, to: rangeKey === "custom" ? to : undefined, campaignIds: [], country: market, prompt: "", phone: "" }}
-          scopeIds={brand ? (data?.options.campaigns ?? []).map((c) => c.id) : null}
-          disabled={!data}
-        />
-        {/* "Export players" moved into the Player activity card, beside its filters and count (Jasiel
-            2026-09-08: it exports THAT list with THOSE filters, so it belongs where the filters are; up
-            here, next to the page-wide call-records Export, it read as a second page export). */}
-        <div className="inline-flex p-[3px] gap-0.5 rounded-[9px] bg-[var(--bg-elevated)] border border-[var(--border)]">
-          {RANGE_PRESETS.map(([key, days]) => {
-            const pf = days ? addDays(todayIso, -(days - 1)) : "";
-            const pt = days ? todayIso : "";
-            const on = from === pf && to === pt;
-            return (
-              <button
-                key={key}
-                type="button"
-                aria-pressed={on}
-                onClick={() => { setFrom(pf); setTo(pt); setCalendarPicked(false); }}
-                className={`px-2.5 py-1 rounded-md text-[12.5px] font-semibold font-mono transition ${on ? "bg-primary text-white" : "text-[var(--text-3)] hover:text-[var(--text-1)]"}`}
-              >
-                {key}
-              </button>
-            );
-          })}
-        </div>
-        {(loading || aggLoading) && <span className="text-[11px] text-[var(--text-3)] ml-1">Updating…</span>}
-        {(error || aggError) && <span className="text-[11px] text-amber-400 font-mono ml-1">{error ?? aggError}</span>}
-        <div className="ml-auto">
+        {/* Everything from here sits at the right. A preset lights only while the window equals it. */}
+        <div className="ml-auto flex items-center gap-2 flex-wrap">
+          <div className="inline-flex p-[3px] gap-0.5 rounded-[9px] bg-[var(--bg-elevated)] border border-[var(--border)]">
+            {RANGE_PRESETS.map(([key, days]) => {
+              const pf = days ? addDays(todayIso, -(days - 1)) : "";
+              const pt = days ? todayIso : "";
+              const on = from === pf && to === pt;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => { setFrom(pf); setTo(pt); setCalendarPicked(false); }}
+                  className={`px-2.5 py-1 rounded-md text-[12.5px] font-semibold font-mono transition ${on ? "bg-primary text-white" : "text-[var(--text-3)] hover:text-[var(--text-1)]"}`}
+                >
+                  {key}
+                </button>
+              );
+            })}
+          </div>
           <RangeCalendar
             from={from}
             to={to}
@@ -328,6 +318,14 @@ export default function AudiencePage() {
             onApply={(f, t) => { setFrom(f); setTo(t); setCalendarPicked(!!(f || t)); }}
             ariaLabel="Pick the Audience window"
             label={calendarPicked ? undefined : "Pick a window"}
+          />
+          {/* The page-wide call-records export. "Export players" lives in the Player activity card
+              beside its own filters (Jasiel 2026-09-08): it exports THAT list with THOSE filters,
+              and up here next to this one it read as a second page export. */}
+          <GlobalExport
+            filters={{ range: rangeKey, from: rangeKey === "custom" ? from : undefined, to: rangeKey === "custom" ? to : undefined, campaignIds: [], country: market, prompt: "", phone: "" }}
+            scopeIds={brand ? (data?.options.campaigns ?? []).map((c) => c.id) : null}
+            disabled={!data}
           />
         </div>
       </div>
