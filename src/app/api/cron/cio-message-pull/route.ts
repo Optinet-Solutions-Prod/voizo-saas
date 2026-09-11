@@ -174,18 +174,19 @@ export async function GET(request: NextRequest) {
         counts.skippedForgottenOrUnkeyable += r.skipped;
         counts.rejectedStamps += r.rejectedStamps;
         if (r.pagesCapped) counts.pagesCapped++;
+        const workspace = r.row.workspace;
         if (r.rateLimited) {
           counts.rateLimited++;
-          const hits = (rateLimitHits.get(r.row.workspace) ?? 0) + 1;
-          rateLimitHits.set(r.row.workspace, hits);
+          const hits = (rateLimitHits.get(workspace) ?? 0) + 1;
+          rateLimitHits.set(workspace, hits);
           if (hits >= MAX_RATE_LIMITS_PER_WORKSPACE) {
-            stoppedWorkspaces.add(r.row.workspace);
-            console.error(`[cio-message-pull] ${r.row.workspace} stopped for tonight after ${hits} rate limits`);
+            stoppedWorkspaces.add(workspace);
+            console.error(`[cio-message-pull] ${workspace} stopped for tonight after ${hits} rate limits`);
           }
         }
         if (r.error) {
           counts.failed++;
-          if (errors.length < 10) errors.push(`${r.row.workspace}/${r.row.cio_id.slice(0, 8)}: ${r.error}`);
+          if (errors.length < 10) errors.push(`${workspace}/${r.row.cio_id.slice(0, 8)}: ${r.error}`);
         } else {
           counts.pulled++;
         }
@@ -193,7 +194,7 @@ export async function GET(request: NextRequest) {
         // Stamped on EVERY outcome. An unstamped failure would come back at the head of the
         // queue tomorrow night and every night after.
         syncRows.push({
-          workspace: r.row.workspace,
+          workspace,
           cio_id: r.row.cio_id,
           last_pulled_at: pulledAt,
           last_message_at: newerIso(r.row.last_message_at, r.newestMessageAt),
@@ -299,6 +300,10 @@ async function pullAccount(row: QueueRow, pulledAt: string, nowMs: number) {
   return { row, rows, newestMessageAt, skipped, rejectedStamps, error, rateLimited, pagesCapped };
 }
 
+/* The awaits in both writers are sequential ON PURPOSE, and react-doctor's await-in-loop warning
+ * is declined here: chunks must land one at a time so a failure stops the rest instead of firing
+ * every remaining chunk at Supabase anyway, and so the upsert load stays flat. Same for the page
+ * loop in pullAccount(), where each request needs the previous response's `next` cursor. */
 async function writeMessages(input: CioMessageRow[], errors: string[]): Promise<number> {
   // Postgres refuses an ON CONFLICT statement that touches the same key twice ("cannot affect row
   // a second time") and fails the ENTIRE batch. Overlapping page cursors, or one account appearing
