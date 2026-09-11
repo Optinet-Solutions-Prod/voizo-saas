@@ -42,6 +42,20 @@ const check = (n, ok, d) => { console.log((ok ? '  PASS  ' : '  FAIL  ') + n + (
   };
   await send('Page.enable'); await send('Runtime.enable'); await send('Network.enable');
   await send('Network.setExtraHTTPHeaders', { headers: { Authorization: auth } });
+  // Record the page's own fetches, BEFORE it makes any. performance.getEntriesByType('resource')
+  // looks like the obvious way to read them back, but its buffer holds 250 entries and then DROPS
+  // new ones rather than evicting old ones — and this page fires 43 lane_reach calls per load, so
+  // the request we actually care about is never in it. Reading it gave `range=7d&page=1` with the
+  // deposited filter missing, which is the stale-window bug this fix exists to remove.
+  await send('Page.addScriptToEvaluateOnNewDocument', {
+    source: `window.__voizoFetches = [];
+      (() => { const original = window.fetch;
+        window.fetch = function (...args) {
+          try { const u = typeof args[0] === 'string' ? args[0] : (args[0] && args[0].url);
+                if (u) window.__voizoFetches.push(String(u)); } catch {}
+          return original.apply(this, args);
+        }; })();`,
+  });
 
   // The card renames itself to "Depositors" the moment that filter is set, so every selector here
   // must accept BOTH labels; the first run retried five times against a card that no longer
@@ -85,10 +99,35 @@ const check = (n, ok, d) => { console.log((ok ? '  PASS  ' : '  FAIL  ') + n + (
   // statement then crosses the 8 s limit and 500s — contention the PROBE created, not a fault in
   // the page (2026-09-11). So wait for the page to go quiet, then retry rather than reporting a
   // failure that is really impatience.
+  // PIN THE WINDOW TO THE PAGE'S OWN (Jasiel 2026-09-12). This used to ask for `range=7d` while the
+  // page showed whatever its preset said — and the players route DEFAULTS TO 14d, so "7d" was not
+  // even the same as leaving it off. Two different windows produced two different populations, the
+  // pool and the table missed each other, the fallback took whatever row was on screen, and a run
+  // could land on a player with no deposits and exit green with the deposit popup never tested.
+  //
+  // Rather than rebuild the query from the preset buttons — the window can also be custom dates,
+  // and brand/country/contact/family/sort all ride along — take the page's OWN request. It already
+  // fetched this list; re-issuing its exact URL cannot disagree with what is on screen.
+  const pageQuery = await ev(`(() => {
+    const seen = Array.isArray(window.__voizoFetches) ? window.__voizoFetches : [];
+    const hits = seen.filter((n) => n.includes('/api/audience/players'));
+    if (!hits.length) return '';
+    const u = new URL(hits[hits.length - 1], location.origin);
+    u.searchParams.set('page', '1');
+    return u.pathname + u.search;
+  })()`);
+  console.log('  the page asked for players ' +
+    (await ev(`(window.__voizoFetches || []).filter((n) => n.includes('/api/audience/players')).length`)) +
+    ' time(s); using the last');
+  check('the page\'s own players query was captured, so the probe shares its window',
+    typeof pageQuery === 'string' && pageQuery.includes('/api/audience/players'), String(pageQuery));
+  if (!pageQuery) { sock.close(); chrome.kill(); process.exit(1); }
+  console.log('  window pinned to the page: ' + pageQuery);
+
   let pool = [];
   for (let a = 0; a < 3 && !pool.length; a++) {
     await wait(a === 0 ? 2500 : 6000);
-    const raw = await ev(`fetch('/api/audience/players?range=7d&deposited=after&page=1').then((r)=>r.json()).then((j)=>JSON.stringify(Array.isArray(j.rows)?j.rows.filter((r)=>r.deposits.length&&r.calls).map((r)=>({p:r.phone,before:r.deposits.some((d)=>!d.afterContact)})):[])).catch(()=>JSON.stringify([]))`);
+    const raw = await ev(`fetch(${JSON.stringify(pageQuery)}).then((r)=>r.json()).then((j)=>JSON.stringify(Array.isArray(j.rows)?j.rows.filter((r)=>r.deposits.length&&r.calls).map((r)=>({p:r.phone,before:r.deposits.some((d)=>!d.afterContact)})):[])).catch(()=>JSON.stringify([]))`);
     pool = typeof raw === "string" ? JSON.parse(raw) : [];
   }
   if (!pool.length) { check('the players route offered candidates', false, 'empty after three tries'); sock.close(); chrome.kill(); process.exit(1); }
@@ -105,13 +144,26 @@ const check = (n, ok, d) => { console.log((ok ? '  PASS  ' : '  FAIL  ') + n + (
   let phone = onScreen.find((p) => byPhone.get(p) === true) ?? onScreen.find((p) => byPhone.has(p)) ?? "";
   let expectTotalRow = byPhone.get(phone) === true;
   if (!phone && onScreen.length) {
+    // Both lists now come from the SAME window, so an empty intersection means the table is simply
+    // on a later page than the pool's page 1. Ask the route about this exact player, on the page's
+    // own query, rather than inventing a second window the way this used to.
     phone = onScreen[0];
-    const one = await ev(`fetch('/api/audience/players?range=7d&deposited=after&q=${encodeURIComponent(String(phone).replace('+', ''))}&page=1').then((r)=>r.json()).then((j)=>JSON.stringify((j.rows||[]).map((r)=>({p:r.phone,before:r.deposits.some((d)=>!d.afterContact)})))).catch(()=>'[]')`);
+    const one = await ev(`fetch(${JSON.stringify(pageQuery + '&q=')} + ${JSON.stringify(encodeURIComponent(String(phone).replace('+', '')))}).then((r)=>r.json()).then((j)=>JSON.stringify((j.rows||[]).map((r)=>({p:r.phone,n:r.deposits.length,before:r.deposits.some((d)=>!d.afterContact)})))).catch(()=>'[]')`);
     const row = (typeof one === "string" ? JSON.parse(one) : []).find((x) => x.p === phone);
     expectTotalRow = row ? row.before === true : false;
+    // Only accept this fallback player if the route agrees they have deposits IN THIS WINDOW.
+    // Accepting one without deposits is exactly how a run used to skip the popup and go green.
+    if (!row || row.n === 0) phone = "";
   }
   check('a player on screen has calls and deposits', /^\+\d{8,15}$/.test(String(phone)),
     `${onScreen.length} rows on screen, ${pool.length} candidates · using ${phone} · before-contact deposit: ${expectTotalRow}`);
+  if (!/^\+\d{8,15}$/.test(String(phone))) {
+    console.log('\n  No player in the page\'s own window has both calls and deposits, so the deposit');
+    console.log('  popup CANNOT be tested. That is a failure of this probe\'s purpose, not a pass:');
+    console.log('  widen the window on the page and run again.');
+    sock.close(); chrome.kill();
+    process.exit(1);
+  }
   const api = JSON.parse(await ev(`fetch('/api/audience/player-calls?phone=${encodeURIComponent(String(phone))}').then(r=>r.json()).then(JSON.stringify)`));
   console.log('  player ' + phone + ' · route says ' + api.calls.length + ' calls, truncated=' + api.truncated);
 
@@ -150,9 +202,15 @@ const check = (n, ok, d) => { console.log((ok ? '  PASS  ' : '  FAIL  ') + n + (
     check('"Deposited, total" is HIDDEN, because it would repeat the row above', String(totalRow) === 'ABSENT', String(totalRow));
   }
   if (!hasDeposits) {
+    // This used to exit GREEN here, with the whole deposit half of the probe untested. A run that
+    // proves nothing must not look like a run that proved everything: the player was chosen
+    // BECAUSE the route said they have deposits in the page's own window, so a plain-text row now
+    // means the drawer and the route disagree, which is a real finding rather than a quiet skip.
+    check('the drawer shows the deposits the route says this player has', false,
+      `route listed deposits for ${phone}, drawer rendered "${depRowKind}"`);
     sock.close(); chrome.kill();
-    console.log('\n' + (failures ? 'FAILURES: ' + failures : 'ALL GREEN (deposit popup skipped: this player has none)'));
-    process.exit(failures ? 1 : 0);
+    console.log('\n  FAILURES: ' + failures + ' (deposit popup NOT tested)');
+    process.exit(1);
   }
 
   // ── CALLS popup ──
