@@ -125,7 +125,8 @@ returns table (
   cio_id          text,
   contacted_at    timestamptz,
   last_pulled_at  timestamptz,
-  last_message_at timestamptz
+  last_message_at timestamptz,
+  attempts        integer
 )
 language sql stable as $$
   with attempted as (
@@ -153,11 +154,12 @@ language sql stable as $$
          acc.cio_id,
          min(acc.contacted_at) as contacted_at,
          s.last_pulled_at,
-         s.last_message_at
+         s.last_message_at,
+         coalesce(s.attempts, 0) as attempts
   from accounts acc
   left join public.cio_delivery_sync s
     on s.workspace = acc.workspace and s.cio_id = acc.cio_id
-  group by acc.workspace, acc.cio_id, s.last_pulled_at, s.last_message_at
+  group by acc.workspace, acc.cio_id, s.last_pulled_at, s.last_message_at, s.attempts
   -- New accounts first, then the stalest. The job stamps last_pulled_at on every outcome, so
   -- re-calling this after each batch walks forward instead of looping on the same rows.
   order by s.last_pulled_at asc nulls first, acc.cio_id

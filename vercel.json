@@ -51,6 +51,10 @@
     {
       "path": "/api/cron/mobivate-reconcile",
       "schedule": "20 4 * * *"
+    },
+    {
+      "path": "/api/cron/cio-message-pull",
+      "schedule": "10 5 * * *"
     }
   ]
 }

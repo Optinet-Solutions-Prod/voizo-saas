@@ -192,8 +192,9 @@ export function toMessageRow(
   const messageId = typeof message?.id === "string" ? message.id.trim() : "";
   if (!messageId) return null;
 
-  // `rejected` is deliberately dropped here: it is diagnostics for the job, not a column.
-  const { rejected: _rejected, ...stamps } = deriveTimestamps(message.metrics, nowMs);
+  // `rejected` is diagnostics for the job, not a column, so the six stamps are named one by one
+  // below rather than spread. No spread anywhere in this function is the point of it.
+  const stamps = deriveTimestamps(message.metrics, nowMs);
   const created = toEpochSeconds(message.created, nowMs);
 
   // An ALLOWLIST, never a spread. `recipient` and `customer_identifiers` are on 100% of responses.
@@ -210,7 +211,12 @@ export function toMessageRow(
     content_id: asInt(message.content_id),
     subject: asString(message.subject),
     metrics: sanitizeMetrics(message.metrics),
-    ...stamps,
+    sent_at: stamps.sent_at,
+    delivered_at: stamps.delivered_at,
+    opened_at: stamps.opened_at,
+    clicked_at: stamps.clicked_at,
+    converted_at: stamps.converted_at,
+    failed_at: stamps.failed_at,
     failure_message: asString(message.failure_message),
     cio_created_at: created === null ? null : isoFrom(created),
     pulled_at: pulledAtIso,
@@ -256,6 +262,22 @@ export function pullWindow(
   // zero messages back, which reads exactly like "this player has no CRM activity".
   if (startTs >= endTs) startTs = endTs - 30 * DAY_S;
   return { startTs, endTs };
+}
+
+/**
+ * The later of two ISO stamps, ignoring anything unparseable.
+ *
+ * This maintains cio_delivery_sync.last_message_at, which sets the next pull's trailing window.
+ * A naive `Date.parse(a) >= Date.parse(b) ? a : b` returns b whenever a is NaN — so one
+ * unparseable value would be adopted as the watermark, and every later window would be computed
+ * from garbage. Both sides are validated before they are compared.
+ */
+export function newerIso(a: string | null, b: string | null): string | null {
+  const ta = parseIsoSeconds(a);
+  const tb = parseIsoSeconds(b);
+  if (ta === null) return tb === null ? null : b;
+  if (tb === null) return a;
+  return ta >= tb ? a : b;
 }
 
 export interface CioMessagesPage {

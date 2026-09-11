@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CIO_MESSAGE_ROW_KEYS,
   deriveTimestamps,
+  newerIso,
   pullWindow,
   sanitizeMetrics,
   toMessageRow,
@@ -232,5 +233,28 @@ describe("pullWindow", () => {
     const w = pullWindow({ lastMessageAt: "2026-09-11T00:00:00.500Z", contactedAt: null }, NOW_MS);
     expect(Number.isInteger(w.startTs)).toBe(true);
     expect(Number.isInteger(w.endTs)).toBe(true);
+  });
+});
+
+describe("newerIso", () => {
+  it("returns the later of two stamps", () => {
+    expect(newerIso("2026-09-11T00:00:00.000Z", "2026-09-10T00:00:00.000Z")).toBe("2026-09-11T00:00:00.000Z");
+    expect(newerIso("2026-09-10T00:00:00.000Z", "2026-09-11T00:00:00.000Z")).toBe("2026-09-11T00:00:00.000Z");
+  });
+
+  it("handles nulls on either side", () => {
+    expect(newerIso(null, "2026-09-11T00:00:00.000Z")).toBe("2026-09-11T00:00:00.000Z");
+    expect(newerIso("2026-09-11T00:00:00.000Z", null)).toBe("2026-09-11T00:00:00.000Z");
+    expect(newerIso(null, null)).toBeNull();
+  });
+
+  // This maintains cio_delivery_sync.last_message_at, which sets the NEXT pull's window. A naive
+  // `Date.parse(a) >= Date.parse(b) ? a : b` returns b whenever a is NaN, so one unparseable value
+  // would become the watermark and every later window would be computed from garbage.
+  it("never adopts an unparseable stamp as the watermark", () => {
+    expect(newerIso("garbage", "2026-09-11T00:00:00.000Z")).toBe("2026-09-11T00:00:00.000Z");
+    expect(newerIso("2026-09-11T00:00:00.000Z", "garbage")).toBe("2026-09-11T00:00:00.000Z");
+    expect(newerIso("garbage", "also garbage")).toBeNull();
+    expect(newerIso("", "2026-09-11T00:00:00.000Z")).toBe("2026-09-11T00:00:00.000Z");
   });
 });

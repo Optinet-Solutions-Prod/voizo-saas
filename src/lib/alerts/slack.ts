@@ -38,6 +38,7 @@ export const CRON_NAMES = {
   dailySnapshot: "daily-snapshot",
   realtimePoll: "realtime-poll",
   mobivateReconcile: "mobivate-reconcile",
+  cioMessagePull: "cio-message-pull",
 } as const;
 
 export type CronName = (typeof CRON_NAMES)[keyof typeof CRON_NAMES];
@@ -59,6 +60,9 @@ export const CRON_STALENESS_THRESHOLD_SECONDS: Record<CronName, number> = {
   "daily-snapshot": 93600, // daily (86400s) x ~1.08 -> 26h, matches the other daily crons
   "realtime-poll": 300, // every 1min x 5 margin, matches campaign-scheduler
   "mobivate-reconcile": 93600, // daily (86400s) x ~1.08 -> 26h, matches the other daily crons
+  // daily at 05:10 UTC. NB: a MISSING heartbeat row is reported as INFO, not stale (see the
+  // failure-mode note in alerts-hourly), so this arms only after the pull's first success.
+  "cio-message-pull": 93600,
 };
 
 const POST_TIMEOUT_MS = 3000;
