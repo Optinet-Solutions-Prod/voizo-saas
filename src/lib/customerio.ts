@@ -25,7 +25,9 @@ const REGION = (process.env.CUSTOMERIO_API_REGION || "us").toLowerCase();
 // Base URL differs by region. Customer.io hosts US and EU separately.
 // ponytail: region stays global — both live workspaces are EU; add a
 // per-workspace region map only when a non-EU workspace arrives (VOZ-198).
-const BASE_URL = REGION === "eu" ? "https://api-eu.customer.io" : "https://api.customer.io";
+// Exported so the nightly message pull (cioMessages.ts) resolves the region the same way instead
+// of keeping a second copy of this ternary that could drift.
+export const CIO_BASE_URL = REGION === "eu" ? "https://api-eu.customer.io" : "https://api.customer.io";
 
 /** The original / only workspace before VOZ-198. A NULL/absent cio_workspace
  *  on a campaigns_v2 row means this one. */
@@ -180,7 +182,7 @@ async function customerioFetch<T>(
   if (resolved.error !== null) return { success: false, data: null, error: resolved.error };
 
   try {
-    const response = await fetch(`${BASE_URL}${path}`, {
+    const response = await fetch(`${CIO_BASE_URL}${path}`, {
       method: "GET",
       headers: {
         Accept: "application/json",
