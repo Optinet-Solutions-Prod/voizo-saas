@@ -119,7 +119,51 @@ export async function GET(request: NextRequest) {
       return [] as Awaited<ReturnType<typeof fetchAllRowsParallel>>;
     });
 
-  const [callRows, campaignRows, smsRows] = await Promise.all([
+  // 2026-09-12: transcripts for the CANDIDATE calls only — connected, not voicemail, not a goal.
+  // deriveAttemptTag returns before the transcript branch for every other call, so nothing else
+  // needs one, and fetching the lot would be ruinous on a route that already pages ~49k rows for
+  // 30d (and once measured 88s on prod). Measured 2026-09-12: 1,452 rows / 0.3 MB / 546 ms at 7d,
+  // 7,401 / 1.8 MB / 1,030 ms at 30d, 10,342 / 1.4 s at 90d — against a main read of 29 to 83
+  // pages, so this is nowhere near the critical path and runs inside the same Promise.all for no
+  // added wall clock. Kept SEQUENTIAL for that reason: parallelising it would optimise a leg that
+  // is not the bottleneck.
+  //
+  // fetchAllRowsParallel takes a single gte and cannot express the candidate predicate, so this
+  // keyset-pages the way /api/dashboard/campaigns does for the same set.
+  //
+  // FAILS SOFT on purpose: an empty map returns this surface to its previous lean answer — wrong
+  // in the same old way rather than 500, and loudly logged. The gate catches a silent regression.
+  const endIso = new Date(endMs).toISOString();
+  const readCandidateTranscripts = async (): Promise<Map<string, DashCallRow["transcript"]>> => {
+    const out = new Map<string, DashCallRow["transcript"]>();
+    try {
+      let lastId = "00000000-0000-0000-0000-000000000000";
+      for (;;) {
+        const { data, error } = await supabaseAdmin
+          .from("calls_v2")
+          .select("id, transcript")
+          .gte("created_at", startIso)
+          .lte("created_at", endIso)
+          .in("status", ["completed", "answered"])
+          .not("voicemail", "is", true)
+          .not("goal_reached", "is", true)
+          .order("id", { ascending: true })
+          .gt("id", lastId)
+          .limit(1000);
+        if (error) throw new Error(error.message);
+        const rows = (data ?? []) as unknown as Array<{ id: string; transcript: DashCallRow["transcript"] }>;
+        for (const r of rows) out.set(r.id, r.transcript);
+        if (rows.length < 1000) break;
+        lastId = rows[rows.length - 1].id;
+      }
+      return out;
+    } catch (e) {
+      console.error("[dashboard/analytics] candidate transcript read failed — Global Performance falls back to the lean split:", e);
+      return new Map();
+    }
+  };
+
+  const [callRows, campaignRows, smsRows, transcriptById] = await Promise.all([
     read(
       "calls_v2",
       "id, campaign_id, campaign_number_id, status, goal_reached, created_at, voicemail, ended_reason, duration_seconds",
@@ -138,6 +182,7 @@ export async function GET(request: NextRequest) {
       "campaign_id, created_at, status, call_id, campaign_number_id",
       { column: "created_at", value: startIso },
     ),
+    readCandidateTranscripts(),
   ]);
 
   const campaigns = campaignRows as unknown as (DashCampaignRow & { system_prompt?: string | null })[];
@@ -220,9 +265,19 @@ export async function GET(request: NextRequest) {
   // Ranged 3-card Performance (Global Performance, Val's mockup). Reuses the already-filtered in-memory
   // call set (no extra fetch) + the lean transcript-less classifier. Isolated failure domain: a perf
   // error must NOT take down the charts/tables/leaderboard, so degrade to perf:null and log with counts.
+  // Splice the candidate transcripts onto the filtered set (copy, never mutate the shared rows —
+  // the charts, tables and leaderboard read the same objects). Non-candidates have no entry and
+  // are passed through untouched, which is exactly the set deriveAttemptTag never asks about.
+  const filteredForPerf: DashCallRow[] = transcriptById.size === 0
+    ? filtered
+    : filtered.map((c) => {
+        const t = c.id ? transcriptById.get(c.id) : undefined;
+        return t === undefined ? c : { ...c, transcript: t };
+      });
+
   let perf: TodayPerfDay | null = null;
   try {
-    perf = computeRangedPerf(filtered, scopedSms, declinedIds, startMs, endMs);
+    perf = computeRangedPerf(filteredForPerf, scopedSms, declinedIds, startMs, endMs);
   } catch (e) {
     console.error("[dashboard/analytics] computeRangedPerf failed:", e, { calls: filtered.length, sms: scopedSms.length });
     perf = null;
@@ -289,7 +344,7 @@ export async function GET(request: NextRequest) {
   const bestPerf = (ids: Set<string> | null): TodayPerfDay | null => {
     if (!ids || ids.size === 0) return null;
     try {
-      return perfForCampaignScope(filtered, scopedSms, declinedIds, startMs, endMs, ids);
+      return perfForCampaignScope(filteredForPerf, scopedSms, declinedIds, startMs, endMs, ids);
     } catch (e) {
       console.error("[dashboard/analytics] perfForCampaignScope failed:", e, { ids: ids.size });
       return null;

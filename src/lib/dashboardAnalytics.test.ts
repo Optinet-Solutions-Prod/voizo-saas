@@ -1243,7 +1243,7 @@ describe("isEarlyHangup / useTranscript seam — lean (transcript-less) classifi
   });
 });
 
-describe("computeRangedPerf — ranged 3-card block (no deltas, lean classifier)", () => {
+describe("computeRangedPerf — ranged 3-card block (no deltas, transcript classifier since 2026-09-12)", () => {
   const T = Date.UTC(2026, 5, 1);
   const end = T + 30 * 86_400_000;
   const at = (d: number) => new Date(T + d * 86_400_000 + 3_600_000).toISOString();
@@ -1256,15 +1256,14 @@ describe("computeRangedPerf — ranged 3-card block (no deltas, lean classifier)
   ];
   const sms: DashSmsRow[] = [];
 
-  it("totals + rows match a lean callWindowBreakdown over the same window", () => {
+  it("totals + rows match a TRANSCRIPT callWindowBreakdown over the same window", () => {
     const perf = computeRangedPerf(calls, sms, new Set(["d"]), T, end);
-    const b = callWindowBreakdown(calls, new Set(["d"]), T, end, { useTranscript: false });
+    const b = callWindowBreakdown(calls, new Set(["d"]), T, end); // default = transcript
     expect(perf.callAttempts.total).toBe(b.total);
-    const reachedRow = perf.callAttempts.rows.find((r) => r.key === "reached");
-    expect(reachedRow?.count).toBe(b.reach);
-    const neutralRow = perf.reached.rows.find((r) => r.key === "neutral");
-    expect(neutralRow?.count).toBe(b.neutral); // the bail counts as neutral (lean)
-    expect(neutralRow?.count).toBe(1);
+    // Conversations established = reach − early hangups (VOZ-396), same as every other surface.
+    expect(perf.callAttempts.rows.find((r) => r.key === "reached")?.count).toBe(b.reach - b.earlyHangup);
+    expect(perf.callAttempts.rows.find((r) => r.key === "early_hangup")?.count).toBe(b.earlyHangup);
+    expect(perf.reached.rows.find((r) => r.key === "neutral")?.count).toBe(b.neutral);
   });
   it("emits null deltas on totals and rows", () => {
     const perf = computeRangedPerf(calls, sms, new Set(["d"]), T, end);
@@ -1278,6 +1277,26 @@ describe("computeRangedPerf — ranged 3-card block (no deltas, lean classifier)
   it("keeps the est marker on the Reached outcome rows", () => {
     const perf = computeRangedPerf(calls, sms, new Set(["d"]), T, end);
     expect(perf.reached.rows.every((r) => r.isEstimated)).toBe(true);
+  });
+
+  // 2026-09-12: Global Performance and Campaign Performance answered the same window
+  // differently — silent pickup 0 vs 920, conversations 390 vs 200, over the SAME 1,491 calls.
+  // Global was the lean one, so a line that answered and never spoke read as a conversation.
+  // These two lock the honest behaviour in.
+  it("counts a call where nobody ever spoke as silent pickup, not a conversation", () => {
+    const deadAir = call("c", "completed", false, at(6), undefined, false, 40, "customer-ended-call",
+      "AI: Hey, Victor here. Quick question.\nAI: Are you still with me?\n");
+    const perf = computeRangedPerf([deadAir], [], new Set(), T, end);
+    expect(perf.callAttempts.rows.find((r) => r.key === "silent_pickup")?.count).toBe(1);
+    expect(perf.callAttempts.rows.find((r) => r.key === "reached")?.count).toBe(0);
+  });
+
+  it("still counts a call the player actually spoke on as a conversation", () => {
+    const real = call("c", "completed", false, at(6), undefined, false, 40, "customer-ended-call",
+      "AI: Quick question.\nUser: yeah go on\nAI: Great.\nUser: sounds good\n");
+    const perf = computeRangedPerf([real], [], new Set(), T, end);
+    expect(perf.callAttempts.rows.find((r) => r.key === "silent_pickup")?.count).toBe(0);
+    expect(perf.callAttempts.rows.find((r) => r.key === "reached")?.count).toBe(1);
   });
 });
 
@@ -1341,9 +1360,16 @@ describe("computeWindowPerf — unified no-delta windowed perf (Slice C)", () =>
     call("c", "completed", true, at(1), "p"),
     call("c", "completed", false, at(2), undefined, false, 30, "customer-ended-call", "User: Hi?"),
   ];
-  it("useTranscript:true matches computeCampaignTodayPerf; false matches computeRangedPerf (parity)", () => {
+  it("useTranscript:true matches BOTH computeCampaignTodayPerf and computeRangedPerf (parity)", () => {
+    // 2026-09-12: computeRangedPerf moved onto the transcript path, so Global Performance and
+    // Campaign Performance can no longer sort the same call two different ways. This test is the
+    // guard: all three ranged/today builders must now agree on the same input.
     expect(computeWindowPerf(calls, [], new Set(), T, end)).toEqual(computeCampaignTodayPerf(calls, [], new Set(), T, end));
-    expect(computeWindowPerf(calls, [], new Set(), T, end, { useTranscript: false })).toEqual(computeRangedPerf(calls, [], new Set(), T, end));
+    expect(computeWindowPerf(calls, [], new Set(), T, end)).toEqual(computeRangedPerf(calls, [], new Set(), T, end));
+  });
+  it("the lean option still exists and still differs — it is just no longer what Global uses", () => {
+    const lean = computeWindowPerf(calls, [], new Set(), T, end, { useTranscript: false });
+    expect(lean).not.toEqual(computeRangedPerf(calls, [], new Set(), T, end));
   });
 });
 

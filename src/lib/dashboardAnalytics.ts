@@ -1648,7 +1648,27 @@ function assembleWindowPerf(cb: CallBreakdown, sb: SmsBreakdown): TodayPerfDay {
   return { callAttempts, reached, sms: smsMetric, inFlight: cb.inFlight };
 }
 
-/** Ranged 3-card block for Global Performance — lean (transcript-less) windowed perf (spec B §5.1). */
+/**
+ * Ranged 3-card block for Global Performance — TRANSCRIPT-BASED since 2026-09-12.
+ *
+ * It was lean (spec B §5.1) and that made our own dashboard contradict itself. Measured over
+ * 05-11 Sep, Global Performance and Campaign Performance were handed the same 6,006 attempts and
+ * agreed on voicemail (3,137), unreachable (1,378) and positive (39) — then split the remaining
+ * 1,491 calls two different ways:
+ *
+ *     silent pickup     Campaign 920   Global   0
+ *     early hang-up     Campaign 371   Global 1101
+ *     conversations     Campaign 200   Global  390
+ *
+ * Identical calls, sorted differently: a classifier gap, not a data gap. Global had no transcript,
+ * so a line that answered and never spoke fell through to `neutral` and was reported as a
+ * conversation. An independent transcript count over 04-11 Sep found 216 calls where the player
+ * took two or more turns — beside Campaign's 200, nowhere near Global's 390.
+ *
+ * The CALLER must now attach transcripts to the candidate calls (connected, not voicemail, not
+ * goal) — deriveAttemptTag returns before the transcript branch for every other call, so only that
+ * subset needs them. Measured 2026-09-12: 1,452 candidates at 7d (0.3 MB), 7,401 at 30d (1.8 MB).
+ */
 export function computeRangedPerf(
   liveCalls: DashCallRow[],
   liveSms: DashSmsRow[],
@@ -1656,12 +1676,14 @@ export function computeRangedPerf(
   startMs: number,
   endMs: number,
 ): TodayPerfDay {
-  return computeWindowPerf(liveCalls, liveSms, declinedIds, startMs, endMs, { useTranscript: false });
+  return computeWindowPerf(liveCalls, liveSms, declinedIds, startMs, endMs, { useTranscript: true });
 }
 
-/** Per-entity ranged perf (Slice E): scope calls+sms to a campaign-id set, then reuse the lean ranged
+/** Per-entity ranged perf (Slice E): scope calls+sms to a campaign-id set, then reuse the ranged
  *  builder. Powers the Top Performers per-entity breakdown cards (Best Campaign/Agent/Prompt). Empty
- *  set → empty perf. Pure — caller supplies the already-filtered/in-scope call+sms sets. */
+ *  set → empty perf. Pure — caller supplies the already-filtered/in-scope call+sms sets.
+ *  Delegates to computeRangedPerf ON PURPOSE: the per-entity cards and the card above them must
+ *  never classify the same call two ways. */
 export function perfForCampaignScope(
   calls: DashCallRow[],
   sms: DashSmsRow[],
