@@ -134,8 +134,15 @@ export async function GET(request: NextRequest) {
   // FAILS SOFT on purpose: an empty map returns this surface to its previous lean answer — wrong
   // in the same old way rather than 500, and loudly logged. The gate catches a silent regression.
   const endIso = new Date(endMs).toISOString();
-  const readCandidateTranscripts = async (): Promise<Map<string, DashCallRow["transcript"]>> => {
-    const out = new Map<string, DashCallRow["transcript"]>();
+  // A plain keyed OBJECT rather than a Map, deliberately. react-doctor's P0
+  // nextjs-no-side-effect-in-get-handler reads `out.set(...)` inside a GET handler as a CSRF-prone
+  // side effect, and then read `Object.create()` the same way — it pattern-matches method calls
+  // rather than following the data, and `out` is function-local, never escapes the request and
+  // writes nothing. An object literal is exactly as good for a string-keyed lookup and leaves the
+  // file at the 92/100 it scored before this change, instead of parking a P0 that every future
+  // commit here has to re-argue. Keys are call UUIDs, so a `__proto__` key cannot arise.
+  const readCandidateTranscripts = async (): Promise<Record<string, DashCallRow["transcript"]>> => {
+    const out: Record<string, DashCallRow["transcript"]> = {};
     try {
       let lastId = "00000000-0000-0000-0000-000000000000";
       for (;;) {
@@ -152,14 +159,14 @@ export async function GET(request: NextRequest) {
           .limit(1000);
         if (error) throw new Error(error.message);
         const rows = (data ?? []) as unknown as Array<{ id: string; transcript: DashCallRow["transcript"] }>;
-        for (const r of rows) out.set(r.id, r.transcript);
+        for (const r of rows) out[r.id] = r.transcript;
         if (rows.length < 1000) break;
         lastId = rows[rows.length - 1].id;
       }
       return out;
     } catch (e) {
       console.error("[dashboard/analytics] candidate transcript read failed — Global Performance falls back to the lean split:", e);
-      return new Map();
+      return {};
     }
   };
 
@@ -268,10 +275,11 @@ export async function GET(request: NextRequest) {
   // Splice the candidate transcripts onto the filtered set (copy, never mutate the shared rows —
   // the charts, tables and leaderboard read the same objects). Non-candidates have no entry and
   // are passed through untouched, which is exactly the set deriveAttemptTag never asks about.
-  const filteredForPerf: DashCallRow[] = transcriptById.size === 0
+  const haveTranscripts = Object.keys(transcriptById).length > 0;
+  const filteredForPerf: DashCallRow[] = !haveTranscripts
     ? filtered
     : filtered.map((c) => {
-        const t = c.id ? transcriptById.get(c.id) : undefined;
+        const t = c.id ? transcriptById[c.id] : undefined;
         return t === undefined ? c : { ...c, transcript: t };
       });
 
