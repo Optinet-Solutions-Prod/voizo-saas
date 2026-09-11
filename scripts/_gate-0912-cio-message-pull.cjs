@@ -48,15 +48,23 @@ function resolveAppApiKey(ws) {
 }
 
 async function sb(path, extra = {}) {
-  const r = await fetch(`${SB}/rest/v1/${path}`, { headers: { ...h, ...extra.headers }, ...extra });
+  // `{ headers: {...}, ...extra }` puts extra.headers LAST and silently drops the apikey and
+  // Authorization, so every call with custom headers 401s. That is not hypothetical: it made
+  // count() return null on both sides of the dry run, and null === null passed as "unchanged"
+  // (2026-09-12). Spread extra FIRST, then build headers on top so auth always survives.
+  const r = await fetch(`${SB}/rest/v1/${path}`, { ...extra, headers: { ...h, ...extra.headers } });
   const text = await r.text();
   let body = null;
   try { body = text ? JSON.parse(text) : null; } catch { body = text; }
   return { status: r.status, ok: r.ok, body, range: r.headers.get('content-range') };
 }
+/** Exact row count, or null when the request failed. Callers must treat null as a FAILURE and
+ *  never as a value to compare — see the self-test below. */
 const count = async (table) => {
   const r = await sb(`${table}?select=*`, { headers: { Range: '0-0', 'Range-Unit': 'items', Prefer: 'count=exact' } });
-  return r.ok ? Number(String(r.range || '').split('/')[1]) : null;
+  if (!r.ok) return null;
+  const n = Number(String(r.range || '').split('/')[1]);
+  return Number.isFinite(n) ? n : null;
 };
 
 (async () => {
@@ -87,16 +95,33 @@ const count = async (table) => {
   }
 
   log('\n=== D. dry run writes nothing ===');
+  // SELF-TEST THE COUNTER FIRST. A broken count() returns null on both sides of the dry run and
+  // `null === null` reads as "unchanged" — the check passes precisely when it is measuring
+  // nothing. cio_events is a table that exists and is known non-empty, so a finite positive count
+  // here is what earns the right to believe the two comparisons below.
+  const counterWorks = await count('cio_events');
+  if (!ok('count() works at all (control: cio_events is known non-empty)',
+          Number.isFinite(counterWorks) && counterWorks > 0, `cio_events = ${counterWorks}`)) {
+    log('\n  The counter is broken, so "row count unchanged" would pass while measuring nothing. Stopping.');
+    process.exit(1);
+  }
+
   const before = await count('cio_messages');
   const beforeSync = await count('cio_delivery_sync');
+  ok('both baseline counts are real numbers, not nulls',
+     Number.isFinite(before) && Number.isFinite(beforeSync), `cio_messages=${before} cio_delivery_sync=${beforeSync}`);
   const dry = await fetch(`${BASE}/api/cron/cio-message-pull?dry=1&max=${MAX}`, {
     headers: { Authorization: `Bearer ${env.CRON_SECRET}` },
   });
   const dryBody = await dry.json();
   ok('dry run answered 200', dry.status === 200, JSON.stringify(dryBody.counts || dryBody).slice(0, 200));
   ok('dry run reports messages it WOULD write', (dryBody.counts?.messages ?? 0) > 0, `${dryBody.counts?.messages} messages`);
-  ok('cio_messages row count unchanged', (await count('cio_messages')) === before, `${before}`);
-  ok('cio_delivery_sync row count unchanged', (await count('cio_delivery_sync')) === beforeSync, `${beforeSync}`);
+  const afterDry = await count('cio_messages');
+  const afterDrySync = await count('cio_delivery_sync');
+  ok('cio_messages row count unchanged',
+     Number.isFinite(afterDry) && Number.isFinite(before) && afterDry === before, `${before} -> ${afterDry}`);
+  ok('cio_delivery_sync row count unchanged',
+     Number.isFinite(afterDrySync) && Number.isFinite(beforeSync) && afterDrySync === beforeSync, `${beforeSync} -> ${afterDrySync}`);
 
   log('\n=== R. real run ===');
   const runStart = new Date().toISOString();
@@ -151,14 +176,33 @@ const count = async (table) => {
       }
       const n = Number(raw);
       if (!Number.isFinite(n) || n < MIN_EPOCH || n > now + 366 * 86400) { outOfRange++; continue; }
-      if (new Date(n * 1000).toISOString() !== stored) mismatched++;
+      // Compare INSTANTS. Postgres renders timestamptz as "2026-09-11T00:01:46+00:00" and JS
+      // toISOString() as "2026-09-11T00:01:46.000Z" — the same moment, never the same string.
+      // String equality here reported 226 mismatches on 140 perfectly correct rows (2026-09-12).
+      if (Date.parse(stored) !== n * 1000) mismatched++;
     }
   }
   ok('every derived column equals its own metric, re-derived from the stored map', mismatched === 0, `${mismatched} mismatches over ${rows.length} rows`);
   // THE KNOWN-BAD CONTROL, on real rows: no `sent` in the map must mean sent_at IS NULL.
-  ok('a stored row with no metrics.sent has sent_at NULL', noSentWrong === 0,
-     noSentRows ? `${noSentRows} such rows, ${noSentWrong} wrongly dated` : 'no such row in this sample, control not exercised');
-  if (noSentRows === 0) log('     NOTE: control not exercised — rerun with a larger --max to include a row with no `sent`.');
+  // THE DESIGN'S NAMED KNOWN-BAD CONTROL (§7), over the WHOLE table rather than this run's sample.
+  // Scoped to one run it depended on which accounts the queue happened to hand back: one run found
+  // 2 such rows and the next found none and printed "control not exercised", which is a control
+  // that only sometimes controls. 11 of 526 probed messages carry no `metrics.sent`, so at table
+  // scale there is always something to test.
+  const everything = await sb('cio_messages?select=message_id,sent_at,metrics&limit=1000');
+  const noSentAll = (everything.body || []).filter((r) => !r.metrics || r.metrics.sent === undefined);
+  const wrongAll = noSentAll.filter((r) => r.sent_at !== null);
+  ok('a stored row with no metrics.sent has sent_at NULL (whole table)',
+     noSentAll.length > 0 && wrongAll.length === 0,
+     noSentAll.length === 0
+       ? `NO SUCH ROW IN ${(everything.body || []).length} — the control cannot run, so this proves nothing`
+       : `${noSentAll.length} such rows of ${(everything.body || []).length}, ${wrongAll.length} wrongly dated`);
+  // And the mirror: a row that DOES carry `sent` must have a sent_at, or the guard is rejecting
+  // everything rather than only the bad values.
+  const withSent = (everything.body || []).filter((r) => r.metrics && r.metrics.sent !== undefined);
+  ok('a stored row WITH metrics.sent has a sent_at (the guard rejects the bad, not the good)',
+     withSent.length > 0 && withSent.every((r) => r.sent_at !== null),
+     `${withSent.filter((r) => r.sent_at === null).length} of ${withSent.length} wrongly null`);
   ok('no stored timestamp came from an out-of-range metric', outOfRange === 0, `${outOfRange}`);
 
   log('\n=== PR. privacy ===');
@@ -168,7 +212,13 @@ const count = async (table) => {
   ok('no `customer_id` column', !cols.has('customer_id'));
   // The strongest form: take the addresses the API just handed us and prove none of them is in
   // our table anywhere.
+  // CAREFUL: for an `in_app` message Customer.io sets `recipient` to the cio_id ITSELF (32 of 33
+  // on one probed account, 2026-09-12). We store cio_id on purpose — it is the join key — so a
+  // naive "does any recipient string appear in our rows" test reports a leak on every in_app
+  // message. Exclude a recipient that is its own account's cio_id; everything else — email
+  // addresses, webhook URLs, phone numbers — is genuinely forbidden and still tested.
   const recipients = new Set();
+  let selfIds = 0;
   for (const acct of (touched.body || []).filter((a) => !a.last_error).slice(0, 3)) {
     const key = resolveAppApiKey(acct.workspace);
     if (!key) continue;
@@ -176,13 +226,20 @@ const count = async (table) => {
       { headers: { Authorization: 'Bearer ' + key } });
     if (!r.ok) continue;
     for (const m of ((await r.json()).messages || [])) {
-      if (typeof m.recipient === 'string' && m.recipient) recipients.add(m.recipient);
+      if (typeof m.recipient !== 'string' || !m.recipient) continue;
+      if (m.recipient === acct.cio_id) { selfIds++; continue; }
+      recipients.add(m.recipient);
     }
   }
+  log(`     (${selfIds} in_app recipients are the cio_id itself and are excluded by design)`);
   const haystack = JSON.stringify(rows);
   const leaked = [...recipients].filter((addr) => haystack.includes(addr));
-  ok(`none of the ${recipients.size} recipient addresses the API returned appears in our rows`,
+  ok(`none of the ${recipients.size} real recipient values the API returned appears in our rows`,
      leaked.length === 0, leaked.length ? `LEAKED ${leaked.length}` : '');
+  // A control for the control: the test above only means something if a string we DID store would
+  // be found. Prove the search works by looking for one.
+  ok('the leak search can actually find a string that IS in our rows (control)',
+     haystack.includes(rows[0].message_id), 'searched for a stored message_id');
   ok('metrics holds numbers only',
      rows.every((r) => Object.values(r.metrics || {}).every((v) => typeof v === 'number')));
 
