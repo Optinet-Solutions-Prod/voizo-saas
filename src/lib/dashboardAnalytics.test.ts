@@ -1291,6 +1291,25 @@ describe("computeRangedPerf — ranged 3-card block (no deltas, transcript class
     expect(perf.callAttempts.rows.find((r) => r.key === "reached")?.count).toBe(0);
   });
 
+  // The trap that nearly shipped on 2026-09-12. computeRangedPerf is strict by default, and
+  // transcriptText(undefined) is "" — so a row with NO transcript attached is not classified
+  // leniently, it is classified as a silent pickup. A caller whose transcript fetch failed and
+  // simply passed the rows through would render "Conversations established 0" for the whole
+  // window. Both halves are asserted: the trap, and the escape hatch that makes it survivable.
+  it("with NO transcripts attached the strict path calls everything a silent pickup", () => {
+    const bare = [call("c", "completed", false, at(3), undefined, false, 30, "customer-ended-call", undefined)];
+    const strict = computeRangedPerf(bare, [], new Set(), T, end);
+    expect(strict.callAttempts.rows.find((r) => r.key === "silent_pickup")?.count).toBe(1);
+    expect(strict.callAttempts.rows.find((r) => r.key === "reached")?.count).toBe(0);
+  });
+
+  it("useTranscript:false is the caller's escape hatch and gives the honest lean split instead", () => {
+    const bare = [call("c", "completed", false, at(3), undefined, false, 30, "customer-ended-call", undefined)];
+    const lean = computeRangedPerf(bare, [], new Set(), T, end, { useTranscript: false });
+    expect(lean.callAttempts.rows.find((r) => r.key === "silent_pickup")?.count).toBe(0);
+    expect(lean.callAttempts.rows.find((r) => r.key === "reached")?.count).toBe(1);
+  });
+
   it("still counts a call the player actually spoke on as a conversation", () => {
     const real = call("c", "completed", false, at(6), undefined, false, 40, "customer-ended-call",
       "AI: Quick question.\nUser: yeah go on\nAI: Great.\nUser: sounds good\n");

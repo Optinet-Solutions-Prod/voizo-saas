@@ -64,6 +64,17 @@ interface SyncRow {
   last_error: string | null;
 }
 
+interface PullResult {
+  row: QueueRow;
+  rows: CioMessageRow[];
+  newestMessageAt: string | null;
+  skipped: number;
+  rejectedStamps: number;
+  error: string | null;
+  rateLimited: boolean;
+  pagesCapped: boolean;
+}
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export async function GET(request: NextRequest) {
@@ -105,6 +116,10 @@ export async function GET(request: NextRequest) {
     rateLimited: 0,
     failed: 0,
     pagesCapped: 0,
+    // Accounts pulled out of a chunk because their workspace was stopped mid-run. They are left
+    // UNSTAMPED on purpose so they lead the queue tomorrow — but without this they vanished from
+    // the report entirely, and a run that silently drops work must not read like a clean one.
+    droppedWorkspaceStopped: 0,
   };
   const skippedWorkspaces = new Set<string>();
   const stoppedWorkspaces = new Set<string>();
@@ -161,10 +176,24 @@ export async function GET(request: NextRequest) {
 
     for (let i = 0; i < workable.length; i += CHUNK) {
       if (Date.now() >= deadline) { budgetHit = true; break; }
-      const chunk = workable.slice(i, i + CHUNK).filter((r) => !stoppedWorkspaces.has(r.workspace));
+      const slice = workable.slice(i, i + CHUNK);
+      const chunk = slice.filter((r) => !stoppedWorkspaces.has(r.workspace));
+      counts.droppedWorkspaceStopped += slice.length - chunk.length;
       if (chunk.length === 0) continue;
 
-      const results = await Promise.all(chunk.map((row) => pullAccount(row, pulledAt, startedAt)));
+      // Every pullAccount is CAUGHT individually. It is believed not to throw — every I/O path
+      // returns a result envelope — but "believed not to throw" is not a guarantee, and the cost
+      // of being wrong is not one lost account: Promise.all rejects on the first throw, the whole
+      // chunk dies unstamped, and those rows come back at the HEAD of the queue tomorrow night and
+      // every night after. One malformed row would wedge the job permanently. Catching turns that
+      // into a recorded failure that advances.
+      const results = await Promise.all(chunk.map((row) =>
+        pullAccount(row, pulledAt, startedAt).catch((e): PullResult => ({
+          row, rows: [], newestMessageAt: null, skipped: 0, rejectedStamps: 0,
+          error: `unhandled: ${e instanceof Error ? e.message : String(e)}`,
+          rateLimited: false, pagesCapped: false,
+        })),
+      ));
 
       const messageRows: CioMessageRow[] = [];
       const syncRows: SyncRow[] = [];
@@ -205,8 +234,23 @@ export async function GET(request: NextRequest) {
       }
 
       if (!dry) {
-        counts.upserted += await writeMessages(messageRows, errors);
-        await writeSync(syncRows, errors);
+        const write = await writeMessages(messageRows, errors);
+        counts.upserted += write.written;
+        // THE WATERMARK ONLY MOVES IF THE MESSAGES LANDED. writeSync used to run unconditionally,
+        // so a transient upsert error stamped last_message_at forward with attempts 0 and
+        // last_error null — the next night's window then began AFTER the messages that were never
+        // written, and that account's CRM history kept a permanent hole while its sync row claimed
+        // a clean pull. last_pulled_at still advances (leaving it would wedge the queue head), but
+        // the watermark stays put and the failure is recorded.
+        await writeSync(
+          write.ok ? syncRows : syncRows.map((r) => ({
+            ...r,
+            last_message_at: results.find((x) => x.row.cio_id === r.cio_id)?.row.last_message_at ?? null,
+            attempts: r.attempts + 1,
+            last_error: r.last_error ?? "cio_messages upsert failed; watermark held",
+          })),
+          errors,
+        );
       } else {
         counts.upserted += messageRows.length; // what WOULD have been written
       }
@@ -223,7 +267,8 @@ export async function GET(request: NextRequest) {
   const summary =
     `[cio-message-pull] ${dry ? "DRY " : ""}${days}d accounts=${counts.accounts} pulled=${counts.pulled} ` +
     `messages=${counts.messages} upserted=${counts.upserted} noKey=${counts.skippedNoKey} ` +
-    `rateLimited=${counts.rateLimited} failed=${counts.failed} rejectedStamps=${counts.rejectedStamps} ` +
+    `rateLimited=${counts.rateLimited} dropped=${counts.droppedWorkspaceStopped} failed=${counts.failed} ` +
+    `rejectedStamps=${counts.rejectedStamps} ` +
     `${drained ? "drained" : budgetHit ? "BUDGET HIT, carrying over" : noNewRows ? "no new rows" : "stopped"} in ${elapsedMs}ms`;
   console.log(summary);
   if (skippedWorkspaces.size) {
@@ -254,7 +299,7 @@ function moreChunksAfter(index: number, total: number): boolean {
   return index + CHUNK < total;
 }
 
-async function pullAccount(row: QueueRow, pulledAt: string, nowMs: number) {
+async function pullAccount(row: QueueRow, pulledAt: string, nowMs: number): Promise<PullResult> {
   const { startTs, endTs } = pullWindow(
     { lastMessageAt: row.last_message_at, contactedAt: row.contacted_at },
     nowMs,
@@ -304,7 +349,7 @@ async function pullAccount(row: QueueRow, pulledAt: string, nowMs: number) {
  * is declined here: chunks must land one at a time so a failure stops the rest instead of firing
  * every remaining chunk at Supabase anyway, and so the upsert load stays flat. Same for the page
  * loop in pullAccount(), where each request needs the previous response's `next` cursor. */
-async function writeMessages(input: CioMessageRow[], errors: string[]): Promise<number> {
+async function writeMessages(input: CioMessageRow[], errors: string[]): Promise<{ written: number; ok: boolean }> {
   // Postgres refuses an ON CONFLICT statement that touches the same key twice ("cannot affect row
   // a second time") and fails the ENTIRE batch. Overlapping page cursors, or one account appearing
   // under two campaigns, can produce that. Dedupe on the primary key, last write wins.
@@ -320,11 +365,11 @@ async function writeMessages(input: CioMessageRow[], errors: string[]): Promise<
       .upsert(slice, { onConflict: "workspace,message_id" });
     if (error) {
       if (errors.length < 10) errors.push(`cio_messages upsert: ${error.message}`);
-      return written;
+      return { written, ok: false };
     }
     written += slice.length;
   }
-  return written;
+  return { written, ok: true };
 }
 
 async function writeSync(input: SyncRow[], errors: string[]): Promise<void> {

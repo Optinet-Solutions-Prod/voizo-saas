@@ -1665,9 +1665,14 @@ function assembleWindowPerf(cb: CallBreakdown, sb: SmsBreakdown): TodayPerfDay {
  * conversation. An independent transcript count over 04-11 Sep found 216 calls where the player
  * took two or more turns — beside Campaign's 200, nowhere near Global's 390.
  *
- * The CALLER must now attach transcripts to the candidate calls (connected, not voicemail, not
- * goal) — deriveAttemptTag returns before the transcript branch for every other call, so only that
- * subset needs them. Measured 2026-09-12: 1,452 candidates at 7d (0.3 MB), 7,401 at 30d (1.8 MB).
+ * The CALLER must attach transcripts to the candidate calls (connected, not voicemail, not goal) —
+ * deriveAttemptTag returns before the transcript branch for every other call, so only that subset
+ * needs them. Measured 2026-09-12: 1,452 candidates at 7d (0.3 MB), 7,401 at 30d (1.8 MB).
+ *
+ * `opts.useTranscript` EXISTS SO THE CALLER CAN SAY IT FAILED. Passing transcript-less rows on the
+ * strict path does not degrade gracefully: transcriptText(undefined) is "", so every candidate
+ * reads as a SILENT PICKUP and the surface renders "Conversations established 0". A caller whose
+ * transcript fetch failed must pass false and get the honest lean split instead.
  */
 export function computeRangedPerf(
   liveCalls: DashCallRow[],
@@ -1675,8 +1680,11 @@ export function computeRangedPerf(
   declinedIds: Set<string>,
   startMs: number,
   endMs: number,
+  opts: { useTranscript?: boolean } = {},
 ): TodayPerfDay {
-  return computeWindowPerf(liveCalls, liveSms, declinedIds, startMs, endMs, { useTranscript: true });
+  return computeWindowPerf(liveCalls, liveSms, declinedIds, startMs, endMs, {
+    useTranscript: opts.useTranscript !== false,
+  });
 }
 
 /** Per-entity ranged perf (Slice E): scope calls+sms to a campaign-id set, then reuse the ranged
@@ -1691,10 +1699,11 @@ export function perfForCampaignScope(
   startMs: number,
   endMs: number,
   campaignIds: ReadonlySet<string>,
+  opts: { useTranscript?: boolean } = {},
 ): TodayPerfDay {
   const c = calls.filter((x) => campaignIds.has(x.campaign_id));
   const s = sms.filter((m) => campaignIds.has(m.campaign_id));
-  return computeRangedPerf(c, s, declinedIds, startMs, endMs);
+  return computeRangedPerf(c, s, declinedIds, startMs, endMs, opts);
 }
 
 /** Per-campaign TODAY breakdown for the Today's-campaigns rows (Slice A). Transcript-based (matches the

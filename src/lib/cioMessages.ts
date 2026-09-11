@@ -354,15 +354,19 @@ export async function fetchCustomerMessages(params: {
     }
 
     const data = (await response.json()) as { messages?: unknown; next?: unknown };
+    // A 200 whose body is not the shape we expect is a failure of this function's CONTRACT, not an
+    // empty inbox — so it reports ok:false. It used to return ok:true with the error set beside an
+    // empty array, and the caller checked `error` only under `if (!ok)`: the account was then
+    // recorded as pulled, with last_error null and attempts 0, and the run called itself clean.
+    // "Callers must not read [] as no CRM activity" only works if [] never arrives on a success.
+    const wellFormed = Array.isArray(data.messages);
     return {
-      ok: true,
+      ok: wellFormed,
       status: response.status,
-      // A 200 whose body is not the shape we expect is a failure of this function's contract, not
-      // an empty inbox. Callers must not read [] here as "no CRM activity".
-      messages: Array.isArray(data.messages) ? (data.messages as CioApiMessage[]) : [],
+      messages: wellFormed ? (data.messages as CioApiMessage[]) : [],
       next: typeof data.next === "string" && data.next !== "" ? data.next : null,
       retryAfterMs: null,
-      error: Array.isArray(data.messages) ? null : "response had no messages array",
+      error: wellFormed ? null : `HTTP ${response.status} but the body carried no messages array`,
     };
   } catch (err) {
     return fail(0, `Network error: ${err instanceof Error ? err.message : String(err)}`);

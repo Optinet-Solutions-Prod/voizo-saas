@@ -131,8 +131,11 @@ export async function GET(request: NextRequest) {
   // fetchAllRowsParallel takes a single gte and cannot express the candidate predicate, so this
   // keyset-pages the way /api/dashboard/campaigns does for the same set.
   //
-  // FAILS SOFT on purpose: an empty map returns this surface to its previous lean answer — wrong
-  // in the same old way rather than 500, and loudly logged. The gate catches a silent regression.
+  // FAILS SOFT, but the soft landing is built BELOW, not here. An empty map does NOT on its own
+  // restore the lean answer: the strict classifier reads a missing transcript as "" and therefore
+  // as a SILENT PICKUP, so an empty map alone would render "Conversations established 0, Silent
+  // pickup 1,491". The coverage check before computeRangedPerf is what turns a failed fetch into
+  // the honest lean split. Returning {} here is only safe because of it.
   const endIso = new Date(endMs).toISOString();
   // A plain keyed OBJECT rather than a Map, deliberately. react-doctor's P0
   // nextjs-no-side-effect-in-get-handler reads `out.set(...)` inside a GET handler as a CSRF-prone
@@ -275,8 +278,31 @@ export async function GET(request: NextRequest) {
   // Splice the candidate transcripts onto the filtered set (copy, never mutate the shared rows —
   // the charts, tables and leaderboard read the same objects). Non-candidates have no entry and
   // are passed through untouched, which is exactly the set deriveAttemptTag never asks about.
-  const haveTranscripts = Object.keys(transcriptById).length > 0;
-  const filteredForPerf: DashCallRow[] = !haveTranscripts
+  // COVERAGE IS ALL OR NOTHING, and the reason is that the failure is not graceful. The strict
+  // classifier asks substantiveUserTurnCount(transcriptText(call.transcript)) === 0, and
+  // transcriptText(undefined) is "" — so a candidate WITHOUT its transcript attached is not
+  // "classified leniently", it is classified as a SILENT PICKUP. An empty map would therefore
+  // render Global Performance as "Conversations established 0, Silent pickup 1,491" rather than
+  // falling back to the old lean answer the way the fetch's own comment claimed.
+  //
+  // So: count the rows that actually need a transcript — connected, not voicemail, not a goal, the
+  // same predicate the fetch uses — and only take the strict path when every one of them has an
+  // entry. `undefined` means NOT FETCHED; a row whose transcript is genuinely null is present in
+  // the map with the value null, and that distinction is what makes this check meaningful.
+  // A partially covered set would be neither lean nor strict, which is worse than either.
+  const CONNECTED = new Set(["completed", "answered"]);
+  const needsTranscript = filtered.filter(
+    (c) => CONNECTED.has(String(c.status)) && c.voicemail !== true && c.goal_reached !== true,
+  );
+  const uncovered = needsTranscript.filter((c) => !c.id || transcriptById[c.id] === undefined).length;
+  const useTranscript = needsTranscript.length === 0 || uncovered === 0;
+  if (!useTranscript) {
+    console.error(
+      `[dashboard/analytics] ${uncovered} of ${needsTranscript.length} candidate calls have no transcript — ` +
+      `falling back to the LEAN split for this window so the numbers stay explainable`,
+    );
+  }
+  const filteredForPerf: DashCallRow[] = !useTranscript
     ? filtered
     : filtered.map((c) => {
         const t = c.id ? transcriptById[c.id] : undefined;
@@ -285,7 +311,7 @@ export async function GET(request: NextRequest) {
 
   let perf: TodayPerfDay | null = null;
   try {
-    perf = computeRangedPerf(filteredForPerf, scopedSms, declinedIds, startMs, endMs);
+    perf = computeRangedPerf(filteredForPerf, scopedSms, declinedIds, startMs, endMs, { useTranscript });
   } catch (e) {
     console.error("[dashboard/analytics] computeRangedPerf failed:", e, { calls: filtered.length, sms: scopedSms.length });
     perf = null;
@@ -352,7 +378,7 @@ export async function GET(request: NextRequest) {
   const bestPerf = (ids: Set<string> | null): TodayPerfDay | null => {
     if (!ids || ids.size === 0) return null;
     try {
-      return perfForCampaignScope(filteredForPerf, scopedSms, declinedIds, startMs, endMs, ids);
+      return perfForCampaignScope(filteredForPerf, scopedSms, declinedIds, startMs, endMs, ids, { useTranscript });
     } catch (e) {
       console.error("[dashboard/analytics] perfForCampaignScope failed:", e, { ids: ids.size });
       return null;
