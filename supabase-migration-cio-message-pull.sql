@@ -49,11 +49,15 @@ create table if not exists public.cio_messages (
   -- NEVER coerced to a zero or an epoch-0 date: 11 of 526 probed messages carry no `metrics.sent`.
   sent_at          timestamptz,
   delivered_at     timestamptz,
-  -- ⚠ READ THIS BEFORE REPORTING ON OPENS. `opened` counts machine opens too — Apple Mail Privacy
-  -- Protection and scanners inflate it, and Customer.io itself reports `prefetch_opened`
-  -- separately. The honest figure is metrics->>'human_opened'. Same for clicked_at vs
-  -- metrics->>'human_clicked'. Both are in `metrics`; no migration is needed to use them.
+  -- ⚠ USE human_opened_at FOR ANY OPEN RATE. `opened` counts machines: measured 2026-09-12 over
+  -- 434 real emails, 69 carry `opened` and only 41 carry `human_opened`, so 28 opens (41%) never
+  -- involved a person and the rate reads 15.9% instead of 9.4% — a 1.7x overstatement, which is
+  -- Apple Mail Privacy Protection prefetching (37 of those rows also carry `prefetch_opened`).
+  -- On the 34 rows carrying both, `opened` is the EARLIER stamp, so the timing is wrong too.
+  -- opened_at is kept because machine opens are real deliverability signal, but it is not
+  -- engagement. `clicked` needs no twin: 0 divergence from human_clicked over the same rows.
   opened_at        timestamptz,
+  human_opened_at  timestamptz,
   clicked_at       timestamptz,
   converted_at     timestamptz,             -- D8
   failed_at        timestamptz,             -- D8
@@ -77,7 +81,9 @@ create index if not exists cio_messages_sent_at_idx on public.cio_messages (sent
 comment on table public.cio_messages is
   'What the CRM sent a Voizo-contacted player, pulled nightly from the Customer.io App API by /api/cron/cio-message-pull. NEVER stores recipient or customer_identifiers (both present on 100% of API responses) — the join key is cio_id. Sibling tables: cio_events = deposits in, cio_track_events = what Voizo sent out.';
 comment on column public.cio_messages.opened_at is
-  'From metrics.opened, which INCLUDES machine opens (Apple MPP, scanners). For an honest human open rate use metrics->>''human_opened''.';
+  'From metrics.opened, which INCLUDES machine opens (Apple MPP, scanners). Measured 2026-09-12: 41% of opens are machine-only, so this reads 1.7x the real rate. For engagement use human_opened_at.';
+comment on column public.cio_messages.human_opened_at is
+  'From metrics.human_opened — a person actually opened it. THIS is the open rate. Added 2026-09-12 after opened_at was measured at 15.9% against this column''s 9.4% over 434 emails.';
 comment on column public.cio_messages.metrics is
   'Customer.io''s epoch-seconds map, numeric values only. Richer than the derived columns: human_opened, human_clicked, prefetch_opened, undeliverable, unsubscribed, attempted, drafted, processed, secondary:delivered, secondary:failed, and link:<id> per clicked link.';
 
@@ -174,6 +180,15 @@ create index if not exists campaign_numbers_v2_last_attempted_at_idx
   on public.campaign_numbers_v2 (last_attempted_at desc);
 create index if not exists realtime_seen_members_phone_e164_idx
   on public.realtime_seen_members (phone_e164);
+
+-- Applied separately to the live project on 2026-09-12, and folded into the table above so a
+-- fresh apply matches. Kept here because re-running it is harmless and it backfills from the
+-- `metrics` map we already store — no Customer.io re-read is needed, which is the whole payoff of
+-- storing the map whole:
+--   alter table public.cio_messages add column if not exists human_opened_at timestamptz;
+--   update public.cio_messages
+--      set human_opened_at = to_timestamp((metrics->>'human_opened')::bigint)
+--    where metrics ? 'human_opened' and human_opened_at is null;
 
 -- ── Verify (paste after applying) ───────────────────────────────────────────────────────────────
 --   select table_name from information_schema.tables

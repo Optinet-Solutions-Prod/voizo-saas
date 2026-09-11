@@ -52,6 +52,7 @@ export interface CioMessageRow {
   sent_at: string | null;
   delivered_at: string | null;
   opened_at: string | null;
+  human_opened_at: string | null;
   clicked_at: string | null;
   converted_at: string | null;
   failed_at: string | null;
@@ -65,8 +66,8 @@ export interface CioMessageRow {
 export const CIO_MESSAGE_ROW_KEYS = [
   "workspace", "cio_id", "message_id", "type", "campaign_id", "broadcast_id", "newsletter_id",
   "msg_template_id", "action_id", "content_id", "subject", "metrics", "sent_at", "delivered_at",
-  "opened_at", "clicked_at", "converted_at", "failed_at", "failure_message", "cio_created_at",
-  "pulled_at",
+  "opened_at", "human_opened_at", "clicked_at", "converted_at", "failed_at", "failure_message",
+  "cio_created_at", "pulled_at",
 ] as const;
 
 /** metrics key -> our column. Customer.io's map holds far more (human_opened, prefetch_opened,
@@ -76,6 +77,12 @@ const DERIVED_STAMPS = {
   sent: "sent_at",
   delivered: "delivered_at",
   opened: "opened_at",
+  // `opened` counts MACHINES too. Measured 2026-09-12 over 434 real emails: 69 carry `opened` and
+  // only 41 carry `human_opened`, so 28 opens — 41% — never involved a person, and the open rate
+  // reads 15.9% instead of 9.4%. Both are stored: machine opens are real deliverability signal,
+  // human opens are the engagement number. `clicked` needs no twin — 0 divergence over the same
+  // rows — and metrics keeps human_clicked if that ever changes.
+  human_opened: "human_opened_at",
   clicked: "clicked_at",
   converted: "converted_at",
   failed: "failed_at",
@@ -120,6 +127,7 @@ export interface DerivedStamps {
   sent_at: string | null;
   delivered_at: string | null;
   opened_at: string | null;
+  human_opened_at: string | null;
   clicked_at: string | null;
   converted_at: string | null;
   failed_at: string | null;
@@ -134,7 +142,7 @@ export function deriveTimestamps(
   nowMs: number = Date.now(),
 ): DerivedStamps {
   const out: DerivedStamps = {
-    sent_at: null, delivered_at: null, opened_at: null,
+    sent_at: null, delivered_at: null, opened_at: null, human_opened_at: null,
     clicked_at: null, converted_at: null, failed_at: null, rejected: [],
   };
   if (!isPlainObject(metrics)) return out;
@@ -214,6 +222,7 @@ export function toMessageRow(
     sent_at: stamps.sent_at,
     delivered_at: stamps.delivered_at,
     opened_at: stamps.opened_at,
+    human_opened_at: stamps.human_opened_at,
     clicked_at: stamps.clicked_at,
     converted_at: stamps.converted_at,
     failed_at: stamps.failed_at,

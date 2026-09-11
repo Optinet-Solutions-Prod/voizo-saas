@@ -166,6 +166,7 @@ const count = async (table) => {
   let mismatched = 0, noSentRows = 0, noSentWrong = 0, outOfRange = 0;
   for (const row of rows) {
     for (const [metric, column] of [['sent', 'sent_at'], ['delivered', 'delivered_at'], ['opened', 'opened_at'],
+                                    ['human_opened', 'human_opened_at'],
                                     ['clicked', 'clicked_at'], ['converted', 'converted_at'], ['failed', 'failed_at']]) {
       const raw = row.metrics ? row.metrics[metric] : undefined;
       const stored = row[column];

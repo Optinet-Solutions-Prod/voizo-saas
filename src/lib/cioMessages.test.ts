@@ -58,6 +58,22 @@ describe("deriveTimestamps", () => {
     expect(t.delivered_at).not.toBeNull();
   });
 
+  // Measured 2026-09-12 over 434 real emails: `opened` is present on 69 and `human_opened` on
+  // only 41, so 28 opens — 41% of them — are machines. Reporting on opened_at alone overstates
+  // the open rate 15.9% vs 9.4%, a 1.7x error, and on the 34 rows carrying both, `opened` is the
+  // EARLIER stamp, so the timing is wrong too.
+  it("derives human_opened_at separately, because 41% of opens are machines", () => {
+    const t = deriveTimestamps({ opened: 1_789_118_641, human_opened: 1_789_118_700 }, NOW_MS);
+    expect(t.opened_at).toBe("2026-09-11T09:24:01.000Z");
+    expect(t.human_opened_at).toBe("2026-09-11T09:25:00.000Z");
+  });
+
+  it("leaves human_opened_at NULL when only a machine opened it", () => {
+    const t = deriveTimestamps({ opened: 1_789_118_641, prefetch_opened: 1_789_118_641 }, NOW_MS);
+    expect(t.opened_at).not.toBeNull();
+    expect(t.human_opened_at).toBeNull();
+  });
+
   it("maps every derived column and leaves the rest null", () => {
     const t = deriveTimestamps(
       { sent: NOW_S - 60, delivered: NOW_S - 50, opened: NOW_S - 40, clicked: NOW_S - 30, converted: NOW_S - 20, failed: NOW_S - 10 },
