@@ -106,12 +106,6 @@ export interface SmsDispatchInput {
    *  don't consume it; when optin_reached_only sees it missing, it fails SAFE
    *  (no text) rather than guessing. */
   attemptTag?: AttemptTag;
-  /** agentSpokeOffer(transcript): the agent got the offer out before the call ended (Jasiel
-   *  2026-09-10). Only optin_reached_only reads it, and only for an early hang-up: a player who
-   *  heard "free spins" and hung up has something to receive; one who hung up on the greeting has
-   *  not. Optional and fail-safe: a caller that does not supply it gets today's behaviour, no text,
-   *  because this rule WIDENS sends and must be opted into. */
-  agentSpokeOffer?: boolean;
 }
 
 export interface SmsDispatchDecision {
@@ -134,9 +128,6 @@ export interface SmsDispatchDecision {
     /** optin_reached_only outcomes (Val 2026-08-07) — one reason per refused
      *  dashboard bucket so logs show exactly WHICH bucket blocked the text. */
     | "early_hangup"
-    /** An early hang-up who HEARD the offer (Jasiel 2026-09-10). Its own reason, distinct from
-     *  reached_engaged, so logs can count exactly how many sends this rule adds. */
-    | "early_hangup_offer_spoken"
     | "agent_timeout"
     /** silent_pickup (2026-08-13): the line answered but nobody ever spoke — zero
      *  substantive user turns. Zero human evidence never gets a text. */
@@ -225,11 +216,6 @@ export function decideSmsDispatch(i: SmsDispatchInput): SmsDispatchDecision {
       case "agent_timeout":
         return { attempt: false, reason: "agent_timeout" };
       case "early_hangup":
-        // Jasiel 2026-09-10: an early hang-up is texted when, and only when, the agent had
-        // already said the offer. Measured 11 Aug to 10 Sep: 351 of 1,048 early hang-ups (33.5%),
-        // about 12 extra texts a day. The other two thirds hung up on the greeting and never
-        // heard it; they stay untexted. Strict `=== true`: undefined is "not spoken".
-        if (i.agentSpokeOffer === true) return { attempt: true, reason: "early_hangup_offer_spoken" };
         return { attempt: false, reason: "early_hangup" };
       // silent_pickup (2026-08-13, Phase A): connected, but zero substantive user
       // turns — dead air or an undetected machine. 316 such calls read 'neutral'

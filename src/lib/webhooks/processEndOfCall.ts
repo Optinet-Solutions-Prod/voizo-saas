@@ -11,7 +11,7 @@
 // message.type === "end-of-call-report" before calling this.
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseServer";
-import { isVoicemail, hasGenuineCustomerConsent, hasRealConversation, agentMentionedSms, agentSpokeOffer, customerDeclinedSms, customerRequestedCallback, customerRiskDisclosure } from "@/lib/transcriptClassify";
+import { isVoicemail, hasGenuineCustomerConsent, hasRealConversation, agentMentionedSms, customerDeclinedSms, customerRequestedCallback, customerRiskDisclosure } from "@/lib/transcriptClassify";
 import { postSlackAlert } from "@/lib/alerts/slack";
 import { decideSmsDispatch, resolveSmsConsentMode, type SmsConsentMode } from "@/lib/smsDispatchDecision";
 import { fireCallFollowup } from "@/lib/followupEvent";
@@ -521,9 +521,6 @@ export async function processEndOfCall(message: Record<string, unknown>): Promis
     agentAnnouncedSms: transcript ? agentMentionedSms(transcript) : false,
     customerDeclinedSms: transcript ? customerDeclinedSms(transcript) : false,
     humanConversation: transcript ? hasRealConversation(transcript) : false,
-    // Jasiel 2026-09-10: an early hang-up who heard the offer gets the text (optin_reached_only
-    // only). No transcript reads as "not spoken", which is the no-text side.
-    agentSpokeOffer: transcript ? agentSpokeOffer(transcript) : false,
     lastResortMode:
       typeof campaign?.sms_last_resort_template === "string" &&
       campaign.sms_last_resort_template.trim().length > 0,
