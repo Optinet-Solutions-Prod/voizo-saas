@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import Sidebar from "@/components/Sidebar";
-import Header from "@/components/Header";
+import AppChrome from "@/components/AppChrome";
 import Providers from "@/components/Providers";
 import DotFieldLayer from "@/components/DotFieldLayer";
 
@@ -38,18 +37,7 @@ export default function RootLayout({
             Not on the dashboard (flat ground, as the mockup): DotFieldLayer decides by route. */}
         <DotFieldLayer />
         <Providers>
-          <div className="flex h-screen overflow-hidden">
-            <Sidebar />
-            {/* right column: header + scrollable content */}
-            <div className="flex-1 flex flex-col overflow-hidden">
-              <Header />
-              {/* pt-14 offsets mobile top bar, pb-16 offsets mobile bottom nav. Transparent so the
-                  global dot-field shows through the content gutters. */}
-              <main className="flex-1 overflow-y-auto pt-14 pb-16 md:pt-0 md:pb-0">
-                {children}
-              </main>
-            </div>
-          </div>
+          <AppChrome>{children}</AppChrome>
         </Providers>
       </body>
     </html>
