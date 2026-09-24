@@ -6,7 +6,8 @@ import { supabaseService, tenancyProvisioned } from "@/lib/supabaseServer";
 // Who is making this request, and which organization are they in.
 // Server-only (route handlers, server components).
 
-export type OrgRole = "owner" | "admin" | "member";
+import { canManageOrg, slugify, ROLE_RANK, type OrgRole } from "@/lib/tenantShared";
+export { canManageOrg, slugify, ROLE_RANK, type OrgRole };
 
 export interface Brand {
   id: string;
@@ -35,22 +36,6 @@ export interface Tenant {
   platformAdmin: boolean;
 }
 
-export const ROLE_RANK: Record<OrgRole, number> = { member: 0, admin: 1, owner: 2 };
-
-export function canManageOrg(role: OrgRole | null | undefined): boolean {
-  return role === "owner" || role === "admin";
-}
-
-/** URL-safe slug: "Fortune Play!" → "fortune-play". */
-export function slugify(input: string): string {
-  return input
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 48) || "brand";
-}
 
 /** The signed-in user for this request, verified with the Auth server. null when signed out. */
 export async function getSessionUser(): Promise<User | null> {

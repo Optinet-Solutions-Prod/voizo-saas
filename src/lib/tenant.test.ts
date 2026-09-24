@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canManageOrg, slugify } from "./tenant";
+import { canManageOrg, slugify } from "./tenantShared";
 
 describe("slugify", () => {
   it("makes URL-safe lowercase slugs", () => {

@@ -47,6 +47,21 @@ with no redeploy: the app re-probes every minute.
 - **Bootstrap**: the migration makes `admin@optinetsolutions.com` owner of an "Optinet"
   organization and adopts all pre-existing rows into it.
 
+## Integrations & phone numbers (Phase 3, 2026-09-24)
+Settings → Integrations: each organization stores its own credentials for Customer.io,
+Squaretalk, FreeSWITCH (shim), OpenAI, Mobivate, Twilio, Resend, Brevo and ElevenLabs.
+Secrets are AES-256-GCM encrypted in `org_integrations.credentials`
+(`src/lib/integrations/crypto.ts`); set **`INTEGRATIONS_ENCRYPTION_KEY`** in Vercel (any long
+random string). Without it the key is derived from the service-role key, which works but ties
+stored credentials to that key. "Save & test" makes one read-only call to the provider
+(`src/lib/integrations/providers.ts`). Squaretalk and Mobivate have no public account endpoint,
+so their tests check reachability and key rejection only.
+Settings → Phone numbers: caller IDs per org (+ optional brand). Twilio numbers are verified
+against the connected account; FreeSWITCH/Squaretalk check the connection; others format only.
+Server code reads an org's credentials with `getOrgIntegration(orgId, provider)`
+(`src/lib/integrations/store.ts`). The call pipeline still reads the env vars; switching it to
+per-org credentials is part of the later dialing work.
+
 ## Admin auth
 Supabase Auth (email + password). `/` (landing) and `/login` are public; everything else
 needs a signed-in user whose **`app_metadata.role` is `"admin"`**, checked in
