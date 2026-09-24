@@ -2137,6 +2137,7 @@ export default function CampaignV2DetailPage() {
                   </span>
                 )}
               </div>
+              <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-[var(--border)] text-[var(--text-3)] text-xs uppercase tracking-wide">
@@ -2181,6 +2182,7 @@ export default function CampaignV2DetailPage() {
                   })}
                 </tbody>
               </table>
+              </div>
             </>
           )
         )}
@@ -2189,6 +2191,7 @@ export default function CampaignV2DetailPage() {
           calls.length === 0 ? (
             <div className="text-center py-12 text-sm text-[var(--text-3)]">No calls yet.</div>
           ) : (
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[var(--border)] text-[var(--text-3)] text-xs uppercase tracking-wide">
@@ -2213,6 +2216,7 @@ export default function CampaignV2DetailPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           )
         )}
 

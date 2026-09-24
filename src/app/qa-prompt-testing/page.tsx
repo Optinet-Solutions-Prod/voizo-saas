@@ -96,7 +96,7 @@ export default function QaPromptTestingPage() {
     }`;
 
   return (
-    <div className="p-4 max-w-[1100px] mx-auto w-full grid gap-4">
+    <div className="p-4 max-w-[1100px] mx-auto w-full grid grid-cols-[minmax(0,1fr)] gap-4">
       <div className="min-w-0">
         <div className="flex items-center gap-2.5">
           <SectionTick color="#a78bfa" />
@@ -109,7 +109,8 @@ export default function QaPromptTestingPage() {
         </p>
       </div>
 
-      <div className="flex w-fit gap-1 p-1 bg-[var(--bg-card)] border border-[var(--border)] rounded-xl">
+      {/* Five tabs don't fit a phone: scroll the strip sideways there instead of stretching the page. */}
+      <div className="flex w-full sm:w-fit max-w-full overflow-x-auto hide-scrollbar gap-1 p-1 bg-[var(--bg-card)] border border-[var(--border)] rounded-xl">
         <button onClick={() => setTab("campaigns")} className={tabCls(tab === "campaigns")}>
           <ClipboardList size={13} /> Campaigns
         </button>

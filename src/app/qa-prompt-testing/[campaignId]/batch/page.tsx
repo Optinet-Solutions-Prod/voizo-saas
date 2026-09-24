@@ -222,7 +222,7 @@ export default function CampaignBatchPage() {
         : "text-red-400 bg-red-500/10";
 
   return (
-    <div className="p-4 max-w-[900px] mx-auto w-full grid gap-4">
+    <div className="p-4 max-w-[900px] mx-auto w-full grid grid-cols-[minmax(0,1fr)] gap-4">
       <div>
         <Link
           href={`/qa-prompt-testing/${campaignId}`}

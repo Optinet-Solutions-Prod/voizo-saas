@@ -364,7 +364,7 @@ function CampaignsPageInner() {
   return (
     // Shell — SectionTick + 18px header, p-4/gap-4 console density (design-system rollout,
     // Jasiel 2026-07-08). Wide max-w kept for the campaigns table.
-    <div className="p-4 w-full max-w-[1400px] mx-auto grid gap-4">
+    <div className="p-4 w-full min-w-0 max-w-[1400px] mx-auto grid grid-cols-[minmax(0,1fr)] gap-4">
       <div className="flex items-start sm:items-center justify-between gap-3 flex-wrap">
         <div className="min-w-0">
           <div className="flex items-center gap-2.5">
@@ -747,7 +747,8 @@ function FilterGroup<T extends string>({
   options, value, onChange,
 }: { options: { key: T; label: string }[]; value: T; onChange: (v: T) => void }) {
   return (
-    <div className="flex gap-1 p-1 bg-[var(--bg-card)] border border-[var(--border)] rounded-xl flex-shrink-0">
+    // Scrolls sideways on phones instead of forcing the page wider than the screen.
+    <div className="flex gap-1 p-1 bg-[var(--bg-card)] border border-[var(--border)] rounded-xl max-w-full overflow-x-auto hide-scrollbar">
       {options.map(o => (
         <button
           key={o.key}

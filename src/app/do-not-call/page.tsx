@@ -106,7 +106,7 @@ export default function DoNotCallPage() {
   const manualCount = useMemo(() => entries.filter((e) => e.reason === "manual").length, [entries]);
 
   return (
-    <div className="p-4 w-full grid gap-4">
+    <div className="p-4 w-full grid grid-cols-[minmax(0,1fr)] gap-4">
       {/* Header — SectionTick + 18px title, matching the dashboard section-header pattern
           (design-system rollout, Jasiel 2026-07-06). Fluid p-4 console density. */}
       <div className="flex items-start justify-between gap-3 flex-wrap">

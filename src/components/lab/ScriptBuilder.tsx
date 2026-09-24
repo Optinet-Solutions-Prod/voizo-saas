@@ -45,6 +45,7 @@ import {
   insertLabEvent,
 } from "@/lib/scriptEngine/lab-db-client";
 import { getVapi, vapiErrorText } from "@/lib/scriptEngine/vapi";
+import { useIsMobile } from "@/lib/useIsMobile";
 import LabConfigForm from "@/components/lab/LabConfigForm";
 import { fetchCampaignsV2 } from "@/lib/campaignV2Client";
 import type { ListenerScript, ListenerHandler, ListenerCollection, LabCallEvent } from "@/lib/scriptEngine/database.types";
@@ -1664,12 +1665,15 @@ export default function ScriptBuilder({ onClose, initialScriptId }: Props) {
   );
 
   // The box palette collapses to a slim rail — and gets out of the way by
-  // itself while a test call is running, so the canvas is the monitor.
+  // itself while a test call is running, so the canvas is the monitor. On
+  // phones it overlays the canvas (see its max-md: classes), so it starts
+  // closed there and the operator opens it from the rail.
+  const isMobile = useIsMobile();
   const [paletteOpen, setPaletteOpen] = useState(true);
   useEffect(() => {
     if (run.status === "connecting" || run.status === "live") setPaletteOpen(false);
-    else if (run.status === "idle") setPaletteOpen(true);
-  }, [run.status]);
+    else if (run.status === "idle") setPaletteOpen(!isMobile);
+  }, [run.status, isMobile]);
 
   // Zoom out to the whole workflow whenever the run view changes size — on
   // start (palette collapses, dock rises), on dock expand/collapse, and when
@@ -1985,7 +1989,7 @@ export default function ScriptBuilder({ onClose, initialScriptId }: Props) {
           value={scriptId ?? ""}
           onChange={(e) => e.target.value && confirmDiscard() && loadScript(e.target.value)}
           title="Open another script"
-          className="w-56 shrink-0 rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-1.5 text-xs text-[var(--text-1)] focus:border-primary focus:outline-none [color-scheme:dark]"
+          className="w-36 sm:w-56 shrink-0 rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-1.5 text-xs text-[var(--text-1)] focus:border-primary focus:outline-none [color-scheme:dark]"
         >
           {!scriptId && <option value="">(open a script…)</option>}
           {scripts.map((s) => (
@@ -2006,7 +2010,8 @@ export default function ScriptBuilder({ onClose, initialScriptId }: Props) {
           className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm font-bold text-[var(--text-1)] hover:border-[var(--border)] focus:border-primary focus:bg-[var(--bg-card)] focus:outline-none"
         />
 
-        <div className="flex items-center gap-3">
+        {/* Thirteen icon buttons: wrap onto extra rows on narrow screens instead of overflowing. */}
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {notice && <span className="text-xs text-emerald-400">{notice}</span>}
           {error && <span className="text-xs text-red-400">{error}</span>}
 
@@ -2218,7 +2223,9 @@ export default function ScriptBuilder({ onClose, initialScriptId }: Props) {
         </div>
       )}
 
-      <div className="flex min-h-0 flex-1">
+      {/* `relative`: on phones the palette and the right-hand panels overlay the canvas
+          (see their max-md: classes) instead of sharing a 390px-wide row with it. */}
+      <div className="relative flex min-h-0 flex-1">
         {/* Palette (collapsible; auto-collapses while a test call runs) */}
         {!paletteOpen ? (
           <button
@@ -2232,7 +2239,7 @@ export default function ScriptBuilder({ onClose, initialScriptId }: Props) {
             <span className="text-[9px] font-semibold uppercase tracking-wider text-[var(--text-3)] [writing-mode:vertical-rl]">Boxes</span>
           </button>
         ) : (
-        <div className="flex w-44 shrink-0 flex-col border-r border-[var(--border)]">
+        <div className="flex w-44 shrink-0 flex-col border-r border-[var(--border)] max-md:absolute max-md:inset-y-0 max-md:left-0 max-md:z-20 max-md:w-60 max-md:bg-[var(--bg-app)] max-md:shadow-2xl">
           <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] px-3 py-2">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-3)]">Boxes</p>
             <button onClick={() => setPaletteOpen(false)} title="Collapse the palette" className="text-[var(--text-3)] transition hover:text-[var(--text-2)]">
@@ -2636,7 +2643,7 @@ export default function ScriptBuilder({ onClose, initialScriptId }: Props) {
             must know the script's SAVED persona before it may suggest anything
             (VOZ-188 — an early save could otherwise overwrite it). */}
         {configOpen && (scriptId === null || scripts.length > 0) && (
-          <div className="flex w-96 shrink-0 flex-col border-l border-[var(--border)]">
+          <div className="flex w-96 shrink-0 flex-col border-l border-[var(--border)] max-md:absolute max-md:inset-y-0 max-md:right-0 max-md:z-20 max-md:w-full max-md:bg-[var(--bg-app)] max-md:shadow-2xl">
             <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] px-3 py-2">
               <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-3)]">Configuration</p>
               <button onClick={() => setConfigOpen(false)} title="Close" className="text-[var(--text-3)] transition hover:text-[var(--text-2)]">
@@ -2663,7 +2670,7 @@ export default function ScriptBuilder({ onClose, initialScriptId }: Props) {
 
         {/* Config panel */}
         {!configOpen && (sd || selEdge) && (
-          <div className="w-72 shrink-0 space-y-3 overflow-y-auto border-l border-[var(--border)] p-3">
+          <div className="w-72 shrink-0 space-y-3 overflow-y-auto border-l border-[var(--border)] p-3 max-md:absolute max-md:inset-y-0 max-md:right-0 max-md:z-20 max-md:w-[min(100%,20rem)] max-md:bg-[var(--bg-app)] max-md:shadow-2xl">
             <div className="flex items-center justify-between">
               <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-3)]">
                 {sd ? (sd.kind === "start" ? "Start call" : `${CONTENT_META[content]?.label ?? "Step"} box`) : "Connection"}

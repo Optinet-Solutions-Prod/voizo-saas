@@ -19,7 +19,7 @@ export default function PlaybookPage() {
     }`;
 
   return (
-    <div className="p-4 w-full max-w-[1200px] mx-auto grid gap-4">
+    <div className="p-4 w-full max-w-[1200px] mx-auto grid grid-cols-[minmax(0,1fr)] gap-4">
       <Link
         href="/script-builder"
         className="inline-flex w-fit items-center gap-1.5 text-xs text-[var(--text-3)] transition hover:text-[var(--text-1)]"

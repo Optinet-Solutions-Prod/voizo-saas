@@ -18,8 +18,9 @@ export interface BandStat {
 export default function StatBand({ stats }: { stats: BandStat[] }) {
   return (
     <div
-      className="grid gap-px bg-[var(--border)] border border-[var(--border)] rounded-[14px] overflow-hidden"
-      style={{ gridTemplateColumns: `repeat(${stats.length}, minmax(0,1fr))` }}
+      // Two cells per row on phones (labels were truncating to "CAMPA…"), one row from sm up.
+      className="grid gap-px bg-[var(--border)] border border-[var(--border)] rounded-[14px] overflow-hidden grid-cols-2 sm:[grid-template-columns:repeat(var(--n),minmax(0,1fr))]"
+      style={{ "--n": stats.length } as React.CSSProperties}
     >
       {stats.map((s) => (
         <div key={s.label} className="bg-[#12141a] px-[18px] py-[15px] min-w-0">

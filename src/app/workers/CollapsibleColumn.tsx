@@ -5,6 +5,10 @@
 // (hover-to-expand) and LOCKED (always expanded). Lock state persists per
 // side in localStorage so the user's preference survives reload.
 //
+// Phones (below md): there is no hover and no room for side columns, so the
+// column is either hidden (`mobile="hidden"`) or pinned open as a bottom sheet
+// over the lower part of the globe (`mobile="sheet"`, the default).
+//
 // Usage:
 //   <CollapsibleColumn side="left" storageKey="workers-clocks">
 //     <WorldClocks now={now} />
@@ -12,7 +16,7 @@
 
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { Lock, LockOpen } from "lucide-react";
 
 interface Props {
@@ -25,12 +29,14 @@ interface Props {
   defaultLocked?: boolean;
   /** Expanded width in px. Default 320. */
   width?: number;
+  /** Below md: "sheet" pins the panel open across the bottom (default), "hidden" removes it. */
+  mobile?: "sheet" | "hidden";
   children: ReactNode;
 }
 
 export default function CollapsibleColumn({
   side, railLabels = [], storageKey,
-  defaultLocked = false, width = 320, children,
+  defaultLocked = false, width = 320, mobile = "sheet", children,
 }: Props) {
   // Lazy initializer reads localStorage on first mount (client-only via
   // "use client") — avoids the set-state-in-effect lint by initializing
@@ -56,20 +62,21 @@ export default function CollapsibleColumn({
 
   const sideClass = side === "left" ? "left-0" : "right-0";
   const lockAlign = side === "left" ? "self-start" : "self-end";
+  const mobileClass = mobile === "hidden" ? "hidden md:flex" : "max-md:inset-x-0 max-md:top-auto max-md:bottom-0 max-md:h-[44%] max-md:w-auto max-md:px-2 max-md:pb-2";
 
   return (
     <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      className={`absolute top-4 bottom-12 ${sideClass} z-10 flex flex-col gap-2.5 px-3 transition-[width] duration-300 ease-[cubic-bezier(.2,.7,.2,1)]`}
-      style={{ width: collapsed ? 42 : width }}>
+      className={`absolute md:top-4 md:bottom-12 ${sideClass} z-10 flex flex-col gap-2.5 px-3 md:w-[var(--col-w)] transition-[width] duration-300 ease-[cubic-bezier(.2,.7,.2,1)] ${mobileClass}`}
+      style={{ "--col-w": `${collapsed ? 42 : width}px` } as CSSProperties}>
 
-      {/* Lock chip */}
+      {/* Lock chip (desktop only — the phone sheet is always open) */}
       <button
         onClick={() => setLocked(l => !l)}
         title={locked ? "Unlock (auto-collapse on mouse-leave)" : "Lock open"}
         aria-pressed={locked}
-        className={`${lockAlign} w-6 h-6 rounded-lg grid place-items-center transition-all border ${
+        className={`hidden md:grid ${lockAlign} w-6 h-6 rounded-lg place-items-center transition-all border ${
           locked
             ? "bg-[var(--bg-card)] border-[var(--border-2)] text-[var(--text-1)]"
             : "bg-[var(--bg-card)] border-[var(--border)] text-[var(--text-3)] hover:text-[var(--text-1)] hover:border-[var(--border-2)]"
@@ -78,7 +85,7 @@ export default function CollapsibleColumn({
       </button>
 
       {/* Rail (collapsed) — vertical labels */}
-      <div className={`flex-1 flex flex-col items-center gap-3 pt-1 transition-opacity ${collapsed ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
+      <div className={`hidden md:flex flex-1 flex-col items-center gap-3 pt-1 transition-opacity ${collapsed ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
         {railLabels.map((label, i) => (
           <div
             key={i}
@@ -89,9 +96,9 @@ export default function CollapsibleColumn({
         ))}
       </div>
 
-      {/* Panel children (expanded) */}
-      <div className={`absolute top-12 ${sideClass === "left-0" ? "left-3" : "right-3"} bottom-0 transition-opacity ${collapsed ? "opacity-0 pointer-events-none" : "opacity-100 delay-100"}`}
-           style={{ width: width - 24 }}>
+      {/* Panel children (expanded on desktop; the whole sheet on phones) */}
+      <div className={`md:absolute md:top-12 ${sideClass === "left-0" ? "md:left-3" : "md:right-3"} md:bottom-0 md:w-[var(--panel-w)] max-md:h-full max-md:min-h-0 transition-opacity ${collapsed ? "md:opacity-0 md:pointer-events-none" : "opacity-100 delay-100"}`}
+           style={{ "--panel-w": `${width - 24}px` } as CSSProperties}>
         <div className="h-full flex flex-col gap-2.5 overflow-hidden">
           {children}
         </div>

@@ -255,7 +255,7 @@ export default function AudiencePage() {
   ].filter(Boolean).join(" · ");
 
   return (
-    <div className="px-[30px] pt-4 pb-16 w-full max-w-[1680px] mx-auto grid gap-4">
+    <div className="px-[30px] pt-4 pb-16 w-full max-w-[1680px] mx-auto grid grid-cols-[minmax(0,1fr)] gap-4">
       {/* ONE toolbar row (Jasiel 2026-09-11, from the mockup: layout only, not its type or colour).
           Left, what is being looked at: the market tabs. Right, how it is being cut:
           the range presets, the window picker, the export. Two rows put the title on one line and

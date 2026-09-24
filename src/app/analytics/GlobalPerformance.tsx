@@ -275,7 +275,7 @@ export default function GlobalPerformance({ filters, onChange, brand }: GlobalPe
     : null;
 
   return (
-    <section className="grid gap-4 min-w-0">
+    <section className="grid grid-cols-[minmax(0,1fr)] gap-4 min-w-0">
       {/* The panel (mockup, 2026-09-03): header, filter bar, connect-rate hero and the chart strip
           in ONE bordered island; Campaign Performance, the heat map and the leaderboards follow as
           their own cards. The rail's "Performance" anchor is this island. */}
@@ -288,7 +288,7 @@ export default function GlobalPerformance({ filters, onChange, brand }: GlobalPe
             rides the picker below ("Campaign: All (N)"), where Campaign Performance keeps its own,
             and the brand in scope is the sidebar switcher's job. */}
         {/* Header right (mockup): the load state, Export, and the range presets. */}
-        <div className="ml-auto flex items-center gap-2 flex-wrap">
+        <div className="ml-auto flex items-center gap-2 flex-wrap max-w-full">
           {loading && <span className="text-[11px] text-[var(--text-3)]">Updating…</span>}
           {error && <span className="text-[11px] text-amber-400 font-mono">{error}</span>}
           <GlobalExport filters={filters} scopeIds={brand ? rawCampaigns.map((c) => c.id) : null} disabled={!data} />

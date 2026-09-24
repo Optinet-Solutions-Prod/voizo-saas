@@ -103,7 +103,7 @@ export default function KnowledgeBasesPage() {
   const deleteTarget = items.find((i) => i.id === deleteConfirmId);
 
   return (
-    <div className="p-4 w-full grid gap-4">
+    <div className="p-4 w-full grid grid-cols-[minmax(0,1fr)] gap-4">
       {/* Header — SectionTick + 18px title, matching the dashboard section-header pattern
           (design-system rollout, Jasiel 2026-07-06). Fluid p-4 console density. */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -220,6 +220,7 @@ export default function KnowledgeBasesPage() {
                 context={`${filtered.length} knowledge base${filtered.length !== 1 ? "s" : ""}`}
                 bodyClassName="p-0"
               >
+                <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-[var(--border)] bg-[var(--bg-card)]">
@@ -261,6 +262,7 @@ export default function KnowledgeBasesPage() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               </WidgetCard>
             )}
           </div>

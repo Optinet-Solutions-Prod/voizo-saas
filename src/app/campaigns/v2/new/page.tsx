@@ -539,13 +539,15 @@ function WizardPage({
   }, [dispatch]);
 
   return (
-    <div className="h-full grid grid-cols-[240px_1fr_340px] max-[1280px]:grid-cols-[200px_1fr_300px] overflow-hidden">
+    // Three columns (steps · form · live preview) from lg up. Below that the steps become a
+    // horizontal strip above the form and the preview rail is hidden (see PreviewRail).
+    <div className="h-full grid grid-cols-1 grid-rows-[auto_1fr] lg:grid-rows-1 lg:grid-cols-[200px_1fr_300px] xl:grid-cols-[240px_1fr_340px] overflow-hidden">
       <Stepper
         currentStep={state.step}
         onJump={(s: Step) => dispatch({ type: "GOTO_STEP", step: s })}
       />
 
-      <main className="overflow-y-auto px-9 py-7 min-w-0">
+      <main className="overflow-y-auto px-4 py-5 sm:px-6 lg:px-9 lg:py-7 min-w-0">
         <div className="max-w-[720px] w-full mx-auto h-full flex flex-col">
           <nav className="flex items-center gap-1.5 text-xs text-[var(--text-3)] mb-2">
             <Link href="/campaigns" className="text-[var(--text-3)] hover:text-blue-400 transition-colors">

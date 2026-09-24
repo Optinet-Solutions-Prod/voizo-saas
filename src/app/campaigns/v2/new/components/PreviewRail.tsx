@@ -118,7 +118,8 @@ export default function PreviewRail({ state }: Props) {
   const card2Ref = useMagnetic<HTMLDivElement>();
 
   return (
-    <aside className="border-l border-[var(--border)] bg-[var(--bg-sidebar)] overflow-y-auto py-8 px-6 flex flex-col gap-3.5">
+    // Desktop-only: on phones the form needs the whole width, and the Review step repeats this.
+    <aside className="hidden lg:flex border-l border-[var(--border)] bg-[var(--bg-sidebar)] overflow-y-auto py-8 px-6 flex-col gap-3.5">
       <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-3)]">
         Live preview
       </p>

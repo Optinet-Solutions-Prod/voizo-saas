@@ -746,7 +746,7 @@ export default function SegmentImporter({ onImport, singleSelectOnly = false, wo
                       </div>
 
                       {/* Compact member list */}
-                      <div className="max-h-40 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--bg-card)]">
+                      <div className="max-h-40 overflow-auto rounded-lg border border-[var(--border)] bg-[var(--bg-card)]">
                         <table className="w-full text-xs">
                           <thead className="sticky top-0 bg-[var(--bg-card)] border-b border-[var(--border)]">
                             <tr>

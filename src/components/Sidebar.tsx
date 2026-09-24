@@ -11,6 +11,8 @@ import { useTheme } from "@/lib/themeContext";
 import { ALL_BRANDS, setBrandScope, useBrandScope } from "@/lib/brandScope";
 import { BRAND_WORKSPACES, brandGlyph, brandLabel } from "@/lib/campaignDisplay";
 import NotificationBell from "@/components/NotificationBell";
+import AccountMenu from "@/components/AccountMenu";
+import { Settings as SettingsIcon, LayoutGrid, X } from "lucide-react";
 // Animated sidebar nav icons (lucide-animated.com, motion-powered). These run
 // only on the desktop nav; the mobile bottom nav reuses the same animated icons.
 import { useReducedMotion } from "motion/react";
@@ -260,32 +262,82 @@ function MobileTopBar() {
           {isDark ? <Sun size={18} /> : <Moon size={18} />}
         </button>
         <NotificationBell size={20} align="right" />
-        <div className="w-7 h-7 bg-gradient-to-br from-primary to-primary rounded-full flex items-center justify-center">
-          <span className="text-white text-[10px] font-bold">V</span>
-        </div>
+        <AccountMenu />
       </div>
     </div>
   );
 }
 
+// Ten destinations don't fit a phone-width tab bar (the labels overlapped). The bar shows the
+// four most used and a "More" tab that opens a sheet with everything else, Settings included.
+const MOBILE_PRIMARY_HREFS = ["/dashboard", "/campaigns", "/script-builder", "/activity"];
+
 function MobileBottomNav() {
   const pathname = usePathname();
+  const [moreOpen, setMoreOpen] = useState(false);
+  const primary = MOBILE_PRIMARY_HREFS.map((h) => navItems.find((n) => n.href === h)!).filter(Boolean);
+  const rest = navItems.filter((n) => !MOBILE_PRIMARY_HREFS.includes(n.href));
+  const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
+  const restActive = rest.some((n) => isActive(n.href)) || isActive("/settings");
+  const tabCls = (active: boolean, href?: string) =>
+    `flex-1 min-w-0 flex flex-col items-center justify-center py-2 gap-1 transition-colors ${
+      // P2 Option C: active mobile-tab is blue by default, red for DNC.
+      active ? (href === "/do-not-call" ? "text-red-400" : "text-primary") : "text-[var(--text-3)] hover:text-[var(--text-2)]"
+    }`;
+
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-[var(--bg-sidebar)] border-t border-[var(--border)] flex items-center">
-      {navItems.map((item) => {
-        const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
-        const Icon = item.animatedIcon;
-        // P2 Option C: active mobile-tab is blue by default, red for DNC.
-        const activeColor = item.href === "/do-not-call" ? "text-red-400" : "text-primary";
-        return (
-          <Link key={item.href} href={item.href}
-            className={`flex-1 flex flex-col items-center justify-center py-2.5 gap-0.5 transition-colors ${isActive ? activeColor : "text-[var(--text-3)] hover:text-[var(--text-2)]"}`}>
-            <Icon size={19} />
-            <span className="text-[10px] font-medium leading-none">{item.label}</span>
-          </Link>
-        );
-      })}
-    </nav>
+    <>
+      {moreOpen && (
+        <div className="md:hidden fixed inset-0 z-40" role="dialog" aria-modal="true" aria-label="More pages">
+          <button type="button" aria-label="Close menu" onClick={() => setMoreOpen(false)} className="absolute inset-0 bg-black/50 cursor-default" />
+          <div className="absolute inset-x-0 bottom-0 rounded-t-2xl border-t border-[var(--border)] bg-[var(--bg-sidebar)] px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] animate-slide-up">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-3)]">More</span>
+              <button type="button" onClick={() => setMoreOpen(false)} aria-label="Close" className="p-1.5 rounded-lg text-[var(--text-3)] hover:text-[var(--text-1)] hover:bg-[var(--bg-elevated)]">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {rest.map((item) => {
+                const Icon = item.icon;
+                const active = isActive(item.href);
+                return (
+                  <Link key={item.href} href={item.href} onClick={() => setMoreOpen(false)}
+                    className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border px-2 py-3 text-center transition-colors ${
+                      active ? "border-primary/40 bg-primary/10 text-[var(--text-1)]" : "border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-2)] hover:bg-[var(--bg-hover)]"
+                    }`}>
+                    <Icon size={18} className={item.href === "/do-not-call" ? "text-red-400" : undefined} />
+                    <span className="text-[11px] font-medium leading-tight">{item.label}</span>
+                  </Link>
+                );
+              })}
+              <Link href="/settings" onClick={() => setMoreOpen(false)}
+                className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border px-2 py-3 text-center transition-colors ${
+                  isActive("/settings") ? "border-primary/40 bg-primary/10 text-[var(--text-1)]" : "border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-2)] hover:bg-[var(--bg-hover)]"
+                }`}>
+                <SettingsIcon size={18} />
+                <span className="text-[11px] font-medium leading-tight">Settings</span>
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-[var(--bg-sidebar)] border-t border-[var(--border)] flex items-stretch pb-[env(safe-area-inset-bottom)]">
+        {primary.map((item) => {
+          const Icon = item.animatedIcon;
+          return (
+            <Link key={item.href} href={item.href} className={tabCls(isActive(item.href), item.href)} onClick={() => setMoreOpen(false)}>
+              <Icon size={20} />
+              <span className="text-[10px] font-medium leading-none truncate max-w-full px-1">{item.label}</span>
+            </Link>
+          );
+        })}
+        <button type="button" onClick={() => setMoreOpen((v) => !v)} aria-expanded={moreOpen} className={tabCls(restActive || moreOpen)}>
+          <LayoutGrid size={20} />
+          <span className="text-[10px] font-medium leading-none">More</span>
+        </button>
+      </nav>
+    </>
   );
 }
 

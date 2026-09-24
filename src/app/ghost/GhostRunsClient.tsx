@@ -95,6 +95,7 @@ export default function GhostRunsClient() {
               <p className="text-xs text-[var(--text-3)] mt-1">Click “New run” to upload a list and launch.</p>
             </div>
           ) : (
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-[11px] uppercase tracking-wide text-[var(--text-3)] border-b border-[var(--border)]">
@@ -133,6 +134,7 @@ export default function GhostRunsClient() {
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </div>
       </div>

@@ -118,7 +118,7 @@ export default function CampaignCallsPage() {
   );
 
   return (
-    <div className="p-4 max-w-[1100px] mx-auto w-full grid gap-4">
+    <div className="p-4 max-w-[1100px] mx-auto w-full grid grid-cols-[minmax(0,1fr)] gap-4">
       <div>
         <Link
           href="/qa-prompt-testing"

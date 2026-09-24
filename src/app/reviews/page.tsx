@@ -118,7 +118,7 @@ export default function ReviewsPage() {
     // Shell — SectionTick + 18px header, matching the dashboard section-header pattern
     // (design-system rollout, Jasiel 2026-07-08). p-4/gap-4 console density; max-w reading
     // column kept (Reviews is a content column, not a full-bleed data table like DNC/Knowledge).
-    <div className="p-4 max-w-[1100px] mx-auto w-full grid gap-4">
+    <div className="p-4 max-w-[1100px] mx-auto w-full grid grid-cols-[minmax(0,1fr)] gap-4">
       <div className="flex items-end justify-between gap-4 flex-wrap">
         <div>
           <div className="flex items-center gap-2.5">

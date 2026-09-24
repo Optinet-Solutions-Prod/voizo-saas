@@ -17,7 +17,9 @@ export default function AppChrome({ children }: { children: ReactNode }) {
     <div className="flex h-screen overflow-hidden">
       <Sidebar />
       {/* right column: header + scrollable content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      {/* min-w-0: without it a wide table or nowrap strip inside a page widens this flex
+          column past the phone screen and gets clipped instead of scrolling. */}
+      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         <Header />
         {/* pt-14 offsets mobile top bar, pb-16 offsets mobile bottom nav. Transparent so the
             global dot-field shows through the content gutters. */}

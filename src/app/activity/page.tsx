@@ -177,7 +177,7 @@ export default function ActivityPage() {
   const filtersActive = campaignFilter !== "all" || statusFilter.size > 0;
 
   return (
-    <div className="p-4 w-full grid gap-4">
+    <div className="p-4 w-full grid grid-cols-[minmax(0,1fr)] gap-4">
       {/* Header — SectionTick + 18px title, matching the dashboard's section-header pattern
           (design-system rollout, Jasiel 2026-07-03). Fluid p-4 console density. */}
       <div className="flex items-start justify-between gap-4 flex-wrap">

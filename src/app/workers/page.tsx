@@ -105,7 +105,7 @@ function WorkersPageInner() {
       </div>
 
       {/* Top-left stats chip (floats over globe) */}
-      <div className="absolute top-4 left-16 z-10 flex flex-wrap items-center gap-3 bg-[var(--bg-card)]/85 backdrop-blur-xl border border-[var(--border)] rounded-xl px-4 py-2.5 text-xs">
+      <div className="absolute top-4 left-4 md:left-16 right-4 md:right-auto z-10 flex flex-wrap items-center gap-3 bg-[var(--bg-card)]/85 backdrop-blur-xl border border-[var(--border)] rounded-xl px-4 py-2.5 text-xs">
         <span className="inline-flex items-center gap-2 text-[var(--text-2)]">
           <span className="relative w-2 h-2 rounded-full bg-blue-500">
             <span className="absolute inset-0 rounded-full bg-blue-500 animate-ping opacity-50" />
@@ -158,15 +158,16 @@ function WorkersPageInner() {
         storageKey="workers-clocks-locked"
         defaultLocked={false}
         width={300}
+        mobile="hidden"
         railLabels={["WORLD CLOCKS"]}>
         <WorldClocks now={now} />
       </CollapsibleColumn>
 
       {/* Hint + sync stamp */}
-      <div className="absolute bottom-4 left-4 z-10 text-[11px] text-[var(--text-3)] font-mono pointer-events-none">
+      <div className="hidden md:block absolute bottom-4 left-4 z-10 text-[11px] text-[var(--text-3)] font-mono pointer-events-none">
         Drag to navigate <span className="opacity-50 mx-1">·</span> Click pin to inspect <span className="opacity-50 mx-1">·</span> Scroll to zoom
       </div>
-      <div className="absolute bottom-4 right-4 z-10 text-[11px] text-[var(--text-3)] font-mono inline-flex items-center gap-2">
+      <div className="hidden md:inline-flex absolute bottom-4 right-4 z-10 text-[11px] text-[var(--text-3)] font-mono items-center gap-2">
         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px] shadow-emerald-500/60 animate-pulse" />
         Live · synced {new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true }).format(now)}
       </div>
