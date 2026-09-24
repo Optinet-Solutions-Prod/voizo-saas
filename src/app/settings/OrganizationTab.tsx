@@ -1,8 +1,10 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, CreditCard, Loader2 } from "lucide-react";
 import { useOrg } from "@/lib/orgContext";
+import { PLAN_BY_KEY, formatMoney } from "@/lib/pricing";
 import { Card, Notice, RoleBadge, api, inputCls, primaryBtn } from "./ui";
 
 export default function OrganizationTab() {
@@ -29,8 +31,20 @@ export default function OrganizationTab() {
     }
   }
 
+  const plan = PLAN_BY_KEY[org.org.plan] ?? PLAN_BY_KEY.free;
+
   return (
     <div className="grid gap-4">
+      <Card title="Plan" description="What your organization is on today. Plans are set by VOIZO for now; card self-service is coming."
+        action={<Link href="/pricing" className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] px-3 text-xs font-medium text-[var(--text-2)] hover:text-[var(--text-1)]">Compare plans <ArrowRight size={13} /></Link>}>
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary"><CreditCard size={22} /></div>
+          <div className="min-w-0 flex-1">
+            <p className="text-base font-semibold text-[var(--text-1)]">{plan.name} <span className="ml-1 text-sm font-normal text-[var(--text-3)]">{formatMoney(plan.monthly.USD, "USD")} / {formatMoney(plan.monthly.EUR, "EUR")} per month</span></p>
+            <p className="text-xs text-[var(--text-3)]">{plan.includedMinutes.toLocaleString()} minutes included · {plan.users === "unlimited" ? "unlimited" : plan.users} users · {plan.brands === "unlimited" ? "unlimited" : plan.brands} brands · {plan.agents}</p>
+          </div>
+        </div>
+      </Card>
       <Card title="Organization" description="The company or team this console belongs to. Everything you create here is visible only to its members.">
         <form onSubmit={save} className="grid gap-4 sm:max-w-md">
           {msg && <Notice kind={msg.kind}>{msg.text}</Notice>}

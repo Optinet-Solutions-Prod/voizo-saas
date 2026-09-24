@@ -87,6 +87,16 @@ checkout yet, per Chris's decision).
   Goal box, the persona and the voice (`src/lib/agents/install.ts`). Placeholders like
   `{{company}}`, `{{first_name}}`, `{{link}}` are left for the operator to fill.
 
+## Pricing (Phase 6, 2026-09-24)
+`src/lib/pricing.ts` + public `/pricing` (USD/EUR and monthly/yearly toggles) + the Plan card in
+Settings → Organization. Display only — no Stripe (Chris's decision); VOIZO staff set a plan in
+Settings → Platform (`organizations.plan`). Plans: Free $0 (60 min, 3 free agents) · Starter
+$49/€45 (500 min, $0.15/min extra) · Pro $149/€139 (2,000 min, $0.12, all 20 agents, own
+ElevenLabs voices, QA judge) · Scale $449/€419 (8,000 min, $0.10, BYO telephony, SLA). Yearly
+≈15% off. Paid agents $19/€18 one-off on Free/Starter, included on Pro/Scale. Research basis is
+in the file header (Bland, Retell, Vapi, Autocalls, Goodcall, Sept 2026). Minute metering and
+overage billing are not implemented; the numbers are the offer, not enforced limits.
+
 ## Admin auth
 Supabase Auth (email + password). `/` (landing) and `/login` are public; everything else
 needs a signed-in user whose **`app_metadata.role` is `"admin"`**, checked in

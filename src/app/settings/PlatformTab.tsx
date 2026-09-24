@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Loader2, ShieldCheck, Unlock } from "lucide-react";
 import { AGENT_CATALOG } from "@/lib/agents/catalog";
+import { PLANS } from "@/lib/pricing";
 import { Card, Notice, api, dangerBtn, primaryBtn, selectCls } from "./ui";
 
 // VOIZO staff only (auth app_metadata.role = "admin"): unlock paid agents for any organization
@@ -15,6 +16,7 @@ export default function PlatformTab() {
   const [orgs, setOrgs] = useState<OrgRow[] | null>(null);
   const [slug, setSlug] = useState("");
   const [agentKey, setAgentKey] = useState(AGENT_CATALOG.find((a) => a.tier === "pro")?.key ?? "");
+  const [plan, setPlan] = useState("starter");
   const [purchases, setPurchases] = useState<Purchase[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
@@ -32,6 +34,17 @@ export default function PlatformTab() {
     catch (e) { setMsg({ kind: "error", text: e instanceof Error ? e.message : "Could not load" }); }
   }, []);
   useEffect(() => { void loadPurchases(slug); }, [slug, loadPurchases]);
+
+  async function setOrgPlan() {
+    setBusy("plan"); setMsg(null);
+    try {
+      await api("/api/admin/org-plan", { method: "PATCH", body: JSON.stringify({ orgSlug: slug, plan }) });
+      setMsg({ kind: "ok", text: `${slug} is now on the ${PLANS.find((p) => p.key === plan)?.name ?? plan} plan.` });
+      const r = await api<{ organizations: OrgRow[] }>("/api/admin/agent-purchases");
+      setOrgs(r.organizations);
+    } catch (err) { setMsg({ kind: "error", text: err instanceof Error ? err.message : "Could not change the plan" }); }
+    finally { setBusy(null); }
+  }
 
   async function unlock(e: FormEvent) {
     e.preventDefault();
@@ -54,6 +67,23 @@ export default function PlatformTab() {
     <div className="grid gap-4">
       <Notice kind="info"><span className="inline-flex items-center gap-1.5"><ShieldCheck size={14} /> You see this tab because your account is marked as VOIZO platform staff.</span></Notice>
       {msg && <Notice kind={msg.kind}>{msg.text}</Notice>}
+      <Card title="Set an organization's plan" description="Pro and Scale include all twenty agents; Free and Starter get the three free ones plus unlocks.">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div className="flex-1">
+            <label htmlFor="pl-plan-org" className="mb-1.5 block text-xs font-medium text-[var(--text-2)]">Organization</label>
+            <select id="pl-plan-org" value={slug} onChange={(e) => setSlug(e.target.value)} className={`${selectCls} w-full`}>
+              {(orgs ?? []).map((o) => <option key={o.id} value={o.slug}>{o.name} ({o.slug}) · {o.plan}</option>)}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="pl-plan" className="mb-1.5 block text-xs font-medium text-[var(--text-2)]">Plan</label>
+            <select id="pl-plan" value={plan} onChange={(e) => setPlan(e.target.value)} className={`${selectCls} w-full sm:w-40`}>
+              {PLANS.map((p) => <option key={p.key} value={p.key}>{p.name}</option>)}
+            </select>
+          </div>
+          <button type="button" onClick={setOrgPlan} disabled={!slug || busy === "plan"} className={primaryBtn}>{busy === "plan" ? <Loader2 size={14} className="animate-spin" /> : null} Save plan</button>
+        </div>
+      </Card>
       <Card title="Unlock a paid agent" description="Grants an organization one of the paid pre-built agents. Free agents never need this.">
         <form onSubmit={unlock} className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div className="flex-1">

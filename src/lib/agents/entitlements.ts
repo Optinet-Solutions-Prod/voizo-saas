@@ -1,4 +1,5 @@
-import { AGENT_BY_KEY, FREE_AGENT_KEYS } from "./catalog";
+import { AGENT_BY_KEY, AGENT_CATALOG, FREE_AGENT_KEYS } from "./catalog";
+import { PLANS_WITH_ALL_AGENTS } from "../pricing";
 
 // Which pre-built agents an organization may install: the free ones always, the rest once an
 // agent_purchases row exists (written by VOIZO platform admins; no card checkout yet).
@@ -8,7 +9,11 @@ const db = async () => (await import("../supabaseServer")).supabaseService;
 export async function unlockedAgentKeys(orgId: string): Promise<Set<string>> {
   const keys = new Set<string>(FREE_AGENT_KEYS);
   try {
-    const { data } = await (await db()).from("agent_purchases").select("agent_key").eq("org_id", orgId);
+    const client = await db();
+    // Pro and Scale plans include every agent (src/lib/pricing.ts).
+    const { data: org } = await client.from("organizations").select("plan").eq("id", orgId).maybeSingle();
+    if (org && PLANS_WITH_ALL_AGENTS.has(org.plan as string)) return new Set(AGENT_CATALOG.map((a) => a.key));
+    const { data } = await client.from("agent_purchases").select("agent_key").eq("org_id", orgId);
     for (const r of data ?? []) keys.add(r.agent_key as string);
   } catch {
     /* table missing (tenancy migration not applied) → free agents only */
