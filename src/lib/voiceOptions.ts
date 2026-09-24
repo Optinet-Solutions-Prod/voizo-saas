@@ -15,6 +15,14 @@ export const VOICE_OPTIONS: ReadonlyArray<{ id: string; name: string }> = [
 
 const BY_ID = new Map(VOICE_OPTIONS.map((v) => [v.id, v.name]));
 
+/**
+ * SaaS (2026-09-24): the organization's own ElevenLabs voices (and the script-builder library)
+ * register their names here once loaded (useVoiceOptions), so voiceName() can label them too.
+ */
+export function registerVoiceNames(voices: { id: string; name: string }[]): void {
+  for (const v of voices) if (!BY_ID.has(v.id)) BY_ID.set(v.id, v.name);
+}
+
 /** Friendly voice name for a voice_id. `short` returns just the persona (text before
  *  the first dash) — e.g. "Stephen". Returns null for null/unknown ids (caller falls back). */
 export function voiceName(voiceId: string | null | undefined, opts?: { short?: boolean }): string | null {

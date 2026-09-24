@@ -11,6 +11,7 @@
  * Server-side only — the Vapi private key never leaves this handler.
  */
 
+import { voiceExtrasForRequest } from "../../../lib/voices/orgVoices";
 import { NextResponse } from "next/server";
 // Relative import — vitest does not resolve "@/" (testable-route convention).
 import { labAssistantId, LAB_ASSISTANT_ENV_HINT } from "../../../lib/scriptEngine/lab-assistant";
@@ -171,6 +172,12 @@ export async function PATCH(req: Request) {
 
   const assistant = await getRes.json();
   const patchBody: Record<string, unknown> = {};
+
+  // SaaS: a voice from the organization's own ElevenLabs account needs that account's key on the assistant.
+  if (wantsVoice && voice?.voiceId) {
+    const extras = await voiceExtrasForRequest();
+    if (extras.voiceCredentials && extras.allowedVoiceIds.includes(voice.voiceId)) patchBody.credentials = [extras.voiceCredentials];
+  }
 
   if (wantsSystemPrompt && typeof systemPrompt === "string") {
     const model = assistant?.model ?? {};

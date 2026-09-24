@@ -1,12 +1,12 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import type { User } from "@supabase/supabase-js";
-import { supabaseService, tenancyProvisioned } from "@/lib/supabaseServer";
+import { supabaseService, tenancyProvisioned } from "./supabaseServer";
 
 // Who is making this request, and which organization are they in.
 // Server-only (route handlers, server components).
 
-import { canManageOrg, slugify, ROLE_RANK, type OrgRole } from "@/lib/tenantShared";
+import { canManageOrg, slugify, ROLE_RANK, type OrgRole } from "./tenantShared";
 export { canManageOrg, slugify, ROLE_RANK, type OrgRole };
 
 export interface Brand {

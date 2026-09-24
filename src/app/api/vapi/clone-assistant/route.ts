@@ -30,6 +30,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseServer";
 import { leaseSlot, patchPhoneAssistant, releaseSlot } from "@/lib/vapi/sipPool";
 import { createClone } from "@/lib/vapi/cloneAssistant";
+import { voiceExtrasForRequest } from "../../../../lib/voices/orgVoices";
 
 export async function POST(request: NextRequest) {
   const key = process.env.VAPI_PRIVATE_KEY;
@@ -76,6 +77,9 @@ export async function POST(request: NextRequest) {
   // it (the campaign persists the COPY, not the operator's original).
   let campaignScript: { id: string; name: string } | null = null;
 
+  // SaaS: the organization's own ElevenLabs voices are allowed and its key rides on the clone.
+  const voiceExtras = await voiceExtrasForRequest();
+
   let cloneResult;
   if (agentMode === "script") {
     if (!scriptId) {
@@ -119,7 +123,7 @@ export async function POST(request: NextRequest) {
     const { composeScriptClone } = await import("@/lib/scriptEngine/composeAssistant");
     const persona = (body.persona as string | undefined) ?? systemPrompt;
     const scriptClone = await composeScriptClone({ scriptId: copy.id, persona });
-    cloneResult = await createClone(key, scriptBase, { voiceId: scriptVoiceId ?? voiceId, campaignName, scriptClone, serverUrl });
+    cloneResult = await createClone(key, scriptBase, { voiceId: scriptVoiceId ?? voiceId, campaignName, scriptClone, serverUrl, ...voiceExtras });
     // Clone failed → the script copy is orphaned; best-effort remove it.
     if (!cloneResult.ok) {
       await deleteScript(copy.id).catch(() => {});
@@ -138,6 +142,7 @@ export async function POST(request: NextRequest) {
       voiceId,
       systemPrompt,
       campaignName,
+      ...voiceExtras,
     });
   }
 

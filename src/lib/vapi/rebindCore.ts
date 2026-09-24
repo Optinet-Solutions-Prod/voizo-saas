@@ -35,6 +35,8 @@
  * the appropriate HTTP status and shape.
  */
 
+import { voiceCloneExtras } from "../voices/orgVoices";
+import { orgIdForCampaign } from "../integrations/store";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClone } from "@/lib/vapi/cloneAssistant";
 import { leaseSlot, linkSlot, patchPhoneAssistant, releaseSlot } from "@/lib/vapi/sipPool";
@@ -99,6 +101,7 @@ export async function executeRebindCore(
       campaignName: campaign.name ?? undefined,
       scriptClone,
       serverUrl,
+      ...(await voiceCloneExtras(await orgIdForCampaign(campaign.id))),
     });
     if (cloneResult.ok && scriptVoiceId) {
       const { ensureCloneVoice } = await import("@/lib/vapi/cloneAssistant");
@@ -109,6 +112,7 @@ export async function executeRebindCore(
       voiceId: campaign.voice_id ?? undefined,
       systemPrompt: campaign.system_prompt ?? undefined,
       campaignName: campaign.name ?? undefined,
+      ...(await voiceCloneExtras(await orgIdForCampaign(campaign.id))),
     });
   }
 

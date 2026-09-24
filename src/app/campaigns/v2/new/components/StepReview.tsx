@@ -14,7 +14,7 @@ import {
   validateBeforeSubmit,
   type Step, type WizardAction, type WizardState, type DialIdentities,
 } from "../wizardState";
-import { VOICE_OPTIONS } from "@/lib/voiceOptions";
+import { voiceName } from "@/lib/voiceOptions";
 
 interface Props {
   state: WizardState;
@@ -193,9 +193,9 @@ export default function StepReview({ state, dispatch, dialIdentities }: Props) {
               label="Voice"
               value={
                 <>
-                  {VOICE_OPTIONS.find((v) => v.id === state.baseVoiceId)?.name ? (
+                  {voiceName(state.baseVoiceId) ? (
                     <span className="text-[12px] text-[var(--text-2)]">
-                      {VOICE_OPTIONS.find((v) => v.id === state.baseVoiceId)?.name}
+                      {voiceName(state.baseVoiceId)}
                     </span>
                   ) : (
                     <span className="text-[12px] text-[var(--text-2)]">

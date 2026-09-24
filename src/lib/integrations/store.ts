@@ -1,5 +1,8 @@
-import { supabaseService } from "@/lib/supabaseServer";
-import { decryptJson } from "@/lib/integrations/crypto";
+import { decryptJson } from "./crypto";
+
+// Loaded lazily: supabaseServer throws at import time without env, and unit tests reach this
+// module through recurringSpawn / rebindCore.
+const db = async () => (await import("../supabaseServer")).supabaseService;
 
 // Server-side access to an organization's stored credentials, for the code that USES them
 // (cron, webhooks, voice lookups). Reads with the service role because callers often have no
@@ -16,7 +19,7 @@ export async function getOrgIntegration<C extends Record<string, string> = Recor
   orgId: string,
   provider: string,
 ): Promise<OrgIntegration<C> | null> {
-  const { data, error } = await supabaseService
+  const { data, error } = await (await db())
     .from("org_integrations")
     .select("provider, credentials, config, status")
     .eq("org_id", orgId)
@@ -37,6 +40,6 @@ export async function getOrgIntegration<C extends Record<string, string> = Recor
 
 /** The organization that owns a campaign — how cron/webhook code finds "whose keys". */
 export async function orgIdForCampaign(campaignId: string): Promise<string | null> {
-  const { data } = await supabaseService.from("campaigns_v2").select("org_id").eq("id", campaignId).maybeSingle();
+  const { data } = await (await db()).from("campaigns_v2").select("org_id").eq("id", campaignId).maybeSingle();
   return (data?.org_id as string | null) ?? null;
 }

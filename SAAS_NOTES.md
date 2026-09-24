@@ -62,6 +62,14 @@ Server code reads an org's credentials with `getOrgIntegration(orgId, provider)`
 (`src/lib/integrations/store.ts`). The call pipeline still reads the env vars; switching it to
 per-org credentials is part of the later dialing work.
 
+## ElevenLabs voices (Phase 4, 2026-09-24)
+Once an organization connects ElevenLabs (Settings → Integrations), its own voices appear in
+the script builder's voice picker under "Your ElevenLabs voices" (`/api/org/voices`, cached 5
+min). Assistants that use such a voice get the org's ElevenLabs key attached inline as a Vapi
+assistant credential (`credentials: [{ provider: "11labs", apiKey }]`) — on campaign clones,
+rebinds, daily spawns and the lab assistant — so Vapi can synthesise a voice that isn't in
+VOIZO's own ElevenLabs account. `voiceCloneExtras(orgId)` in `src/lib/voices/orgVoices.ts`.
+
 ## Admin auth
 Supabase Auth (email + password). `/` (landing) and `/login` are public; everything else
 needs a signed-in user whose **`app_metadata.role` is `"admin"`**, checked in

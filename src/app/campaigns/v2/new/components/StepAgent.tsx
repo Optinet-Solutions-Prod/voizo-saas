@@ -4,7 +4,7 @@ import { Bot, FileText, Loader2, Megaphone } from "lucide-react";
 import type { Dispatch } from "react";
 
 import type { WizardAction, WizardState } from "../wizardState";
-import { VOICE_OPTIONS } from "@/lib/voiceOptions";
+import { voiceName } from "@/lib/voiceOptions";
 import StyledSelect from "@/components/StyledSelect";
 import { DEFAULT_SHORT_PROMPT } from "@/lib/scriptEngine/lab-tools";
 
@@ -167,7 +167,7 @@ export default function StepAgent({ state, dispatch, assistants, assistantsError
                   <span>
                     Voice:{" "}
                     <span className="text-[var(--text-2)]">
-                      {VOICE_OPTIONS.find((v) => v.id === state.baseVoiceId)?.name ??
+                      {voiceName(state.baseVoiceId) ??
                         (state.baseVoiceId ? "Custom voice" : "agent default")}
                     </span>
                   </span>
@@ -259,7 +259,7 @@ export default function StepAgent({ state, dispatch, assistants, assistantsError
             <span>
               Voice:{" "}
               <span className="text-[var(--text-2)]">
-                {(state.baseVoiceId && VOICE_OPTIONS.find((v) => v.id === state.baseVoiceId)?.name) || "agent default"}
+                {(state.baseVoiceId && voiceName(state.baseVoiceId)) || "agent default"}
               </span>
             </span>
             <span className="text-[10px] uppercase tracking-wide text-[var(--text-3)] bg-[var(--bg-app)] px-1.5 py-0.5 rounded font-medium">

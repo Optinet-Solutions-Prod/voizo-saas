@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { VOICE_OPTIONS } from "@/lib/scriptEngine/voices";
+import { useVoiceOptions } from "@/lib/useVoiceOptions";
 import { DEFAULT_SHORT_PROMPT } from "@/lib/scriptEngine/lab-tools";
 import { getLabSettings, saveLabSettings, updateScript } from "@/lib/scriptEngine/lab-db-client";
 import { reconcileAssistantId } from "./assistantChoice";
@@ -58,13 +59,14 @@ export default function LabConfigForm({ onAssistantChange, scriptId = null, scri
   // Set once the operator types in the persona box for the open script —
   // async prefills must never overwrite typing.
   const personaDirty = useRef(false);
-  const [voiceId, setVoiceId] = useState<string>(
-    scriptVoiceId && VOICE_OPTIONS.some((v) => v.voiceId === scriptVoiceId) ? scriptVoiceId : VOICE_OPTIONS[0].voiceId,
-  );
+  // SaaS: the library plus the organization's own ElevenLabs voices. A saved voice id that
+  // isn't in the library may be a custom one, so it is kept rather than reset.
+  const voices = useVoiceOptions();
+  const [voiceId, setVoiceId] = useState<string>(scriptVoiceId || VOICE_OPTIONS[0].voiceId);
   // Re-sync the picker to the script's saved voice when a different script opens
   // (VOZ-252) — otherwise a Save would overwrite it with the default.
   useEffect(() => {
-    if (scriptVoiceId && VOICE_OPTIONS.some((v) => v.voiceId === scriptVoiceId)) setVoiceId(scriptVoiceId);
+    if (scriptVoiceId) setVoiceId(scriptVoiceId);
   }, [scriptVoiceId]);
   const [serverOverride, setServerOverride] = useState("");
   const [envBaseUrl, setEnvBaseUrl] = useState<string | null>(null);
@@ -196,7 +198,8 @@ export default function LabConfigForm({ onAssistantChange, scriptId = null, scri
       }
 
       // 2. Push prompt + voice onto the assistant
-      const voice = VOICE_OPTIONS.find((v) => v.voiceId === voiceId);
+      // Every selectable voice is ElevenLabs (library or the org's own account).
+      const voice = voiceId ? { provider: "11labs", voiceId } : undefined;
       const r1 = await fetch("/api/vapi-assistant", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -277,12 +280,32 @@ export default function LabConfigForm({ onAssistantChange, scriptId = null, scri
               value={voiceId}
               onChange={(e) => setVoiceId(e.target.value)}
             >
-              {VOICE_OPTIONS.map((v) => (
-                <option key={v.voiceId} value={v.voiceId}>
-                  {v.label}
-                </option>
-              ))}
+              {voices.custom.length > 0 && (
+                <optgroup label="Your ElevenLabs voices">
+                  {voices.custom.map((v) => (
+                    <option key={v.voiceId} value={v.voiceId}>
+                      {v.label}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              <optgroup label="VOIZO voice library">
+                {voices.library.map((v) => (
+                  <option key={v.voiceId} value={v.voiceId}>
+                    {v.label}
+                  </option>
+                ))}
+              </optgroup>
+              {voiceId && !voices.all.some((v) => v.voiceId === voiceId) && (
+                <option value={voiceId}>Saved voice ({voiceId.slice(0, 8)}…)</option>
+              )}
             </select>
+            <p className="mt-1 text-[11px] text-[var(--text-3)]">
+              {voices.connected
+                ? `${voices.custom.length} voice${voices.custom.length === 1 ? "" : "s"} from your ElevenLabs account.`
+                : "Connect ElevenLabs under Settings → Integrations to use your own voices."}
+              {voices.error ? ` ${voices.error}.` : ""}
+            </p>
           </div>
         </div>
       </Section>

@@ -23,6 +23,8 @@
 // this module is now under test (recurringSpawn.test.ts). snapshotCampaignPrompt
 // moved to a lazy import inside spawnChildIfDue — its module chain loads
 // supabaseServer, which throws at import time without env vars (test poison).
+import { voiceCloneExtras } from "../voices/orgVoices";
+import { orgIdForCampaign } from "../integrations/store";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClone } from "../vapi/cloneAssistant";
 import { fetchSegmentPhones } from "../customerio";
@@ -493,6 +495,7 @@ export async function spawnChildIfDue(
         campaignName: `${parent.name} (${todayStr})`,
         scriptClone,
         serverUrl,
+        ...(await voiceCloneExtras(await orgIdForCampaign(parent.id))),
       });
       if (cloneResult.ok && scriptVoiceId) {
         const { ensureCloneVoice } = await import("../vapi/cloneAssistant");
@@ -509,6 +512,7 @@ export async function spawnChildIfDue(
       voiceId: parent.voice_id ?? undefined,
       systemPrompt: parent.system_prompt,
       campaignName: `${parent.name} (${todayStr})`,
+      ...(await voiceCloneExtras(await orgIdForCampaign(parent.id))),
     });
   }
   if (!cloneResult.ok) {

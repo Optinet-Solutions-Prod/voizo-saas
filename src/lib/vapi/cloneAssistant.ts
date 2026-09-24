@@ -407,6 +407,16 @@ export interface CreateCloneOverrides {
    * clone is byte-for-byte the current agent-mode clone.
    */
   scriptClone?: ScriptCloneConfig;
+  /**
+   * SaaS (2026-09-24): voice ids from the organization's own ElevenLabs account, allowed in
+   * addition to KNOWN_VOICES / VOICE_OPTIONS. From voiceCloneExtras(orgId).
+   */
+  allowedVoiceIds?: string[];
+  /**
+   * The organization's ElevenLabs key, attached inline as an assistant credential so Vapi can
+   * synthesise a voice that lives in that account. Only sent when present.
+   */
+  voiceCredentials?: { provider: "11labs"; apiKey: string };
 }
 
 export interface VapiClone {
@@ -445,9 +455,9 @@ export async function createClone(
     return { ok: false, status: 400, error: "baseAssistantId is required" };
   }
 
-  const { voiceId, systemPrompt, campaignName, serverUrl, scriptClone } = overrides;
+  const { voiceId, systemPrompt, campaignName, serverUrl, scriptClone, allowedVoiceIds, voiceCredentials } = overrides;
 
-  if (voiceId && !KNOWN_VOICE_IDS.has(voiceId)) {
+  if (voiceId && !KNOWN_VOICE_IDS.has(voiceId) && !(allowedVoiceIds ?? []).includes(voiceId)) {
     return { ok: false, status: 400, error: "Unknown voiceId" };
   }
 
@@ -795,6 +805,8 @@ export async function createClone(
     // tags Maria set on the base. Merge preserves base.metadata while ensuring
     // our voizoClone marker is always present for the assistant-picker filter.
     metadata: { ...(base.metadata ?? {}), voizoClone: true, ...(scriptClone ? { scriptEngine: true } : {}) },
+    // ── Organization's own ElevenLabs key (SaaS): lets a custom voice synthesise ──
+    ...(voiceCredentials ? { credentials: [voiceCredentials] } : {}),
     // ── Strip Vapi-server-set fields (POST /assistant rejects these) ──
     id: undefined,
     orgId: undefined,
