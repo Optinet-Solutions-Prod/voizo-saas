@@ -1,5 +1,24 @@
 # Voizo SaaS — fork notes
 
+## Chris: what's left for you (as of 2026-09-24)
+1. **Push the last commits.** `git push` from this machine stopped working mid-afternoon
+   ("could not read Username for https://github.com" — the credential manager can't prompt
+   non-interactively). Commits `ebd65d8` (voices), `e010b2b` (agents), `d2cffd4` (pricing) and
+   `c77b10e` (tours) are local only; open a terminal and run `git push origin main`.
+2. **Run `supabase-migration-saas-tenancy.sql`** once in the Supabase SQL editor. Until then the
+   console runs single-workspace and Settings explains this. It makes your admin account owner of
+   the "Optinet" organization and switches on members, invites, brands, integrations, phone
+   numbers and agent unlocks.
+3. **Vercel env:** add `INTEGRATIONS_ENCRYPTION_KEY` (any long random string) before anyone
+   stores provider credentials.
+4. **Sample voices:** the 20 agent clips were generated with OpenAI TTS. For ElevenLabs, put
+   `ELEVENLABS_API_KEY` in `.env.local` and run
+   `node scripts/generate-agent-samples.mjs --provider elevenlabs --force`.
+5. **Supabase Auth:** leave "Allow new users to sign up" ON — `/signup` is now a feature.
+   Consider an SMTP provider in Supabase for reliable confirmation emails.
+6. Optional: set your organization's plan and unlock agents in Settings → Platform (your account
+   has the platform-admin flag).
+
 A copy of the internal Voizo dialer/dashboard, being adapted into a multi-tenant SaaS.
 
 ## Origin
