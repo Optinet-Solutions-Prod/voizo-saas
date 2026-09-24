@@ -28,9 +28,19 @@ The whole app is gated by **HTTP Basic Auth** in `src/middleware.ts` using
 `DASHBOARD_USERNAME` + `DASHBOARD_PASSWORD`. The browser prompts on first load.
 If both are unset the middleware leaves the app open, so always set them.
 
+## Vercel crons (removed for now)
+All crons were removed from `vercel.json` for the first deploy (agent/UI testing only; the
+every-minute ones need Vercel Pro). Restore from git history (`git show 4029b52:vercel.json`)
+when calling goes live. The set was:
+- `* * * * *` campaign-scheduler, realtime-poll
+- `*/5 * * * *` recording-backfill · `*/30 * * * *` campaign-heartbeat, score-backfill
+- `15 * * * *` alerts-hourly · `0 */3 * * *` qa-import-sweep
+- daily: stuck-slot-watchdog (09:00), golden-replay (09:30), daily-snapshot (07:00),
+  qa-analysis-daily (06:00), mobivate-reconcile (04:20), cio-message-pull (05:10)
+
 ## Status
 - [x] Repo copied to `voizo-saas`
-- [ ] Supabase schema provisioned (structure only)
+- [x] Supabase schema provisioned (structure only)
 - [ ] Env configured for the new project
 - [ ] Calling providers wired (Vapi, etc.)
 - No campaigns / data seeded (by design)
