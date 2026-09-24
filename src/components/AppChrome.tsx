@@ -2,10 +2,11 @@
 
 // The console shell (sidebar + header + scrolling main). The public pages — the landing page and
 // the sign-in page — render full-bleed without it.
-import { ReactNode } from "react";
+import { ReactNode, Suspense } from "react";
 import { usePathname } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import Header from "@/components/Header";
+import TourLauncher from "@/components/TourLauncher";
 
 const BARE_PATHS = new Set(["/", "/login", "/signup", "/onboarding", "/pricing", "/agents"]);
 const BARE_PREFIXES = ["/invite/", "/auth/"];
@@ -28,6 +29,10 @@ export default function AppChrome({ children }: { children: ReactNode }) {
           {children}
         </main>
       </div>
+      {/* Guided tours + the floating ? button (console pages only). */}
+      <Suspense fallback={null}>
+        <TourLauncher />
+      </Suspense>
     </div>
   );
 }

@@ -50,9 +50,9 @@ function SettingsInner() {
   return (
     <div className="p-4 max-w-[1000px] mx-auto w-full grid grid-cols-[minmax(0,1fr)] gap-4">
       <Header />
-      <div className="flex w-full sm:w-fit max-w-full overflow-x-auto hide-scrollbar gap-1 p-1 bg-[var(--bg-card)] border border-[var(--border)] rounded-xl">
+      <div data-tour="settings-tabs" className="flex w-full sm:w-fit max-w-full overflow-x-auto hide-scrollbar gap-1 p-1 bg-[var(--bg-card)] border border-[var(--border)] rounded-xl">
         {tabs.map(({ key, label, icon: Icon }) => (
-          <button key={key} type="button" onClick={() => setTab(key)}
+          <button key={key} type="button" data-tour={`tab-${key}`} onClick={() => setTab(key)}
             className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-medium transition whitespace-nowrap ${tab === key ? "bg-[var(--bg-elevated)] text-[var(--text-1)]" : "text-[var(--text-3)] hover:text-[var(--text-1)]"}`}>
             <Icon size={13} /> {label}
           </button>

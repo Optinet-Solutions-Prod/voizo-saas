@@ -97,6 +97,17 @@ ElevenLabs voices, QA judge) · Scale $449/€419 (8,000 min, $0.10, BYO telepho
 in the file header (Bland, Retell, Vapi, Autocalls, Goodcall, Sept 2026). Minute metering and
 overage billing are not implemented; the numbers are the offer, not enforced limits.
 
+## Guided tours (Phase 7, 2026-09-24)
+Four spotlight tours in `src/lib/tours/tours.ts`: **Welcome** (auto-starts on the first visit to
+the dashboard, or with `?welcome=1` after onboarding), **Campaign** (first visit to the wizard),
+**Script Builder** (first visit; covers templates, palette, canvas, cog, test call, save) and
+**Organization** (first visit to Settings; members, brands, integrations, phone numbers). Every
+step has Skip; Esc skips; ←/→ move. Targets are `data-tour="…"` attributes; a step whose target
+isn't on screen (phone) shows centred. Completion (`done` / `skipped`) is saved in localStorage
+and in the user's `auth.user_metadata.tours`, so it follows the user across devices. The floating
+**?** button (bottom-right, above the phone tab bar) lists all tours to replay them or reset.
+`/<page>?tour=<id>` starts a tour on arrival.
+
 ## Admin auth
 Supabase Auth (email + password). `/` (landing) and `/login` are public; everything else
 needs a signed-in user whose **`app_metadata.role` is `"admin"`**, checked in

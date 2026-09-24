@@ -2073,6 +2073,7 @@ export default function ScriptBuilder({ onClose, initialScriptId }: Props) {
               setSelNodeId(null);
               setSelEdgeId(null);
             }}
+            data-tour="sb-config"
             title="Configuration — voice agent, persona, listener tuning (shared with the Listener Lab)"
             className={`rounded-lg border p-2 transition ${
               configOpen ? "border-primary bg-primary/15 text-primary" : "border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--bg-hover)]"
@@ -2145,6 +2146,7 @@ export default function ScriptBuilder({ onClose, initialScriptId }: Props) {
 
           {/* Run: save → QA → live test call with the canvas as the monitor */}
           <button
+            data-tour="sb-run"
             onClick={handleRunClick}
             disabled={!scriptId || busy || qaBusy}
             title={
@@ -2168,7 +2170,7 @@ export default function ScriptBuilder({ onClose, initialScriptId }: Props) {
           </button>
 
           {/* Save */}
-          <button onClick={handleSave} disabled={!scriptId || busy || !dirty || locked} title={locked ? "Locked — this script is used by a running campaign. Unlock to save." : dirty ? "Save" : "No changes to save"} className="rounded-lg bg-primary p-2 text-white transition hover:-translate-y-px disabled:opacity-40">
+          <button data-tour="sb-save" onClick={handleSave} disabled={!scriptId || busy || !dirty || locked} title={locked ? "Locked — this script is used by a running campaign. Unlock to save." : dirty ? "Save" : "No changes to save"} className="rounded-lg bg-primary p-2 text-white transition hover:-translate-y-px disabled:opacity-40">
             {busy ? (
               <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" strokeDasharray="42" strokeLinecap="round" /></svg>
             ) : (
@@ -2239,7 +2241,7 @@ export default function ScriptBuilder({ onClose, initialScriptId }: Props) {
             <span className="text-[9px] font-semibold uppercase tracking-wider text-[var(--text-3)] [writing-mode:vertical-rl]">Boxes</span>
           </button>
         ) : (
-        <div className="flex w-44 shrink-0 flex-col border-r border-[var(--border)] max-md:absolute max-md:inset-y-0 max-md:left-0 max-md:z-20 max-md:w-60 max-md:bg-[var(--bg-app)] max-md:shadow-2xl">
+        <div data-tour="sb-palette" className="flex w-44 shrink-0 flex-col border-r border-[var(--border)] max-md:absolute max-md:inset-y-0 max-md:left-0 max-md:z-20 max-md:w-60 max-md:bg-[var(--bg-app)] max-md:shadow-2xl">
           <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] px-3 py-2">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-3)]">Boxes</p>
             <button onClick={() => setPaletteOpen(false)} title="Collapse the palette" className="text-[var(--text-3)] transition hover:text-[var(--text-2)]">
@@ -2593,7 +2595,7 @@ export default function ScriptBuilder({ onClose, initialScriptId }: Props) {
                 </div>
               );
             })()}
-          <div className="relative order-1 min-h-0 flex-1">
+          <div data-tour="sb-canvas" className="relative order-1 min-h-0 flex-1">
           {scriptId ? (
             <ReactFlow
               nodes={displayNodes}

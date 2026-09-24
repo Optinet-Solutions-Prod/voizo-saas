@@ -113,6 +113,7 @@ function NavRow({ item, isActive, collapsed }: { item: NavItem; isActive: boolea
     <li>
       <Link
         href={item.href}
+        data-tour={`nav-${item.href.slice(1)}`}
         title={collapsed ? item.label : undefined}
         onMouseEnter={() => { if (!reduce) iconRef.current?.startAnimation(); }}
         onMouseLeave={() => iconRef.current?.stopAnimation()}
@@ -163,7 +164,7 @@ function BrandSwitcher({ collapsed }: { collapsed: boolean }) {
   return (
     // The VOIZO block IS the switcher (Jasiel 2026-09-03): the brand sits where "DIALER" was, and
     // the block opens the brand menu. The logo mark stays the V for now.
-    <div className="relative min-w-0">
+    <div className="relative min-w-0" data-tour="brand-switcher">
       <button
         type="button"
         aria-haspopup="menu"

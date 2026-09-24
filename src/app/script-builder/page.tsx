@@ -142,12 +142,14 @@ function ScriptBuilderInner() {
         </div>
         {/* Pre-built agents (SaaS Phase 5): twenty ready-made scripts to start from. */}
         <Link
+          data-tour="sb-templates"
           href="/script-builder/templates"
           className="shrink-0 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] px-4 py-2.5 text-sm font-semibold text-[var(--text-2)] transition hover:text-[var(--text-1)] hover:bg-[var(--bg-hover)]"
         >
           Agent templates
         </Link>
         <button
+          data-tour="sb-new"
           onClick={openCreate}
           className="shrink-0 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-px"
         >

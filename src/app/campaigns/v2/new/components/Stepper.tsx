@@ -13,7 +13,7 @@ interface Props {
 // form: circle + short name only, scrolling sideways if the five steps don't fit the width.
 export default function Stepper({ currentStep, onJump }: Props) {
   return (
-    <aside className="border-b lg:border-b-0 lg:border-r border-[var(--border)] overflow-x-auto hide-scrollbar lg:overflow-y-auto px-4 py-3 lg:py-8 lg:pl-6 lg:pr-2">
+    <aside data-tour="wizard-steps" className="border-b lg:border-b-0 lg:border-r border-[var(--border)] overflow-x-auto hide-scrollbar lg:overflow-y-auto px-4 py-3 lg:py-8 lg:pl-6 lg:pr-2">
       <p className="hidden lg:block text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-3)] mb-5">
         Create campaign
       </p>

@@ -20,7 +20,7 @@ export default function FooterNav({
   const isLast = currentStep === 5;
   const primaryRef = useMagnetic<HTMLButtonElement>();
   return (
-    <div className="flex items-center justify-between gap-3 pt-5 mt-7 border-t border-[var(--border)]">
+    <div data-tour="wizard-footer" className="flex items-center justify-between gap-3 pt-5 mt-7 border-t border-[var(--border)]">
       {currentStep > 1 ? (
         <button
           type="button"

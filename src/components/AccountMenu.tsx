@@ -55,6 +55,7 @@ export default function AccountMenu() {
       <button
         onClick={() => setOpen((v) => !v)}
         aria-label="Account menu"
+        data-tour="account-menu"
         aria-expanded={open}
         className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center cursor-pointer ring-2 ring-transparent hover:ring-blue-500/30 transition"
       >
