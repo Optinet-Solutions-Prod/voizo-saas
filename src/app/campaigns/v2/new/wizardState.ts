@@ -332,6 +332,8 @@ export type WizardAction =
   | { type: "NEXT" }
   | { type: "BACK" }
   | { type: "SET_AUDIENCE_FIELDS"; payload: AudiencePayload }
+  /** SaaS: the operator picks the campaign's brand (an organization brand slug; null = none). */
+  | { type: "SET_BRAND"; payload: string | null }
   | { type: "IMPORT_SEGMENT"; payload: ImportSegmentPayload }
   | { type: "SET_AGENT_FIELDS"; payload: AgentPayload }
   | { type: "SET_SCHEDULE_FIELDS"; payload: SchedulePayload }
@@ -588,6 +590,8 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
       return applyDetectedTimezone(next);
     }
 
+    case "SET_BRAND":
+      return { ...state, cioWorkspace: action.payload };
     case "SET_AGENT_FIELDS":
       return { ...state, ...action.payload };
 

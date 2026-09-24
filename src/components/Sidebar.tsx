@@ -12,6 +12,7 @@ import { ALL_BRANDS, setBrandScope, useBrandScope } from "@/lib/brandScope";
 import { BRAND_WORKSPACES, brandGlyph, brandLabel } from "@/lib/campaignDisplay";
 import NotificationBell from "@/components/NotificationBell";
 import AccountMenu from "@/components/AccountMenu";
+import { useOrg } from "@/lib/orgContext";
 import { Settings as SettingsIcon, LayoutGrid, X } from "lucide-react";
 // Animated sidebar nav icons (lucide-animated.com, motion-powered). These run
 // only on the desktop nav; the mobile bottom nav reuses the same animated icons.
@@ -144,12 +145,21 @@ const GLYPH_BG: Record<string, string> = {
 // the sidebar where the mockup put it. "All brands" is offered first but is not the default.
 function BrandSwitcher({ collapsed }: { collapsed: boolean }) {
   const brand = useBrandScope();
+  const org = useOrg();
   const [open, setOpen] = useState(false);
   const label = brand === ALL_BRANDS ? "All brands" : brandLabel(brand);
+  // SaaS: the organization's brands (Settings → Brands). Before the tenancy migration, or with
+  // no brands defined yet, the legacy catalog keeps the switcher populated.
+  const orgBrands = org.brands;
   const choices: [string, string, string][] = [
     [ALL_BRANDS, "All brands", "AB"],
-    ...BRAND_WORKSPACES.map((ws): [string, string, string] => [ws, brandLabel(ws), brandGlyph(brandLabel(ws))]),
+    ...(orgBrands.length
+      ? orgBrands.map((b): [string, string, string] => [b.slug, b.name, brandGlyph(b.name)])
+      : org.provisioned
+        ? []
+        : BRAND_WORKSPACES.map((ws): [string, string, string] => [ws, brandLabel(ws), brandGlyph(brandLabel(ws))])),
   ];
+  const glyphBg = (key: string) => orgBrands.find((b) => b.slug === key)?.color ?? GLYPH_BG[key] ?? GLYPH_BG[ALL_BRANDS];
   return (
     // The VOIZO block IS the switcher (Jasiel 2026-09-03): the brand sits where "DIALER" was, and
     // the block opens the brand menu. The logo mark stays the V for now.
@@ -192,10 +202,15 @@ function BrandSwitcher({ collapsed }: { collapsed: boolean }) {
                 onClick={() => { setBrandScope(key); setOpen(false); }}
                 className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-[13px] text-left hover:bg-[var(--bg-hover)] ${key === brand ? "text-[var(--text-1)] bg-[var(--bg-elevated)]" : "text-[var(--text-2)]"}`}
               >
-                <span className="w-6 h-6 rounded-md flex items-center justify-center text-white text-[10px] font-bold shrink-0" style={{ background: GLYPH_BG[key] ?? GLYPH_BG[ALL_BRANDS] }}>{g}</span>
+                <span className="w-6 h-6 rounded-md flex items-center justify-center text-white text-[10px] font-bold shrink-0" style={{ background: glyphBg(key) }}>{g}</span>
                 {name}
               </button>
             ))}
+            {org.provisioned && orgBrands.length === 0 && (
+              <Link href="/settings?tab=brands" onClick={() => setOpen(false)} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-[12px] text-[var(--text-3)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-1)]">
+                + Add brands in Settings
+              </Link>
+            )}
           </div>
         </>
       )}

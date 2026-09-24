@@ -3,6 +3,7 @@
 import { NotificationsProvider } from "@/lib/notificationsContext";
 import { ToastProvider } from "@/lib/toastContext";
 import { ThemeProvider } from "@/lib/themeContext";
+import { OrgProvider } from "@/lib/orgContext";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { MotionConfig } from "motion/react";
 import { ReactNode } from "react";
@@ -10,6 +11,7 @@ import { ReactNode } from "react";
 export default function Providers({ children }: { children: ReactNode }) {
   return (
     <ThemeProvider>
+      <OrgProvider>
       <NotificationsProvider>
         {/* One app-level Radix tooltip provider: 150ms open delay (snappy, not flickery),
             with the built-in skip-delay so moving between hints opens them instantly. */}
@@ -21,6 +23,7 @@ export default function Providers({ children }: { children: ReactNode }) {
           </MotionConfig>
         </TooltipProvider>
       </NotificationsProvider>
+      </OrgProvider>
     </ThemeProvider>
   );
 }

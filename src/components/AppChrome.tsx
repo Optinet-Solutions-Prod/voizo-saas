@@ -7,11 +7,12 @@ import { usePathname } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import Header from "@/components/Header";
 
-const BARE_PATHS = new Set(["/", "/login"]);
+const BARE_PATHS = new Set(["/", "/login", "/signup", "/onboarding", "/pricing", "/agents"]);
+const BARE_PREFIXES = ["/invite/", "/auth/"];
 
 export default function AppChrome({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  if (BARE_PATHS.has(pathname)) return <>{children}</>;
+  if (BARE_PATHS.has(pathname) || BARE_PREFIXES.some((p) => pathname.startsWith(p))) return <>{children}</>;
 
   return (
     <div className="flex h-screen overflow-hidden">

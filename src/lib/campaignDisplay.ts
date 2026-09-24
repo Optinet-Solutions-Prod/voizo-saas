@@ -82,11 +82,26 @@ export const DEFAULT_BRAND_WORKSPACE = "lucky7even";
 // Since 2026-09-03 this catalog is also the brand SWITCHER's list: a brand missing here still
 // renders in mixed views but cannot be chosen on its own. Roosterbet keeps the spelling the
 // fallback already produced, so no existing label moved.
-const BRAND_NAMES: Record<string, string> = {
+const LEGACY_BRAND_NAMES: Record<string, string> = {
   lucky7even: "Lucky7even",
   fortuneplay: "Fortune Play",
   roosterbet: "Roosterbet",
 };
+let BRAND_NAMES: Record<string, string> = LEGACY_BRAND_NAMES;
+
+/**
+ * SaaS (2026-09-24): an organization's brands (table `brands`) replace the legacy catalog for
+ * display and for the switcher. OrgProvider calls this once the org is loaded; null restores
+ * the legacy list (signed out, or the tenancy migration not applied yet).
+ */
+export function setBrandCatalog(brands: { slug: string; name: string }[] | null): void {
+  BRAND_NAMES = brands ? Object.fromEntries(brands.map((b) => [b.slug.toLowerCase(), b.name])) : LEGACY_BRAND_NAMES;
+}
+
+/** The brands the switcher offers right now (org brands when loaded, else the legacy catalog). */
+export function brandWorkspaces(): string[] {
+  return Object.keys(BRAND_NAMES);
+}
 
 /** Display name for a campaign's brand. null/blank → the default brand. */
 export function brandLabel(workspace: string | null | undefined): string {
@@ -109,8 +124,8 @@ export function brandKey(workspace: string | null | undefined): string {
   return (workspace ?? "").trim().toLowerCase() || DEFAULT_BRAND_WORKSPACE;
 }
 
-/** The brands the switcher offers, catalog order. */
-export const BRAND_WORKSPACES: readonly string[] = Object.keys(BRAND_NAMES);
+/** The legacy brand catalog, catalog order. Prefer brandWorkspaces() (org-aware). */
+export const BRAND_WORKSPACES: readonly string[] = Object.keys(LEGACY_BRAND_NAMES);
 
 /** Two-letter glyph for a brand name: initials of two words ("Fortune Play" → FP), else the
  *  first letter and first digit ("Lucky7even" → L7), else the first two letters. */

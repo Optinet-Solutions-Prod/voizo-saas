@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import AppChrome from "@/components/AppChrome";
+import TenantGate from "@/components/TenantGate";
 import Providers from "@/components/Providers";
 import DotFieldLayer from "@/components/DotFieldLayer";
 
@@ -37,7 +38,9 @@ export default function RootLayout({
             Not on the dashboard (flat ground, as the mockup): DotFieldLayer decides by route. */}
         <DotFieldLayer />
         <Providers>
-          <AppChrome>{children}</AppChrome>
+          <TenantGate>
+            <AppChrome>{children}</AppChrome>
+          </TenantGate>
         </Providers>
       </body>
     </html>

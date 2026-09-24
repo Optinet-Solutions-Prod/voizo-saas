@@ -9,9 +9,11 @@ import Link from "next/link";
 import { User, Settings, LogOut, Sun, Moon } from "lucide-react";
 import { useTheme } from "@/lib/themeContext";
 import { supabaseAuthBrowser } from "@/lib/supabaseAuthBrowser";
+import { useOrg } from "@/lib/orgContext";
 
 export default function AccountMenu() {
   const { isDark, toggle } = useTheme();
+  const org = useOrg();
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
@@ -63,7 +65,9 @@ export default function AccountMenu() {
         <div className="absolute right-0 top-full mt-2 z-50 w-52 bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl shadow-2xl overflow-hidden py-1">
           <div className="px-3 py-2.5 border-b border-[var(--border)]">
             <p className="text-xs font-semibold text-[var(--text-1)] truncate" title={email ?? undefined}>{email ?? "Signed in"}</p>
-            <p className="text-[10px] text-[var(--text-3)] mt-0.5">Admin</p>
+            <p className="text-[10px] text-[var(--text-3)] mt-0.5 truncate">
+              {org.org ? `${org.org.name} · ${org.role}` : org.provisioned ? "No organization" : "Workspace"}
+            </p>
           </div>
 
           <button type="button" disabled title="Profile (coming soon)" className={`${itemCls} text-[var(--text-3)] cursor-not-allowed`}>

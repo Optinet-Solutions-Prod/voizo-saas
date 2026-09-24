@@ -23,6 +23,30 @@ Minimum to boot + place a call:
 
 **Never commit real keys.** Use `.env.local` locally and host env vars in production.
 
+## Organizations, brands, members (Phase 2, 2026-09-24)
+**One-time step: run `supabase-migration-saas-tenancy.sql` in the Supabase SQL editor.**
+Until it has run, the console detects the missing tables and keeps working in the old
+single-workspace mode (Settings shows a notice). After it runs, everything below is live
+with no redeploy: the app re-probes every minute.
+
+- **Model**: `organizations` → `organization_members` (role owner | admin | member, one org per
+  user) → `brands` (name, globally-unique slug, colour). `organization_invites` carry a token
+  link (14 days). Owners/admins manage the org, members, invites and brands; members use the
+  console. `app_metadata.role = "admin"` on an auth user = VOIZO platform staff.
+- **Isolation**: every org-owned table has `org_id` (default `current_org_id()`), child tables are
+  scoped through their campaign/script/set, and all `using (true)` policies were replaced.
+  `supabaseAdmin` now sends the signed-in user's JWT (so those policies apply) and falls back to
+  the service role for cron/webhooks. Analytics functions run as the caller (SECURITY INVOKER).
+  Known shared tables: `lab_settings`, `listener_qa_schedule`, `lab_call_events` (lab singletons).
+- **Brands** replace the hard-coded Lucky7even/Fortune Play/Roosterbet list: the sidebar switcher
+  lists the org's brands, `brandLabel()` reads them, and the campaign wizard has a Brand select
+  stored as `campaigns_v2.cio_workspace` (the same label SMS/Customer.io key on).
+- **Flows**: `/signup` → email confirmation → `/onboarding` (create an org, or accept the invite
+  sent to that email). `/invite/<token>` for invited people. `/settings` has Organization,
+  Members (+ invites, with the link shown for hand sharing when Resend isn't configured) and Brands.
+- **Bootstrap**: the migration makes `admin@optinetsolutions.com` owner of an "Optinet"
+  organization and adopts all pre-existing rows into it.
+
 ## Admin auth
 Supabase Auth (email + password). `/` (landing) and `/login` are public; everything else
 needs a signed-in user whose **`app_metadata.role` is `"admin"`**, checked in

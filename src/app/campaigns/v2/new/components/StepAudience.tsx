@@ -20,6 +20,7 @@ import {
   type DialIdentities,
 } from "../wizardState";
 import StyledSelect from "@/components/StyledSelect";
+import { useOrg } from "@/lib/orgContext";
 
 interface DuplicateSkipped {
   total: number;
@@ -38,6 +39,7 @@ interface Props {
 }
 
 export default function StepAudience({ state, dispatch, duplicateSkipped, dialIdentities }: Props) {
+  const org = useOrg();
   const hours = getCallingHours(state.timezone);
   const tzLabel =
     TIMEZONE_OPTIONS.find((o) => o.value === state.timezone)?.label ?? state.timezone;
@@ -143,6 +145,26 @@ export default function StepAudience({ state, dispatch, duplicateSkipped, dialId
               );
             })}
           </div>
+
+          {/* SaaS: which of the organization's brands this campaign runs for. Stored as the
+              brand slug in campaigns_v2.cio_workspace (the label SMS sender IDs and Customer.io
+              workspaces are keyed by). A Customer.io import overwrites it with the segment's brand. */}
+          {org.brands.length > 0 && (
+            <div>
+              <label htmlFor="wiz-brand" className="block text-sm font-medium text-[var(--text-1)] mb-1.5">Brand</label>
+              <select
+                id="wiz-brand"
+                value={state.cioWorkspace ?? ""}
+                onChange={(e) => dispatch({ type: "SET_BRAND", payload: e.target.value || null })}
+                className="w-full sm:max-w-xs px-3.5 py-2.5 rounded-xl bg-[var(--bg-app)] border border-[var(--border)] text-sm text-[var(--text-1)] focus:outline-none focus:border-blue-500/50 transition [color-scheme:dark]"
+              >
+                <option value="">No brand</option>
+                {org.brands.map((b) => (
+                  <option key={b.id} value={b.slug}>{b.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* CIO picker */}
           {state.audienceSource === "cio" && (

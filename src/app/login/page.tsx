@@ -88,7 +88,8 @@ export default function LoginPage() {
           </div>
 
           <p className="mt-6 text-center text-xs text-[var(--text-3)]">
-            Need access? Ask your workspace administrator.
+            New to VOIZO?{" "}
+            <Link href="/signup" className="font-medium text-[var(--text-1)] hover:underline">Create an account</Link>
           </p>
         </div>
       </main>

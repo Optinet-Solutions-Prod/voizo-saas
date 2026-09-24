@@ -4,11 +4,9 @@ import { FormEvent, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AlertCircle, ArrowRight, Eye, EyeOff, Loader2, Lock, Mail } from "lucide-react";
 import { supabaseAuthBrowser } from "@/lib/supabaseAuthBrowser";
-import { isAdmin, safeNextPath } from "@/lib/auth";
+import { safeNextPath } from "@/lib/auth";
 
 const PRIMARY = "#4d90f0";
-
-const NOT_ADMIN = "This account doesn't have access to the console.";
 
 export default function LoginForm() {
   const params = useSearchParams();
@@ -18,14 +16,14 @@ export default function LoginForm() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(params.get("error") === "not_admin" ? NOT_ADMIN : null);
+  const [error, setError] = useState<string | null>(params.get("error") === "confirm_failed" ? "That confirmation link is invalid or has expired. Sign in, or create the account again." : null);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setLoading(true);
     const supabase = supabaseAuthBrowser();
-    const { data, error: signInError } = await supabase.auth.signInWithPassword({
+    const { error: signInError } = await supabase.auth.signInWithPassword({
       email: email.trim(),
       password,
     });
@@ -37,12 +35,6 @@ export default function LoginForm() {
           ? "That email and password don't match."
           : signInError.message,
       );
-      return;
-    }
-    if (!isAdmin(data.user)) {
-      await supabase.auth.signOut();
-      setLoading(false);
-      setError(NOT_ADMIN);
       return;
     }
     // Full navigation (not router.push) so the middleware sees the new session cookies and
