@@ -140,6 +140,13 @@ function ScriptBuilderInner() {
             className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-card)] py-2.5 pl-10 pr-4 text-sm text-[var(--text-1)] placeholder-[var(--text-3)] focus:border-primary focus:outline-none"
           />
         </div>
+        {/* Pre-built agents (SaaS Phase 5): twenty ready-made scripts to start from. */}
+        <Link
+          href="/script-builder/templates"
+          className="shrink-0 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] px-4 py-2.5 text-sm font-semibold text-[var(--text-2)] transition hover:text-[var(--text-1)] hover:bg-[var(--bg-hover)]"
+        >
+          Agent templates
+        </Link>
         <button
           onClick={openCreate}
           className="shrink-0 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-px"

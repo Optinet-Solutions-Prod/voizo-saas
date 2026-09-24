@@ -4,6 +4,9 @@ import {
   ArrowRight, BarChart3, Bot, CalendarClock, CheckCircle2, MessageSquareText, PhoneCall,
   ShieldCheck, Sparkles, Workflow,
 } from "lucide-react";
+import AgentGallery from "@/components/AgentGallery";
+import { AGENT_CATALOG, publicAgent } from "@/lib/agents/catalog";
+import { sampleUrl } from "@/lib/agents/entitlements";
 
 export const metadata: Metadata = {
   title: "VOIZO — AI voice agents for outbound calling",
@@ -168,8 +171,9 @@ export default function LandingPage() {
           <Logo />
           <div className="hidden md:flex items-center gap-8 text-sm text-[var(--text-2)]">
             <a href="#features" className="hover:text-[var(--text-1)] transition-colors">Features</a>
+            <a href="#agents" className="hover:text-[var(--text-1)] transition-colors">Agents</a>
             <a href="#how" className="hover:text-[var(--text-1)] transition-colors">How it works</a>
-            <a href="#compliance" className="hover:text-[var(--text-1)] transition-colors">Compliance</a>
+            <Link href="/pricing" className="hover:text-[var(--text-1)] transition-colors">Pricing</Link>
           </div>
           <Link
             href="/login"
@@ -253,6 +257,25 @@ export default function LandingPage() {
                 <p className="mt-2 text-sm leading-relaxed text-[var(--text-2)]">{body}</p>
               </div>
             ))}
+          </div>
+        </section>
+
+        {/* ── Pre-built agents (Phase 5): listen to the samples ── */}
+        <section id="agents" className="scroll-mt-20 border-t border-[var(--border)] bg-[var(--bg-panel)]">
+          <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div className="max-w-2xl">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em]" style={{ color: PRIMARY }}>Pre-built agents</p>
+                <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">Hear them before you hire them</h2>
+                <p className="mt-4 text-[var(--text-2)]">Twenty agents for the calls businesses make most: reminders, lead follow-up, payments, renewals, surveys. Three are free with every account. Press play.</p>
+              </div>
+              <Link href="/agents" className="inline-flex items-center gap-2 rounded-xl border border-[var(--border-2)] bg-[var(--bg-card)] px-4 py-2.5 text-sm font-semibold text-[var(--text-1)] transition hover:bg-[var(--bg-hover)]">
+                See all 20 agents <ArrowRight size={15} />
+              </Link>
+            </div>
+            <div className="mt-10">
+              <AgentGallery compact agents={AGENT_CATALOG.slice(0, 8).map((a) => ({ ...publicAgent(a), sampleUrl: sampleUrl(a.key) }))} />
+            </div>
           </div>
         </section>
 

@@ -70,6 +70,23 @@ assistant credential (`credentials: [{ provider: "11labs", apiKey }]`) — on ca
 rebinds, daily spawns and the lab assistant — so Vapi can synthesise a voice that isn't in
 VOIZO's own ElevenLabs account. `voiceCloneExtras(orgId)` in `src/lib/voices/orgVoices.ts`.
 
+## Pre-built agents (Phase 5, 2026-09-24)
+`src/lib/agents/catalog.ts` holds 20 agents (name, role, industry, persona, full call flow,
+voice, sample text, price). **Free:** Ava (appointment reminder), Leo (lead qualifier), Maya
+(satisfaction survey). The other 17 are $19 / €18 one-time per organization (or included in
+Pro/Scale) and are unlocked by VOIZO staff in Settings → Platform (`agent_purchases`; no card
+checkout yet, per Chris's decision).
+- **Landing / `/agents`:** every agent has a ~20 s sample clip in the public Storage bucket
+  `agent-samples` (`<key>.mp3`). Generated with `node scripts/generate-agent-samples.mjs` —
+  currently OpenAI TTS (gpt-4o-mini-tts). **Chris wanted ElevenLabs:** set `ELEVENLABS_API_KEY`
+  in `.env.local` and run `node scripts/generate-agent-samples.mjs --provider elevenlabs --force`;
+  it then uses each agent's own library voice.
+- **In-app:** Script Builder → "Agent templates" (`/script-builder/templates`). "Add to my
+  agents" creates a real script in the org: Playbook scenarios for every line (group
+  "<Name> — <Role>"), a graph Start → Opening → Reason → replies → SMS → Goodbye → End, a Call
+  Goal box, the persona and the voice (`src/lib/agents/install.ts`). Placeholders like
+  `{{company}}`, `{{first_name}}`, `{{link}}` are left for the operator to fill.
+
 ## Admin auth
 Supabase Auth (email + password). `/` (landing) and `/login` are public; everything else
 needs a signed-in user whose **`app_metadata.role` is `"admin"`**, checked in

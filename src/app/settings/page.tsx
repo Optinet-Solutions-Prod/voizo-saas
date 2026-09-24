@@ -31,7 +31,7 @@ function SettingsInner() {
   const org = useOrg();
   const router = useRouter();
   const params = useSearchParams();
-  const tabs = [...BASE_TABS, ...SETTINGS_TABS_EXTRA];
+  const tabs = [...BASE_TABS, ...SETTINGS_TABS_EXTRA.filter((t) => !t.platformOnly || org.platformAdmin)];
   const tab = params.get("tab") ?? "organization";
   const setTab = (k: string) => router.replace(`/settings?tab=${k}`);
 
@@ -61,7 +61,7 @@ function SettingsInner() {
       {tab === "organization" && <OrganizationTab />}
       {tab === "members" && <MembersTab />}
       {tab === "brands" && <BrandsTab />}
-      {SETTINGS_TABS_EXTRA.map((t) => (tab === t.key ? <t.component key={t.key} /> : null))}
+      {SETTINGS_TABS_EXTRA.filter((t) => !t.platformOnly || org.platformAdmin).map((t) => (tab === t.key ? <t.component key={t.key} /> : null))}
     </div>
   );
 }
