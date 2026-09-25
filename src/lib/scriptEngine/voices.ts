@@ -1,28 +1,27 @@
+// The VOIZO voice library: ElevenLabs "premade" voices. These ids are public — every
+// ElevenLabs account and Vapi's built-in ElevenLabs can use them — so agents, test calls and
+// the landing-page samples all sound the same and nothing depends on a private voice account.
+//
+// SaaS (2026-09-25): replaced the original list, whose ids lived in a former team member's
+// private ElevenLabs account and were not reachable from the SaaS accounts (401 on lookup).
+// Genders/accents come from ElevenLabs' own labels. voiceIds must stay unique (they are the
+// <option> values).
 export const VOICE_OPTIONS = [
-  // Val's picks. NOTE: voiceIds must stay unique in this list — they are the
-  // <option> values; "Val - Mark - Natural Conversations" REPLACED the old
-  // "Mark – Dynamic, Balanced and Emotional" label (same UgBBYS2s… voice).
-  // ⚠ These labels are HUMAN-TYPED TEXT, not the voices' real identities — the
-  // ids live in Val's ElevenLabs account and neither the Vapi API nor its
-  // dashboard can name them. Gender annotations below were verified BY EAR on
-  // live production calls (2026-07-30 incident: a FEMALE voice labelled "Mark"
-  // introduced itself as Victor on real campaigns). Ear-test before ever
-  // pointing a campaign at a voice from this list.
-  { label: "Val - Mark - Casual & Relaxed",           provider: "11labs", voiceId: "1SM7GgM6IMuvQlz2BwM3" }, // FEMALE (ear-verified 2026-07-30, despite the name)
-  { label: "Val - Mark - Natural Conversations",      provider: "11labs", voiceId: "UgBBYS2sOqTuMpoF3BR0" }, // MALE (ear-verified 2026-07-30) — the production voice, pinned in EXPECTED_SCRIPT_BASE
-  { label: "Val - Cal - Casual and Natural",          provider: "11labs", voiceId: "aqXKinCxkMOvW6f3qU8l" }, // gender UNVERIFIED
-  { label: "Val - Hope - Natural, clear",             provider: "11labs", voiceId: "OYTbf65OHHFELVut7v2H" }, // FEMALE (the 2026-07-28/29 incident voice)
-  { label: "Stephen – Sales and Customer Service",    provider: "11labs", voiceId: "3jR9BuQAOPMWUjWpi0ll" },
-  { label: "Jackson – American Tech Sales Rep",       provider: "11labs", voiceId: "2zGvynULFssveGrcP8hi" },
-  { label: "George – Natural, Full and Confident",    provider: "11labs", voiceId: "YaarrMwvJxVUpjbZ2RpC" },
-  { label: "Alex – Professional",                     provider: "11labs", voiceId: "pHqSZYhjNK8nDCPRglTL" },
-  { label: "Matthew Logovik",                         provider: "11labs", voiceId: "1IthILLNX448pH19aMvC" },
-  { label: "Voice A (7EzWGsX1…)",                     provider: "11labs", voiceId: "7EzWGsX10sAS4c9m9cPf" },
-  { label: "Voice B (8fcyCHOz…)",                     provider: "11labs", voiceId: "8fcyCHOzlKDlxh1InJSf" },
-  { label: "Voice C (sUzXYdok…)",                     provider: "11labs", voiceId: "sUzXYdokj3o9QQ91yPRF" },
-  { label: "Voice D (E5vwBa1s…)",                     provider: "11labs", voiceId: "E5vwBa1swCEXshQFkLEu" },
-  { label: "Voice E (4e32WqNV…)",                     provider: "11labs", voiceId: "4e32WqNVWRquDa1OcRYZ" },
-  { label: "Voice F (mBqbvkxI…)",                     provider: "11labs", voiceId: "mBqbvkxIFe5HjjaoiN4P" },
-  { label: "Voice G (e243k3Nw…)",                     provider: "11labs", voiceId: "e243k3NwaO5uqjBb8yKV" },
-  { label: "Voice H (I1ejplf7…)",                     provider: "11labs", voiceId: "I1ejplf72DWHJzwAiw4n" },
+  { label: "Eric – Smooth, trustworthy (US male)",        provider: "11labs", voiceId: "cjVigY5qzO86Huf0OWal" },
+  { label: "Sarah – Mature, reassuring (US female)",      provider: "11labs", voiceId: "EXAVITQu4vr4xnSDxMaL" },
+  { label: "Chris – Charming, down-to-earth (US male)",   provider: "11labs", voiceId: "iP95p4xoKVk53GoZ742B" },
+  { label: "Bella – Professional, bright (US female)",    provider: "11labs", voiceId: "hpp4J3VqNfWAUOO0d1Us" },
+  { label: "Brian – Deep, resonant (US male)",            provider: "11labs", voiceId: "nPczCjzI2devNBz1zQrb" },
+  { label: "Matilda – Knowledgeable, professional (US female)", provider: "11labs", voiceId: "XrExE9yKIg1WjnnlVkGX" },
+  { label: "Will – Relaxed optimist (US male)",           provider: "11labs", voiceId: "bIHbv24MWmeRgasZH58o" },
+  { label: "Jessica – Playful, warm (US female)",         provider: "11labs", voiceId: "cgSgspJ2msm6clMCkdW9" },
+  { label: "Roger – Laid-back, casual (US male)",         provider: "11labs", voiceId: "CwhRBWXzGAHq8TQ4Fs17" },
+  { label: "Daniel – Steady broadcaster (UK male)",       provider: "11labs", voiceId: "onwK4e9ZLuTAKqWW03F9" },
+  { label: "Alice – Clear, engaging (UK female)",         provider: "11labs", voiceId: "Xb7hH8MSUJpSbSDYk0k2" },
+  { label: "George – Warm storyteller (UK male)",         provider: "11labs", voiceId: "JBFqnCBsd6RMkjVDRZzb" },
+  { label: "Lily – Velvety, composed (UK female)",        provider: "11labs", voiceId: "pFZP5JQG7iQjIQuC4Bku" },
+  { label: "Charlie – Confident, energetic (AU male)",    provider: "11labs", voiceId: "IKne3meq5aSn9XLyUdCD" },
 ] as const;
+
+/** Sensible default for new scripts and the base agent. */
+export const DEFAULT_VOICE_ID = VOICE_OPTIONS[0].voiceId;

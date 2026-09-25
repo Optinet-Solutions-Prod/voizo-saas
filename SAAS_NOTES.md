@@ -7,12 +7,9 @@
    numbers and agent unlocks.
 2. **Vercel env:** add `INTEGRATIONS_ENCRYPTION_KEY` (any long random string) before anyone
    stores provider credentials.
-3. **Sample voices:** the 20 agent clips were generated with OpenAI TTS. For ElevenLabs, put
-   `ELEVENLABS_API_KEY` in `.env.local` and run
-   `node scripts/generate-agent-samples.mjs --provider elevenlabs --force`.
-4. **Supabase Auth:** leave "Allow new users to sign up" ON — `/signup` is now a feature.
+3. **Supabase Auth:** leave "Allow new users to sign up" ON — `/signup` is now a feature.
    Consider an SMTP provider in Supabase for reliable confirmation emails.
-5. Optional: set your organization's plan and unlock agents in Settings → Platform (your account
+4. Optional: set your organization's plan and unlock agents in Settings → Platform (your account
    has the platform-admin flag).
 
 A copy of the internal Voizo dialer/dashboard, being adapted into a multi-tenant SaaS.
@@ -122,6 +119,18 @@ isn't on screen (phone) shows centred. Completion (`done` / `skipped`) is saved 
 and in the user's `auth.user_metadata.tours`, so it follows the user across devices. The floating
 **?** button (bottom-right, above the phone tab bar) lists all tours to replay them or reset.
 `/<page>?tour=<id>` starts a tour on arrival.
+
+## Voice library & Vapi agents (2026-09-25)
+The VOIZO voice library (`src/lib/scriptEngine/voices.ts`) is now 14 ElevenLabs **premade**
+voices: public ids that every ElevenLabs account and Vapi's built-in ElevenLabs can use. The old
+ids belonged to a former team member's private account and returned 401 from the SaaS accounts.
+The 20 agent samples were regenerated with ElevenLabs (`ELEVEN_LABS_KEY` in `.env.local`) using
+each agent's own library voice. Both Vapi agents ("Default Assistant" = base, "Default Lab
+Assistant" = lab) were configured by API: voice Eric (11labs), Deepgram flux-general-en with
+keyterms, gpt-4.1 plus a base system prompt, and their webhook pointed at
+https://voizo-saas.vercel.app with the shared secret. `EXPECTED_SCRIPT_BASE` in
+`cloneAssistant.ts` still pins the legacy voice/model, so clone verification logs drift
+*warnings* (never blocking).
 
 ## Admin auth
 Supabase Auth (email + password). `/` (landing) and `/login` are public; everything else

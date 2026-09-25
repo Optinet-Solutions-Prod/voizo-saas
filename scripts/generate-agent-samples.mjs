@@ -21,7 +21,7 @@ for (const line of fs.existsSync(path.join(root, ".env.local")) ? fs.readFileSyn
 
 const args = process.argv.slice(2);
 const opt = (name, dflt) => { const i = args.indexOf(`--${name}`); return i >= 0 ? args[i + 1] : dflt; };
-const provider = opt("provider", process.env.ELEVENLABS_API_KEY ? "elevenlabs" : "openai");
+const provider = opt("provider", (process.env.ELEVENLABS_API_KEY || process.env.ELEVEN_LABS_KEY) ? "elevenlabs" : "openai");
 const only = opt("only", "")?.split(",").filter(Boolean);
 const force = args.includes("--force");
 
@@ -69,7 +69,7 @@ async function ttsOpenAI(text, gender, i) {
 }
 
 async function ttsElevenLabs(text, voiceId) {
-  const key = process.env.ELEVENLABS_API_KEY;
+  const key = (process.env.ELEVENLABS_API_KEY || process.env.ELEVEN_LABS_KEY);
   if (!key) throw new Error("ELEVENLABS_API_KEY missing");
   const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`, {
     method: "POST",

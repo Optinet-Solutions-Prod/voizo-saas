@@ -61,16 +61,17 @@ export interface AgentTemplate {
   tags: string[];
 }
 
-// Library voices (ear-verified where noted in voices.ts).
+// Library voices (ElevenLabs premade — public ids, see scriptEngine/voices.ts). The keys keep
+// the persona names the flows were written with; the ids are the voices they map to.
 const V = {
-  hope: "OYTbf65OHHFELVut7v2H",     // female
-  casual: "1SM7GgM6IMuvQlz2BwM3",   // female (ear-verified)
-  mark: "UgBBYS2sOqTuMpoF3BR0",     // male
-  stephen: "3jR9BuQAOPMWUjWpi0ll",  // male
-  jackson: "2zGvynULFssveGrcP8hi",  // male
-  george: "YaarrMwvJxVUpjbZ2RpC",   // male
-  alex: "pHqSZYhjNK8nDCPRglTL",     // male
-  matthew: "1IthILLNX448pH19aMvC",  // male
+  hope: "EXAVITQu4vr4xnSDxMaL",     // Sarah — female
+  casual: "cgSgspJ2msm6clMCkdW9",   // Jessica — female
+  mark: "cjVigY5qzO86Huf0OWal",     // Eric — male
+  stephen: "nPczCjzI2devNBz1zQrb",  // Brian — male
+  jackson: "bIHbv24MWmeRgasZH58o",  // Will — male
+  george: "JBFqnCBsd6RMkjVDRZzb",   // George — male (UK)
+  alex: "iP95p4xoKVk53GoZ742B",     // Chris — male
+  matthew: "onwK4e9ZLuTAKqWW03F9",  // Daniel — male (UK)
 } as const;
 
 const PRICE = { priceUsd: 19, priceEur: 18 };

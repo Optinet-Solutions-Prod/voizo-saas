@@ -48,6 +48,21 @@ export const KNOWN_VOICES: Record<string, string> = {
   // it lets a script campaign PIN it as its own voice_id (VOZ-251) instead of
   // silently re-inheriting the shared base's voice on every clone/daily spawn.
   "OYTbf65OHHFELVut7v2H": "Val (female)",
+  // SaaS library (ElevenLabs premade, 2026-09-25) — see scriptEngine/voices.ts.
+  "cjVigY5qzO86Huf0OWal": "Eric",
+  "EXAVITQu4vr4xnSDxMaL": "Sarah",
+  "iP95p4xoKVk53GoZ742B": "Chris",
+  "hpp4J3VqNfWAUOO0d1Us": "Bella",
+  "nPczCjzI2devNBz1zQrb": "Brian",
+  "XrExE9yKIg1WjnnlVkGX": "Matilda",
+  "bIHbv24MWmeRgasZH58o": "Will",
+  "cgSgspJ2msm6clMCkdW9": "Jessica",
+  "CwhRBWXzGAHq8TQ4Fs17": "Roger",
+  "onwK4e9ZLuTAKqWW03F9": "Daniel",
+  "Xb7hH8MSUJpSbSDYk0k2": "Alice",
+  "JBFqnCBsd6RMkjVDRZzb": "George (UK)",
+  "pFZP5JQG7iQjIQuC4Bku": "Lily",
+  "IKne3meq5aSn9XLyUdCD": "Charlie",
 };
 
 // Any voiceId the app can legitimately request: the campaign-clone allowlist
