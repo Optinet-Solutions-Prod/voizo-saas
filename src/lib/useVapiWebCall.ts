@@ -29,6 +29,8 @@ export function explainVapiError(err: unknown): string {
   if (/NotFoundError|no audio|not found/i.test(text)) return "No microphone was found. Plug one in or pick a different input device.";
   if (/meeting has ended|ejected/i.test(text)) return "The call ended.";
   if (/401|unauthori[sz]ed|public key/i.test(text)) return "The Vapi public key is missing or wrong on this deployment.";
+  if (/Failed to fetch|NetworkError|ERR_|load failed|blocked/i.test(text)) return "The browser couldn't reach Vapi's call service (api.vapi.ai / daily.co). An ad-blocker, privacy extension, VPN or firewall is the usual cause — try a normal Chrome window without extensions.";
+  if (/daily|room|join/i.test(text)) return `The audio room couldn't be joined: ${text}. Check that daily.co isn't blocked by an extension or firewall.`;
   return text;
 }
 
@@ -155,17 +157,34 @@ export function useVapiWebCall() {
           return [...prev, { role, text: m.transcript!, final }];
         });
       });
+      // The SDK reports failures through events and then resolves start() with null, so keep
+      // the first real reason it gives us and show that — not a generic "no call".
+      let reported: string | null = null;
+      let lastStage = "";
+      vapi.on("call-start-progress", (p: { stage?: string; status?: string; metadata?: Record<string, unknown> }) => {
+        console.info("[vapi] start progress", p?.stage, p?.status, p?.metadata ?? "");
+        if (p?.status === "failed") lastStage = `${p.stage ?? "unknown"}${p.metadata?.reason ? ` (${String(p.metadata.reason)})` : ""}${p.metadata?.error ? `: ${String(p.metadata.error)}` : ""}`;
+      });
       vapi.on("error", (e: unknown) => {
+        console.error("[vapi] error", e);
         const text = vapiErrorText(e, "");
         if (/meeting has ended|ejected/i.test(text)) { setStatus("ended"); return; }
-        setError(explainVapiError(e));
+        reported = explainVapiError(e);
+        setError(reported);
         setStatus("error");
         if (timerRef.current) window.clearInterval(timerRef.current);
         stopMeter();
       });
       const call = await vapi.start(assistant);
-      if (!call) throw new Error("Vapi returned no call");
+      if (!call && !reported) {
+        throw new Error(
+          lastStage
+            ? `The call didn't start — failed at ${lastStage}.`
+            : "The call didn't start. Something on this computer or network stopped the browser from reaching Vapi's call service (api.vapi.ai / daily.co): an ad-blocker or privacy extension, a VPN or corporate firewall, or a browser that blocks WebRTC. Try a normal Chrome window without extensions.",
+        );
+      }
     } catch (e) {
+      console.error("[vapi] start failed", e);
       setError(explainVapiError(e));
       setStatus("error");
       stopMeter();
