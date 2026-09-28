@@ -120,6 +120,23 @@ and in the user's `auth.user_metadata.tours`, so it follows the user across devi
 **?** button (bottom-right, above the phone tab bar) lists all tours to replay them or reset.
 `/<page>?tour=<id>` starts a tour on arrival.
 
+## Sample scripts — production architecture (2026-09-28)
+`src/lib/agents/scriptGraph.ts` builds every agent template in the same shape as the team's
+best-performing production script (structure only — no brand content): an agent-first
+**opener** (verbatim), **"The reason for the call"** (pitch that hints there is more, "don't end
+on a dead beat"), **"The details + text message"** (offer the text, never read numbers aloud,
+light urgency) with reply connectors for *follow-up question* / *wrapping up* (quick words) /
+*declines* plus one per catalog objection, a four-box **follow-up loop** (answer → anything
+else? → push the next step → last word), a **decline route**, a floating **Call Goal** checklist
+and **two goodbyes**. Reply detectors are `action_type: "ignore"`, `mode: "listener"` handlers
+(exactly what the builder creates for a connector rule); playbook lines (who are you, how did you
+get my number, are you a robot, is this a scam, call me later, every objection and the positive
+reply) sit in a per-script collection. Persona uses the `[Identity] … [Delivery & personality] …`
+layout. `{{playerName}}` stays for the engine; the company is filled at install.
+`validateScriptSpec()` enforces the builder's own pre-call rules and the unit test runs it for
+all 20 agents; the builder's Workflow check reports "All checks passed" on installed copies.
+Optinet was put on the Pro plan and has Ava, Leo, Maya, Zara, Daniel and Isla installed.
+
 ## Try an agent — the demo path (2026-09-28)
 After the first presentation failed (Vapi logged both test calls as
 `error-assistant-did-not-receive-customer-audio` after 0 s — the browser sent no microphone
