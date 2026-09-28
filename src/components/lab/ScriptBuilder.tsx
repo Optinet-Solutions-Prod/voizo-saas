@@ -1557,6 +1557,19 @@ export default function ScriptBuilder({ onClose, initialScriptId }: Props) {
       // Reworded opening: configure-assistant put the gist in the prompt; the
       // model generates the first message in its own words.
       const openingReword = ((startCfg.openingDelivery as string) ?? "verbatim") === "reword";
+      // Microphone first (SaaS 2026-09-28): the presentation-day failures were calls that
+      // connected and ended at 0 s with "assistant did not receive customer audio" — the
+      // browser had no mic permission. Ask explicitly and fail with a plain message.
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach((t) => t.stop());
+      } catch (micErr) {
+        setError(/NotAllowed|denied|permission/i.test(String(micErr))
+          ? "Microphone access is blocked. Click the lock icon in the address bar, allow the microphone, and press ▶ again."
+          : "No microphone was found. Plug one in or pick an input device, then press ▶ again.");
+        setRun({ callId: null, status: "idle", currentNodeId: null, visited: [], lastLine: null, lastHop: null });
+        return;
+      }
       const vapi = getVapi();
       const call = await vapi.start(
         aid,
@@ -3770,9 +3783,11 @@ export default function ScriptBuilder({ onClose, initialScriptId }: Props) {
             <div className="border-b border-[var(--border)] px-5 py-3">
               <p className="text-[10px] uppercase tracking-wider text-[var(--text-3)]">Workflow check</p>
               <p className="text-sm font-bold text-[var(--text-1)]">
-                {qa.errors.length + qa.warnings.length > 0
-                  ? `${qa.errors.length + qa.warnings.length} issue${qa.errors.length + qa.warnings.length > 1 ? "s" : ""} to fix before the test call`
-                  : "All checks passed"}
+                {qa.errors.length > 0
+                  ? `${qa.errors.length} problem${qa.errors.length > 1 ? "s" : ""} to fix before the test call`
+                  : qa.warnings.length > 0
+                    ? `${qa.warnings.length} suggestion${qa.warnings.length > 1 ? "s" : ""} — you can still run the call`
+                    : "All checks passed"}
               </p>
             </div>
             <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-5 py-3">
@@ -3800,11 +3815,13 @@ export default function ScriptBuilder({ onClose, initialScriptId }: Props) {
               </button>
               <button
                 onClick={startRun}
-                disabled={qa.errors.length > 0 || qa.warnings.length > 0 || qaBusy}
+                // Warnings no longer block (SaaS 2026-09-28): a demo must be able to run on a
+                // script that merely has suggestions. Real problems (errors) still do.
+                disabled={qa.errors.length > 0 || qaBusy}
                 className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-40"
                 title={
-                  qa.errors.length + qa.warnings.length > 0
-                    ? "Fix every issue above first — the call only starts on a clean check"
+                  qa.errors.length > 0
+                    ? "Fix the problems above first — the call can't start with them"
                     : "Start a live test call from the browser"
                 }
               >

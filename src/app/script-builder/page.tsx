@@ -170,9 +170,42 @@ function ScriptBuilderInner() {
         {loading && <p className="px-5 py-10 text-center text-sm text-[var(--text-3)]">Loading scripts...</p>}
         {!loading && error && <p className="px-5 py-10 text-center text-sm text-red-400">{error}</p>}
         {!loading && !error && filtered.length === 0 && (
-          <p className="px-5 py-10 text-center text-sm text-[var(--text-3)]">
-            {scripts.length === 0 ? "No scripts yet — create your first one above." : "No scripts match your search."}
-          </p>
+          scripts.length === 0 ? (
+            // Empty workspace (SaaS 2026-09-28): offer the sample agents right here instead of a
+            // blank list — the presentation had nothing to show.
+            <div className="px-5 py-10 text-center">
+              <p className="text-sm text-[var(--text-2)]">No scripts yet.</p>
+              <p className="mt-1 text-xs text-[var(--text-3)]">Start with the three free sample agents, browse all twenty templates, or create a blank script above.</p>
+              <div className="mt-4 flex flex-wrap justify-center gap-2">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={async () => {
+                    setBusy(true);
+                    setError(null);
+                    try {
+                      for (const key of ["appointment-reminder", "lead-qualifier", "satisfaction-survey"]) {
+                        const r = await fetch("/api/agents/install", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key }) });
+                        if (!r.ok) throw new Error((await r.json().catch(() => ({})))?.error ?? "Install failed");
+                      }
+                      setScripts(await listScripts());
+                    } catch (e) {
+                      setError(e instanceof Error ? e.message : "Could not add the sample agents");
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                  className="rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-px disabled:opacity-50"
+                >
+                  {busy ? "Adding…" : "Add the 3 sample agents"}
+                </button>
+                <Link href="/script-builder/templates" className="rounded-lg border border-[var(--border)] bg-[var(--bg-card)] px-4 py-2.5 text-sm font-semibold text-[var(--text-2)] hover:text-[var(--text-1)]">Browse all 20 templates</Link>
+                <Link href="/agents/try" className="rounded-lg border border-[var(--border)] bg-[var(--bg-card)] px-4 py-2.5 text-sm font-semibold text-[var(--text-2)] hover:text-[var(--text-1)]">Try a live call</Link>
+              </div>
+            </div>
+          ) : (
+            <p className="px-5 py-10 text-center text-sm text-[var(--text-3)]">No scripts match your search.</p>
+          )
         )}
 
         {paginated.map((s) => (

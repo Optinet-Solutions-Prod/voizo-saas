@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useRef, useState, useSyncExternalStore } from "react";
 import {
-  PhoneOff, BookOpen, LayoutDashboard, Sun, Moon, Globe2,
+  PhoneOff, BookOpen, LayoutDashboard, Sun, Moon, Globe2, Headphones,
   Activity, Users, PanelLeftClose, PanelLeftOpen, ClipboardCheck, Megaphone, Workflow, FlaskConical,
 } from "lucide-react";
 import { useTheme } from "@/lib/themeContext";
@@ -59,6 +59,8 @@ const navSections: { label: string; items: NavItem[] }[] = [
     label: "Data",
     items: [
       { label: "Script Builder", href: "/script-builder", icon: Workflow, animatedIcon: WorkflowIcon,   ...NEUTRAL },
+      // SaaS 2026-09-28: talk to any of the 20 agents in the browser — the demo path.
+      { label: "Try an agent", href: "/agents/try", icon: Headphones, animatedIcon: ActivityIcon, ...NEUTRAL },
       { label: "Reviews",  href: "/reviews",  icon: ClipboardCheck, animatedIcon: ClipboardCheckIcon, ...NEUTRAL },
       { label: "QA Prompt Testing", href: "/qa-prompt-testing", icon: FlaskConical, animatedIcon: ClipboardCheckIcon, ...NEUTRAL },
       { label: "Audience", href: "/audience", icon: Users,          animatedIcon: UsersIcon,          ...NEUTRAL },

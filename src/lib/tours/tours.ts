@@ -30,6 +30,7 @@ export const TOURS: Record<TourId, TourDef> = {
       { target: "brand-switcher", title: "Brands", body: "Every campaign belongs to a brand: a product or customer you call for. Switch here to filter the whole console to one brand, or see all of them.", placement: "right" },
       { target: "nav-campaigns", title: "Campaigns", body: "Upload an audience, pick an agent, set calling windows and press start. Recurring and real-time campaigns run themselves.", placement: "right" },
       { target: "nav-script-builder", title: "Script Builder", body: "Design what your agents say as a flow of boxes, or start from one of twenty pre-built agents. Test with a real call before any customer hears it.", placement: "right" },
+      { target: "nav-agents/try", title: "Try an agent", body: "The quickest demo: pick any of the twenty agents, type your name and your brand, and talk to it in the browser. No setup at all.", placement: "right" },
       { target: "nav-reviews", title: "Reviews & QA", body: "Read transcripts, let the AI judge score calls, and label the ones that matter to improve your scripts.", placement: "right" },
       { target: "account-menu", title: "Settings", body: "Your organization, team members, brands, connected services and phone numbers live under Settings in this menu.", placement: "bottom" },
       { title: "You're set", body: "Start with Script Builder → Agent templates to add a free agent, then create your first campaign. Each of those pages has its own short tour." },

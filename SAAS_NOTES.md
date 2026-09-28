@@ -120,6 +120,24 @@ and in the user's `auth.user_metadata.tours`, so it follows the user across devi
 **?** button (bottom-right, above the phone tab bar) lists all tours to replay them or reset.
 `/<page>?tour=<id>` starts a tour on arrival.
 
+## Try an agent — the demo path (2026-09-28)
+After the first presentation failed (Vapi logged both test calls as
+`error-assistant-did-not-receive-customer-audio` after 0 s — the browser sent no microphone
+audio — and there were no sample scripts), the demo no longer depends on the script engine:
+- **`/agents/try`** ("Try an agent" in the sidebar, "Try live call" on every template card):
+  pick any of the 20 agents, enter your first name and the brand, optionally a voice, press
+  Start. The browser asks for the microphone, shows a live level meter for you and the agent,
+  connects through the Vapi web SDK with a **transient assistant** built by
+  `src/lib/agents/demo.ts` (persona + the full call flow in the prompt, placeholders filled with
+  demo values, ElevenLabs voice, Deepgram nova-3, GPT-4.1) and shows the transcript live. No
+  webhooks, no database, no configuration. `POST /api/agents/demo-call` returns the config.
+- **Sample scripts:** new organizations get Ava, Leo and Maya installed automatically; an empty
+  Script Builder offers "Add the 3 sample agents". Optinet has them now.
+- **Script Builder test call:** asks for the microphone before dialing (plain message if
+  blocked) and the workflow check no longer blocks on warnings, only on errors.
+- If a demo call connects but ends at 0 s again: the microphone is blocked or muted for the
+  site. The page now says so and shows the mic level before connecting.
+
 ## Voice library & Vapi agents (2026-09-25)
 The VOIZO voice library (`src/lib/scriptEngine/voices.ts`) is now 14 ElevenLabs **premade**
 voices: public ids that every ElevenLabs account and Vapi's built-in ElevenLabs can use. The old

@@ -22,5 +22,19 @@ export async function POST(request: NextRequest) {
   // Runs as the signed-in user (auth.uid() inside the function is them).
   const { data, error } = await supabaseAdmin.rpc("create_organization", { p_name: name, p_slug: slugify(name) });
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-  return NextResponse.json({ org: data });
+
+  // A new workspace starts with the three free sample agents (SaaS 2026-09-28), so the Script
+  // Builder is never empty on first visit. Best-effort: a failure here must not fail sign-up.
+  const samples: string[] = [];
+  try {
+    const { AGENT_BY_KEY, FREE_AGENT_KEYS } = await import("@/lib/agents/catalog");
+    const { installAgentTemplate } = await import("@/lib/agents/install");
+    for (const key of FREE_AGENT_KEYS) {
+      const r = await installAgentTemplate(AGENT_BY_KEY[key], { company: name });
+      samples.push(r.scriptName);
+    }
+  } catch (e) {
+    console.warn("[org/create] sample agents not installed:", e instanceof Error ? e.message : e);
+  }
+  return NextResponse.json({ org: data, samples });
 }

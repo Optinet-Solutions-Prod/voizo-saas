@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, Loader2, Lock, Pause, Play, Sparkles } from "lucide-react";
+import { Check, Loader2, Lock, Pause, Phone, Play, Sparkles } from "lucide-react";
 
 // Cards for the pre-built agents, with a play button for each sample clip. Used by the public
 // /agents page and the landing page (read-only) and by the in-app templates page (install).
@@ -80,7 +80,8 @@ export default function AgentGallery({ agents, currency = "USD", onInstall, inst
               {a.tags.slice(0, 3).map((t) => <span key={t} className="rounded-md bg-[var(--bg-elevated)] px-2 py-0.5 text-[11px] text-[var(--text-3)]">{t}</span>)}
             </div>
             {onInstall && (
-              <div className="mt-4 flex items-center gap-2 border-t border-[var(--border)] pt-4">
+              <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-4">
+                <a href={`/agents/try?agent=${a.key}`} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 text-xs font-semibold text-primary hover:bg-primary/20" title="Talk to this agent in your browser"><Phone size={13} /> Try live call</a>
                 {a.installedScriptId ? (
                   <a href={`/script-builder?id=${a.installedScriptId}`} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 text-xs font-medium text-emerald-300 hover:bg-emerald-500/20"><Check size={13} /> Open in Script Builder</a>
                 ) : a.tier === "free" || a.unlocked ? (
