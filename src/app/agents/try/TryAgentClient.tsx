@@ -50,7 +50,7 @@ export default function TryAgentClient() {
       const r = await fetch("/api/agents/demo-call", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: agent.key, company, firstName, voiceId: voiceId || undefined }) });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error ?? "Could not prepare the call");
-      await call.start(j.publicKey, j.assistant);
+      await call.start(j.publicKey, j.assistantId, j.overrides);
     } catch (err) {
       setApiError(err instanceof Error ? err.message : "Could not prepare the call");
     } finally {

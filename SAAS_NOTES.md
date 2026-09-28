@@ -155,6 +155,20 @@ audio — and there were no sample scripts), the demo no longer depends on the s
 - If a demo call connects but ends at 0 s again: the microphone is blocked or muted for the
   site. The page now says so and shows the mic level before connecting.
 
+## Two example voices (2026-09-29)
+Chris's rule: every pre-built agent, sample clip and demo call uses ONE male and ONE female
+voice — intended: **Mark – Natural Conversations** (`UgBBYS2sOqTuMpoF3BR0`) and **Hope –
+Natural, clear** (`OYTbf65OHHFELVut7v2H`). Both ids live in a former team member's private
+ElevenLabs account: the SaaS key gets `voice_not_found`, and Vapi's own ElevenLabs can't use
+them either. Until they are shared into the VOIZO ElevenLabs account (ElevenLabs → the owner
+shares the voice → "Add to my voices"; the id may change), `SAMPLE_VOICES` in
+`src/lib/scriptEngine/voices.ts` points at the closest premade stand-ins (Eric / Sarah). Switching
+is a one-line change per voice there, then `node scripts/generate-agent-samples.mjs --provider
+elevenlabs --force`. Plumbing is ready: demo calls run on a persistent per-agent Vapi assistant
+that carries the platform ElevenLabs credential (`ELEVEN_LABS_KEY` — **add it to Vercel**), and
+clones/rebinds/the lab assistant fall back to that key when the org has none, so account-only
+voices synthesise. Demo call config goes to the browser as per-call overrides only, never keys.
+
 ## Voice library & Vapi agents (2026-09-25)
 The VOIZO voice library (`src/lib/scriptEngine/voices.ts`) is now 14 ElevenLabs **premade**
 voices: public ids that every ElevenLabs account and Vapi's built-in ElevenLabs can use. The old

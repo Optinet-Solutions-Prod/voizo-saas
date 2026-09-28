@@ -1,14 +1,22 @@
-// The VOIZO voice library: ElevenLabs "premade" voices. These ids are public — every
-// ElevenLabs account and Vapi's built-in ElevenLabs can use them — so agents, test calls and
-// the landing-page samples all sound the same and nothing depends on a private voice account.
+// The VOIZO voice library.
 //
-// SaaS (2026-09-25): replaced the original list, whose ids lived in a former team member's
-// private ElevenLabs account and were not reachable from the SaaS accounts (401 on lookup).
-// Genders/accents come from ElevenLabs' own labels. voiceIds must stay unique (they are the
-// <option> values).
+// SAMPLE_VOICES (2026-09-29, Chris): every pre-built agent, sample clip and demo call uses ONE
+// male and ONE female voice. The intended pair is "Mark – Natural Conversations"
+// (UgBBYS2sOqTuMpoF3BR0) and "Hope – Natural, clear" (OYTbf65OHHFELVut7v2H); those ids live in a
+// former team member's private ElevenLabs account and are NOT visible to the SaaS account yet
+// (voice_not_found). Until they are shared into it, the closest premade voices stand in. To
+// switch: change the two ids/labels below — nothing else references them.
+//
+// VOICE_OPTIONS is what the pickers offer: the pair first, then ElevenLabs "premade" voices
+// (public ids every account and Vapi's built-in ElevenLabs can use).
+export const SAMPLE_VOICES = {
+  male:   { label: "VOIZO male — Eric (stand-in for Mark)",     voiceId: "cjVigY5qzO86Huf0OWal" },
+  female: { label: "VOIZO female — Sarah (stand-in for Hope)",  voiceId: "EXAVITQu4vr4xnSDxMaL" },
+} as const;
+
 export const VOICE_OPTIONS = [
-  { label: "Eric – Smooth, trustworthy (US male)",        provider: "11labs", voiceId: "cjVigY5qzO86Huf0OWal" },
-  { label: "Sarah – Mature, reassuring (US female)",      provider: "11labs", voiceId: "EXAVITQu4vr4xnSDxMaL" },
+  { label: SAMPLE_VOICES.male.label,   provider: "11labs", voiceId: SAMPLE_VOICES.male.voiceId },
+  { label: SAMPLE_VOICES.female.label, provider: "11labs", voiceId: SAMPLE_VOICES.female.voiceId },
   { label: "Chris – Charming, down-to-earth (US male)",   provider: "11labs", voiceId: "iP95p4xoKVk53GoZ742B" },
   { label: "Bella – Professional, bright (US female)",    provider: "11labs", voiceId: "hpp4J3VqNfWAUOO0d1Us" },
   { label: "Brian – Deep, resonant (US male)",            provider: "11labs", voiceId: "nPczCjzI2devNBz1zQrb" },
@@ -24,4 +32,4 @@ export const VOICE_OPTIONS = [
 ] as const;
 
 /** Sensible default for new scripts and the base agent. */
-export const DEFAULT_VOICE_ID = VOICE_OPTIONS[0].voiceId;
+export const DEFAULT_VOICE_ID = SAMPLE_VOICES.male.voiceId;

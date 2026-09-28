@@ -11,6 +11,8 @@
 // Three are free for every organization; the rest are unlocked per organization
 // (agent_purchases). Pure data — no server imports — so the landing page can read it too.
 
+import { SAMPLE_VOICES } from "../scriptEngine/voices";
+
 export type AgentTier = "free" | "pro";
 
 export interface AgentObjection {
@@ -61,17 +63,17 @@ export interface AgentTemplate {
   tags: string[];
 }
 
-// Library voices (ElevenLabs premade — public ids, see scriptEngine/voices.ts). The keys keep
-// the persona names the flows were written with; the ids are the voices they map to.
+// One male and one female voice for every example (Chris, 2026-09-29) — see SAMPLE_VOICES in
+// scriptEngine/voices.ts. The keys keep the persona names the flows were written with.
 const V = {
-  hope: "EXAVITQu4vr4xnSDxMaL",     // Sarah — female
-  casual: "cgSgspJ2msm6clMCkdW9",   // Jessica — female
-  mark: "cjVigY5qzO86Huf0OWal",     // Eric — male
-  stephen: "nPczCjzI2devNBz1zQrb",  // Brian — male
-  jackson: "bIHbv24MWmeRgasZH58o",  // Will — male
-  george: "JBFqnCBsd6RMkjVDRZzb",   // George — male (UK)
-  alex: "iP95p4xoKVk53GoZ742B",     // Chris — male
-  matthew: "onwK4e9ZLuTAKqWW03F9",  // Daniel — male (UK)
+  hope: SAMPLE_VOICES.female.voiceId,
+  casual: SAMPLE_VOICES.female.voiceId,
+  mark: SAMPLE_VOICES.male.voiceId,
+  stephen: SAMPLE_VOICES.male.voiceId,
+  jackson: SAMPLE_VOICES.male.voiceId,
+  george: SAMPLE_VOICES.male.voiceId,
+  alex: SAMPLE_VOICES.male.voiceId,
+  matthew: SAMPLE_VOICES.male.voiceId,
 } as const;
 
 const PRICE = { priceUsd: 19, priceEur: 18 };

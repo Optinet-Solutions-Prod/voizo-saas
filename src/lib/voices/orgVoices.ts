@@ -74,10 +74,18 @@ export async function voiceExtrasForRequest(): Promise<Awaited<ReturnType<typeof
  * the org's ElevenLabs credential to attach inline (`credentials` on the assistant). Both empty
  * when the org hasn't connected ElevenLabs.
  */
+/** VOIZO's own ElevenLabs key (the platform's, for library voices that live in its account). */
+export function platformElevenLabsKey(): string | null {
+  return process.env.ELEVEN_LABS_KEY || process.env.ELEVENLABS_API_KEY || null;
+}
+
 export async function voiceCloneExtras(orgId: string | null | undefined): Promise<{ allowedVoiceIds: string[]; voiceCredentials?: { provider: "11labs"; apiKey: string } }> {
-  if (!orgId) return { allowedVoiceIds: [] };
+  // Without an org key, fall back to the platform key so library voices that exist only in
+  // VOIZO's ElevenLabs account (not ElevenLabs' public premade set) still synthesise.
+  const platform = platformElevenLabsKey();
+  if (!orgId) return { allowedVoiceIds: [], ...(platform ? { voiceCredentials: { provider: "11labs" as const, apiKey: platform } } : {}) };
   const key = await orgElevenLabsKey(orgId);
-  if (!key) return { allowedVoiceIds: [] };
+  if (!key) return { allowedVoiceIds: [], ...(platform ? { voiceCredentials: { provider: "11labs" as const, apiKey: platform } } : {}) };
   const { voices } = await customVoices(orgId);
   return { allowedVoiceIds: voices.map((v) => v.voiceId), voiceCredentials: { provider: "11labs", apiKey: key } };
 }

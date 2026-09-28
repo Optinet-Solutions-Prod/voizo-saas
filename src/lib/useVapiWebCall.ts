@@ -119,8 +119,8 @@ export function useVapiWebCall() {
     setStatus((s) => (s === "live" || s === "connecting" ? "ended" : s));
   }, [stopMeter]);
 
-  /** Start a call with a transient assistant config (or an assistant id) using the given public key. */
-  const start = useCallback(async (publicKey: string, assistant: Record<string, unknown> | string) => {
+  /** Start a call: a transient assistant config, or an assistant id plus per-call overrides. */
+  const start = useCallback(async (publicKey: string, assistant: Record<string, unknown> | string, overrides?: Record<string, unknown>) => {
     setError(null);
     setTranscript([]);
     setSeconds(0);
@@ -175,7 +175,7 @@ export function useVapiWebCall() {
         if (timerRef.current) window.clearInterval(timerRef.current);
         stopMeter();
       });
-      const call = await vapi.start(assistant);
+      const call = await vapi.start(assistant, overrides);
       if (!call && !reported) {
         throw new Error(
           lastStage
