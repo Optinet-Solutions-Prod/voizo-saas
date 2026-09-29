@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { CheckCircle2, ExternalLink, Loader2, Plug, PlugZap, XCircle } from "lucide-react";
 import { useOrg } from "@/lib/orgContext";
+import DeliveryModeCard from "@/components/DeliveryModeCard";
 import type { ProviderField } from "@/lib/integrations/providers";
 import { Card, Notice, api, dangerBtn, ghostBtn, inputCls, primaryBtn, selectCls } from "./ui";
 
@@ -12,7 +13,7 @@ interface Item {
   status: "untested" | "ok" | "failed"; lastTestedAt: string | null; lastError: string | null;
 }
 
-const CATEGORY_LABEL: Record<string, string> = { crm: "CRM & audiences", telephony: "Telephony", ai: "AI", sms: "SMS", email: "Email", voice: "Voices" };
+const CATEGORY_LABEL: Record<string, string> = { crm: "CRM & audiences", telephony: "Telephony, SIP & WhatsApp", ai: "AI", sms: "SMS", email: "Email", voice: "Voices" };
 
 export default function IntegrationsTab() {
   const org = useOrg();
@@ -38,6 +39,7 @@ export default function IntegrationsTab() {
     <div className="grid gap-4">
       {msg && <Notice kind={msg.kind}>{msg.text}</Notice>}
       {!org.canManage && <Notice kind="info">Only owners and admins can connect or change integrations. You can see what&apos;s connected.</Notice>}
+      <DeliveryModeCard canManage={org.canManage} />
       {groups.map((cat) => (
         <Card key={cat} title={CATEGORY_LABEL[cat] ?? cat}>
           <ul className="divide-y divide-[var(--border)]">

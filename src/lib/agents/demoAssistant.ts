@@ -9,7 +9,7 @@ import { platformElevenLabsKey } from "../voices/orgVoices";
 
 const VAPI = "https://api.vapi.ai";
 // Bump when composeDemoAssistant changes; assistants created with an older version are patched.
-const DEMO_VERSION = 2;
+export const DEMO_VERSION = 3;
 const cache = new Map<string, string>();
 
 async function vapi(path: string, init: RequestInit = {}) {

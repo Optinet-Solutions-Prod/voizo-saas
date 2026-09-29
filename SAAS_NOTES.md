@@ -228,3 +228,12 @@ when calling goes live. The set was:
 - Public `/api/public/demo-call` (no sign-in): 3 calls per visitor per hour, global daily cap `PUBLIC_DEMO_DAILY_CAP` (default 150, counted from Vapi call log), 4-minute calls.
 - `/api/public/agent-match`: OpenAI (gpt-4.1-mini) ranks the catalog for a business type; keyword fallback if the key is missing.
 - Landing page + /agents: "Which agent fits your business?" panel, Listen / Talk buttons on every card, modal with name, business name, business type. Business type is fed into the agent prompt.
+
+## Wrap-up, call summary, delivery mode, SIP trunk, WhatsApp (2026-09-29)
+- Demo prompt: one-line reassurance (what's agreed, what happens next, nothing more to do) before a single goodbye. Demo assistants at DEMO_VERSION 3 (run `npx tsx --env-file=.env.local scripts/upgrade-demo-assistants.mts` after prompt changes).
+- Call summary card after every demo call (public modal + Try an agent): `POST /api/public/call-summary` → outcome / headline / summary / next step / highlights via gpt-4.1-mini.
+- Delivery mode per organization (`organizations.settings.delivery_mode`): `on_the_go` (default, VOIZO's services) or `own`. Settings → Integrations, top card. `resolveIntegration(orgId, provider)` in src/lib/integrations/store.ts picks platform vs org credentials; platform values come from env: MOBIVATE_*, RESEND_*, FREESWITCH_SHIM_*, SQUARETALK_BASE_URL / SQUARETALK_API_KEY, PLATFORM_SIP_HOST / PORT / TRANSPORT / USERNAME / PASSWORD / CALLER_ID (the Squaretalk trunk).
+- Status: the call pipeline and SMS/email senders still read platform env directly (= on-the-go behaviour). Phone-number tests already honour the mode. Wiring "bring your own" into the dialer/SMS/email paths is the next step.
+- Integrations: "Your SIP trunk" (host/port/transport/auth; test = DNS + TCP/TLS connect) and "WhatsApp Business Calling" (phone number ID + token; test = Graph API number lookup + calling status). Phone numbers can be registered as "My SIP trunk" or "WhatsApp Business number".
+- WhatsApp calling: the integration + tests are in place; placing calls needs Meta's Business Calling API approval on the number and the media bridge (Meta ↔ Vapi/SIP). Not live yet: don't demo it as a working call path.
+- Landing: tagline "Calls on the go. Agents on the go.", hero copy, two new feature cards, "On the go, or bring your own" section.

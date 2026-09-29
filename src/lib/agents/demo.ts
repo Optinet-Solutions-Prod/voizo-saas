@@ -86,7 +86,8 @@ export function composeDemoPrompt(agent: AgentTemplate, input: DemoInput): strin
     const next = o.next === "value" ? "then return to the reason for the call" : o.next === "sms" ? "then say a text is on its way and wrap up" : o.next === "positive" ? "then continue as if they said yes" : "then say goodbye";
     lines.push(`${4 + i}. If they ${f(o.trigger).toLowerCase()} — ${f(o.name).toLowerCase()} — say: "${f(o.reply)}" and ${next}.`);
   });
-  lines.push(`${4 + flow.objections.length}. Goodbye: "${f(flow.goodbye)}" Say it once, in one short line, then end the call straight away with the end-call function. Never say goodbye twice.`);
+  lines.push(`${4 + flow.objections.length}. Wrap-up: one short, warm line of reassurance — what's agreed, what happens next, and that there's nothing more they need to do (for example: "You're all set, ${input.firstName} — that's on its way and there's nothing else you need to do. Any questions, just give us a shout.").`);
+  lines.push(`${5 + flow.objections.length}. Goodbye: "${f(flow.goodbye)}" Say it once, right after the wrap-up, then end the call straight away with the end-call function. Never say goodbye twice.`);
   lines.push("");
   lines.push("MUST COVER");
   for (const g of flow.goals) lines.push(`- ${f(g)}`);
@@ -96,7 +97,7 @@ export function composeDemoPrompt(agent: AgentTemplate, input: DemoInput): strin
   lines.push("- Keep every turn to one or two short sentences, under 25 words. One question at a time, then stop and listen.");
   lines.push("- Use the lines above as a guide, in your own words; never read placeholders, brackets, legal or opt-out text aloud.");
   lines.push("- If they ask something off-script, answer in a sentence and steer back.");
-  lines.push("- Don't repeat yourself. When the conversation is done, say the goodbye once and end the call.");
+  lines.push("- Don't repeat yourself. When the conversation is done, give the one-line wrap-up, say the goodbye once and end the call.");
   return lines.join("\n");
 }
 

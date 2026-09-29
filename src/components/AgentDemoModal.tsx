@@ -5,6 +5,7 @@ import { AlertCircle, ArrowRight, Headphones, Loader2, Pause, Phone, Play, Rotat
 import { useVapiWebCall } from "@/lib/useVapiWebCall";
 import LiveCallPanel, { formatSeconds } from "./LiveCallPanel";
 import type { GalleryAgent } from "./AgentGallery";
+import CallSummaryCard from "./CallSummaryCard";
 
 // Public demo modal (landing page, /agents): listen to the agent's sample, or enter your name,
 // business name and business type and talk to it live in the browser. No sign-in; the server
@@ -166,6 +167,7 @@ export default function AgentDemoModal({ agent, initial, onClose, onDetails }: {
                     <a href="/signup" className="mt-2 inline-flex items-center gap-1 font-semibold text-emerald-100 hover:underline">Create a free account to make it yours <ArrowRight size={13} /></a>
                   </div>
                 )}
+                {call.status === "ended" && !call.error && <CallSummaryCard agentKey={agent.key} firstName={firstName} company={company} transcript={call.transcript} seconds={call.seconds} />}
                 <button type="submit" disabled={preparing || !firstName.trim() || !company.trim()} className="mt-1 inline-flex h-12 items-center justify-center gap-2 rounded-xl text-sm font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60" style={{ background: PRIMARY, boxShadow: `0 8px 24px ${PRIMARY}33` }}>
                   {preparing ? <Loader2 size={16} className="animate-spin" /> : <Phone size={16} />} {call.status === "ended" ? `Call ${first} again` : `Start the call with ${first}`}
                 </button>

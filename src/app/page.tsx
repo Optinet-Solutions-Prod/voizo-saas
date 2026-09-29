@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import {
   ArrowRight, BarChart3, Bot, CalendarClock, CheckCircle2, MessageSquareText, PhoneCall,
-  ShieldCheck, Sparkles, Workflow,
+  MessageCircle, ShieldCheck, Sparkles, Workflow, Zap,
 } from "lucide-react";
 import PublicAgentsShowcase from "@/components/PublicAgentsShowcase";
 import TryItNowButton from "@/components/TryItNow";
@@ -10,9 +10,9 @@ import { AGENT_CATALOG, publicAgent } from "@/lib/agents/catalog";
 import { sampleUrl } from "@/lib/agents/entitlements";
 
 export const metadata: Metadata = {
-  title: "VOIZO — AI voice agents for outbound calling",
+  title: "VOIZO — Calls on the go. Agents on the go.",
   description:
-    "Build AI voice agents, run outbound call campaigns, follow up by SMS and see what every call achieved.",
+    "AI voice agents ready as they are, anytime, anywhere: numbers, SMS, email and SIP trunk included, or bring your own. Calls to mobiles, landlines and WhatsApp.",
 };
 
 // Public landing page (the middleware leaves "/" open). Server-rendered, no data fetches.
@@ -56,6 +56,18 @@ const FEATURES = [
     title: "Analytics that add up",
     body: "Reach, pickups, conversations, opt-ins and cost per campaign, with exports for your CRM and a daily snapshot of the numbers.",
     tint: "#5fb85f",
+  },
+  {
+    icon: Zap,
+    title: "On the go, ready as it is",
+    body: "Phone numbers, SMS, email and a SIP trunk come with your account. Pick an agent, add your brand, press start. Anytime, anywhere.",
+    tint: "#f0c94d",
+  },
+  {
+    icon: MessageCircle,
+    title: "WhatsApp calling",
+    body: "Reach customers on WhatsApp through Meta's Business Calling API, alongside mobile and landline numbers, from the same campaign.",
+    tint: "#25d366",
   },
 ];
 
@@ -192,22 +204,22 @@ export default function LandingPage() {
           <div>
             <span className="inline-flex items-center gap-2 rounded-full border border-[var(--border-2)] bg-[var(--bg-card)] px-3 py-1 text-xs text-[var(--text-2)]">
               <span className="h-1.5 w-1.5 rounded-full" style={{ background: PRIMARY }} />
-              AI outbound calling platform
+              Ready as it is · anytime, anywhere
             </span>
             <h1 className="mt-6 text-[2rem] font-bold leading-[1.08] tracking-tight sm:text-5xl lg:text-[3.1rem]">
-              Voice agents that call,
+              Calls on the go.
               <br />
               <span
                 className="bg-clip-text text-transparent"
                 style={{ backgroundImage: `linear-gradient(90deg, ${PRIMARY}, #8b7cf6)` }}
               >
-                convert and follow up.
+                Agents on the go.
               </span>
             </h1>
             <p className="mt-6 max-w-xl text-base leading-relaxed text-[var(--text-2)] sm:text-lg">
-              VOIZO runs your outbound campaigns with AI voice agents: it dials your audience inside
-              the windows you set, holds natural conversations, texts the offer to people who opt in,
-              and shows you what every call achieved.
+              VOIZO is ready as it is, anytime, anywhere. Pick an agent, add your brand and start
+              calling on our numbers, SIP trunk, SMS and email, with nothing to set up. Or bring your
+              own carrier, numbers and senders. Calls reach mobiles, landlines and WhatsApp.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
               <TryItNowButton
@@ -223,7 +235,7 @@ export default function LandingPage() {
             </div>
             <p className="mt-3 text-xs text-[var(--text-4)]">Take a live call from an AI agent in your browser. No account, no setup.</p>
             <ul className="mt-10 flex flex-wrap gap-x-6 gap-y-2 text-sm text-[var(--text-3)]">
-              {["Natural-sounding voices", "Recurring & real-time campaigns", "Built-in call QA"].map((t) => (
+              {["Numbers, SMS, email & SIP trunk included", "Bring your own carrier if you prefer", "Mobile, landline & WhatsApp"].map((t) => (
                 <li key={t} className="flex items-center gap-2">
                   <CheckCircle2 size={15} style={{ color: PRIMARY }} /> {t}
                 </li>
@@ -242,7 +254,7 @@ export default function LandingPage() {
             <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">Everything a calling team needs, in one console</h2>
             <p className="mt-4 text-[var(--text-2)]">From the first draft of a script to the report on how it performed.</p>
           </div>
-          <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {FEATURES.map(({ icon: Icon, title, body, tint }) => (
               <div
                 key={title}
@@ -274,6 +286,37 @@ export default function LandingPage() {
             </div>
             <div className="mt-10">
               <PublicAgentsShowcase compact featured={8} agents={AGENT_CATALOG.map((a) => ({ ...publicAgent(a), sampleUrl: sampleUrl(a.key) }))} />
+            </div>
+          </div>
+        </section>
+
+        {/* ── On the go, or bring your own ── */}
+        <section id="on-the-go" className="scroll-mt-20 mx-auto max-w-6xl px-4 py-20 sm:px-6">
+          <div className="max-w-2xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em]" style={{ color: PRIMARY }}>Two ways to run</p>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">On the go, or bring your own</h2>
+            <p className="mt-4 text-[var(--text-2)]">Start on VOIZO&apos;s infrastructure today and switch to your own carrier whenever you like. One setting, no rebuild.</p>
+          </div>
+          <div className="mt-12 grid gap-4 md:grid-cols-2">
+            <div className="rounded-2xl border p-7" style={{ borderColor: `${PRIMARY}66`, background: `linear-gradient(160deg, ${PRIMARY}1f, transparent 60%)` }}>
+              <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-white" style={{ background: PRIMARY }}><Zap size={20} /></span>
+              <h3 className="mt-5 text-xl font-semibold">Agents on the go</h3>
+              <p className="mt-1 text-sm font-medium" style={{ color: PRIMARY }}>Ready as it is, anytime, anywhere.</p>
+              <ul className="mt-5 space-y-2.5 text-sm text-[var(--text-2)]">
+                {["VOIZO phone numbers with per-country caller IDs", "VOIZO SIP trunk for every campaign call", "SMS and email follow-ups sent for you", "WhatsApp calling once your number is enabled"].map((t) => (
+                  <li key={t} className="flex items-start gap-2"><CheckCircle2 size={16} className="mt-0.5 shrink-0" style={{ color: PRIMARY }} /> {t}</li>
+                ))}
+              </ul>
+            </div>
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-7">
+              <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--bg-elevated)] text-[var(--text-1)]"><PhoneCall size={20} /></span>
+              <h3 className="mt-5 text-xl font-semibold">Bring your own</h3>
+              <p className="mt-1 text-sm font-medium text-[var(--text-3)]">Your carrier, your numbers, your senders.</p>
+              <ul className="mt-5 space-y-2.5 text-sm text-[var(--text-2)]">
+                {["Your own phone numbers, tested from the console", "Your SIP trunk, Squaretalk, Twilio or FreeSWITCH", "Your SMS and email providers, encrypted at rest", "Mix and match: VOIZO fills in whatever you don't connect"].map((t) => (
+                  <li key={t} className="flex items-start gap-2"><CheckCircle2 size={16} className="mt-0.5 shrink-0 text-[var(--text-3)]" /> {t}</li>
+                ))}
+              </ul>
             </div>
           </div>
         </section>

@@ -9,6 +9,7 @@ import { useVapiWebCall } from "@/lib/useVapiWebCall";
 import { useVoiceOptions } from "@/lib/useVoiceOptions";
 import type { GalleryAgent } from "@/components/AgentGallery";
 import LiveCallPanel, { formatSeconds } from "@/components/LiveCallPanel";
+import CallSummaryCard from "@/components/CallSummaryCard";
 
 const PRIMARY = "#4d90f0";
 
@@ -136,6 +137,7 @@ export default function TryAgentClient() {
               {call.status === "ended" && !call.error && (
                 <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3.5 py-3 text-sm text-emerald-200">Call ended after {formatSeconds(call.seconds)}. Try another agent, or the same one with different answers.</div>
               )}
+              {agent && call.status === "ended" && !call.error && <CallSummaryCard agentKey={agent.key} firstName={firstName} company={company} transcript={call.transcript} seconds={call.seconds} />}
               <button type="submit" disabled={preparing || !agent || !firstName.trim() || !company.trim()} className="mt-1 inline-flex h-12 items-center justify-center gap-2 rounded-xl text-sm font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60" style={{ background: PRIMARY, boxShadow: `0 8px 24px ${PRIMARY}33` }}>
                 {preparing ? <Loader2 size={16} className="animate-spin" /> : <Phone size={16} />} {call.status === "ended" ? "Call again" : "Start the call"}
               </button>

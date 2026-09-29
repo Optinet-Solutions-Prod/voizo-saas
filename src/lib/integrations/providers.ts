@@ -138,6 +138,79 @@ export const PROVIDERS: ProviderDef[] = [
     },
   },
   {
+    key: "siptrunk",
+    name: "Your SIP trunk",
+    category: "telephony",
+    description: "Bring your own SIP trunk from any carrier. In bring-your-own mode, campaign calls go out through it instead of VOIZO's trunk.",
+    docsUrl: "https://docs.vapi.ai/advanced/sip/sip-trunk",
+    fields: [
+      { key: "host", label: "SIP host", type: "text", required: true, placeholder: "sip.yourcarrier.com", help: "Hostname or IP of the trunk's signalling gateway." },
+      { key: "port", label: "Port", type: "text", placeholder: "5060" },
+      { key: "transport", label: "Transport", type: "select", options: [{ value: "udp", label: "UDP" }, { value: "tcp", label: "TCP" }, { value: "tls", label: "TLS" }] },
+      { key: "username", label: "Auth username", type: "text" },
+      { key: "password", label: "Auth password", type: "secret", secret: true },
+      { key: "callerId", label: "Default caller ID", type: "text", placeholder: "+442036953434" },
+    ],
+    async test(_creds, config) {
+      const host = (config.host ?? "").trim();
+      if (!host) return fail("Enter the SIP host.");
+      const port = Number(config.port || 5060);
+      const transport = (config.transport || "udp").toLowerCase();
+      try {
+        const dns = await import("node:dns/promises");
+        const addrs = await dns.lookup(host, { all: true });
+        const ip = addrs[0]?.address;
+        if (!ip) return fail(`${host} doesn't resolve.`);
+        if (transport === "udp") return { ok: true, detail: `${host} resolves to ${ip}. UDP trunks can't be probed without a call; registration is checked on the first dial.`, facts: { ip, port: String(port) } };
+        const net = await import("node:net");
+        const reachable = await new Promise<boolean>((resolve) => {
+          const s = net.createConnection({ host: ip, port });
+          const done = (v: boolean) => { s.destroy(); resolve(v); };
+          s.setTimeout(6000, () => done(false));
+          s.once("connect", () => done(true));
+          s.once("error", () => done(false));
+        });
+        return reachable
+          ? { ok: true, detail: `${host} (${ip}) accepts ${transport.toUpperCase()} connections on port ${port}.`, facts: { ip, port: String(port) } }
+          : fail(`${host} (${ip}) didn't accept a ${transport.toUpperCase()} connection on port ${port}.`);
+      } catch (e) {
+        return netError(e, host);
+      }
+    },
+  },
+  {
+    key: "whatsapp",
+    name: "WhatsApp Business Calling",
+    category: "telephony",
+    description: "Call customers on WhatsApp through Meta's Business Calling API. Enable calling on your WhatsApp Business number in WhatsApp Manager, then connect it here.",
+    docsUrl: "https://developers.facebook.com/docs/whatsapp/cloud-api/calling",
+    fields: [
+      { key: "phoneNumberId", label: "Phone number ID", type: "text", required: true, help: "WhatsApp Manager → Phone numbers → the number's ID (not the phone number itself)." },
+      { key: "wabaId", label: "WhatsApp Business Account ID", type: "text" },
+      { key: "accessToken", label: "System user access token", type: "secret", secret: true, required: true, help: "A permanent token with whatsapp_business_messaging and whatsapp_business_management." },
+    ],
+    async test(creds, config) {
+      const id = (config.phoneNumberId ?? "").trim();
+      if (!/^\d{5,}$/.test(id)) return fail("The phone number ID should be numeric.");
+      const H = { Authorization: `Bearer ${creds.accessToken}` };
+      try {
+        const r = await call(`https://graph.facebook.com/v21.0/${id}?fields=display_phone_number,verified_name,quality_rating`, { headers: H });
+        const j = (await r.json().catch(() => ({}))) as { display_phone_number?: string; verified_name?: string; quality_rating?: string; error?: { message?: string } };
+        if (!r.ok) return fail(`Meta rejected the connection: ${j.error?.message ?? `HTTP ${r.status}`}`);
+        const s = await call(`https://graph.facebook.com/v21.0/${id}/settings`, { headers: H });
+        const sj = (await s.json().catch(() => ({}))) as { calling?: { status?: string } };
+        const calling = (sj.calling?.status ?? "unknown").toLowerCase();
+        const facts = { number: j.display_phone_number ?? "", name: j.verified_name ?? "", quality: j.quality_rating ?? "", calling };
+        const who = `${j.verified_name ?? "Number"} (${j.display_phone_number ?? id})`;
+        return calling === "enabled"
+          ? { ok: true, detail: `${who} is connected and calling is enabled.`, facts }
+          : { ok: true, detail: `${who} is connected. Calling status: ${calling} — enable calling for this number in WhatsApp Manager before dialing.`, facts };
+      } catch (e) {
+        return netError(e, "Meta's Graph API");
+      }
+    },
+  },
+  {
     key: "openai",
     name: "OpenAI",
     category: "ai",

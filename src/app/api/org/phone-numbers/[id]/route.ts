@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireTenant } from "@/lib/tenant";
 import { supabaseAdmin } from "@/lib/supabaseServer";
-import { getOrgIntegration } from "@/lib/integrations/store";
+import { getOrgIntegration, resolveIntegration } from "@/lib/integrations/store";
 import { PROVIDER_MAP } from "@/lib/integrations/providers";
 
 // POST   /api/org/phone-numbers/:id → test the number: format, then the provider's own check
@@ -31,16 +31,28 @@ async function testNumber(orgId: string, n: NumberRow): Promise<{ ok: boolean; d
     }
   }
   if (n.provider === "freeswitch") {
-    const fs = await getOrgIntegration(orgId, "freeswitch");
-    if (!fs) return { ok: false, detail: "Connect FreeSWITCH under Integrations first, then test again." };
+    const fs = await resolveIntegration(orgId, "freeswitch");
+    if (!fs) return { ok: false, detail: "Connect FreeSWITCH under Integrations first (or switch to Agents on the go), then test again." };
     const res = await PROVIDER_MAP.freeswitch.test(fs.credentials, fs.config);
     return res.ok ? { ok: true, detail: "Number format is valid and the FreeSWITCH shim is reachable. A live test call comes with the dialing phase." } : res;
   }
   if (n.provider === "squaretalk") {
-    const sq = await getOrgIntegration(orgId, "squaretalk");
-    if (!sq) return { ok: false, detail: "Connect Squaretalk under Integrations first, then test again." };
+    const sq = await resolveIntegration(orgId, "squaretalk");
+    if (!sq) return { ok: false, detail: "Connect Squaretalk under Integrations first (or switch to Agents on the go), then test again." };
     const res = await PROVIDER_MAP.squaretalk.test(sq.credentials, sq.config);
     return res.ok ? { ok: true, detail: "Number format is valid and Squaretalk is reachable." } : res;
+  }
+  if (n.provider === "siptrunk") {
+    const st = await resolveIntegration(orgId, "siptrunk");
+    if (!st) return { ok: false, detail: "Connect your SIP trunk under Integrations first (or switch to Agents on the go), then test again." };
+    const res = await PROVIDER_MAP.siptrunk.test(st.credentials, st.config);
+    return res.ok ? { ok: true, detail: `Number format is valid and the ${st.source === "platform" ? "VOIZO" : "connected"} SIP trunk is reachable. ${res.detail}` } : res;
+  }
+  if (n.provider === "whatsapp") {
+    const wa = await getOrgIntegration(orgId, "whatsapp");
+    if (!wa) return { ok: false, detail: "Connect WhatsApp Business Calling under Integrations first, then test again." };
+    const res = await PROVIDER_MAP.whatsapp.test(wa.credentials, wa.config);
+    return res.ok ? { ok: true, detail: `Number format is valid. ${res.detail}` } : res;
   }
   return { ok: true, detail: "Number format is valid. No automatic ownership check is available for this carrier." };
 }

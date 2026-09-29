@@ -17,7 +17,9 @@ export function normalizeE164(input: string): string {
 export const NUMBER_PROVIDERS = [
   { value: "twilio", label: "Twilio" },
   { value: "squaretalk", label: "Squaretalk" },
-  { value: "freeswitch", label: "FreeSWITCH / SIP trunk" },
+  { value: "freeswitch", label: "FreeSWITCH" },
+  { value: "siptrunk", label: "My SIP trunk" },
+  { value: "whatsapp", label: "WhatsApp Business number" },
   { value: "vapi", label: "Vapi number" },
   { value: "other", label: "Other carrier" },
 ] as const;
