@@ -120,6 +120,16 @@ and in the user's `auth.user_metadata.tours`, so it follows the user across devi
 **?** button (bottom-right, above the phone tab bar) lists all tours to replay them or reset.
 `/<page>?tour=<id>` starts a tour on arrival.
 
+## Demo account & pitch rehearsals (2026-09-29)
+`demo@optinetsolutions.com` / `VoizoDemo2026!` is a confirmed account with **no organization**,
+so a pitch can start at onboarding without waiting for a confirmation email. After a rehearsal,
+`node scripts/reset-demo-org.mjs --user demo@optinetsolutions.com` deletes the organization it
+created (scripts, playbook, brands, members) so the same account can go through onboarding again.
+To show a *live* sign-up instead, either accept the "check your email" step (Supabase's default
+mailer, rate-limited) or turn off "Confirm email" under Supabase → Authentication → Providers →
+Email for the day. Campaigns: stop at the Review step in a demo — Launch would create a real
+campaign (FreeSWITCH is stubbed, but the rows are real).
+
 ## Sample scripts — production architecture (2026-09-28)
 `src/lib/agents/scriptGraph.ts` builds every agent template in the same shape as the team's
 best-performing production script (structure only — no brand content): an agent-first
