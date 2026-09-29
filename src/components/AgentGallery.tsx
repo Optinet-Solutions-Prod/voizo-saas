@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, Loader2, Lock, Pause, Phone, Play, Sparkles } from "lucide-react";
+import { Check, Loader2, Lock, Pause, Phone, Play, Sparkles, Star } from "lucide-react";
 
 // Cards for the pre-built agents, with a play button for each sample clip. Used by the public
 // /agents page and the landing page (read-only) and by the in-app templates page (install).
@@ -15,7 +15,7 @@ export interface GalleryAgent {
 
 const PRIMARY = "#4d90f0";
 
-export default function AgentGallery({ agents, currency = "USD", onInstall, installing, compact, onTry, highlightKeys = [] }: {
+export default function AgentGallery({ agents, currency = "USD", onInstall, installing, compact, onTry, highlightKeys = [], recommendGender }: {
   agents: GalleryAgent[];
   currency?: "USD" | "EUR";
   /** In-app: install handler; absent on marketing pages. */
@@ -26,6 +26,8 @@ export default function AgentGallery({ agents, currency = "USD", onInstall, inst
   onTry?: (agent: GalleryAgent) => void;
   /** Agents the matcher suggested; drawn with a "Suggested for you" badge. */
   highlightKeys?: string[];
+  /** Voices to mark as "Recommended" (the stronger of the two sample voices). */
+  recommendGender?: "male" | "female";
 }) {
   const [playing, setPlaying] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -65,6 +67,7 @@ export default function AgentGallery({ agents, currency = "USD", onInstall, inst
               <Body type={onTry ? "button" : undefined} onClick={onTry ? () => onTry(a) : undefined} className={`min-w-0 flex-1 text-left ${onTry ? "cursor-pointer rounded-lg -m-1 p-1 hover:bg-[var(--bg-hover)]" : ""}`} title={onTry ? `Listen to ${a.name} or talk live` : undefined}>
                 <div className="flex flex-wrap items-center gap-2">
                   <h3 className="text-base font-semibold text-[var(--text-1)]">{a.name}</h3>
+                  {recommendGender && a.gender === recommendGender && <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-[11px] font-medium text-amber-300" title="One of our strongest voices"><Star size={10} /> Recommended</span>}
                   {a.tier === "free" ? (
                     <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-300">Free</span>
                   ) : a.unlocked ? (

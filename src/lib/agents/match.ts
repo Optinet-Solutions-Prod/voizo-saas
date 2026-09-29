@@ -23,15 +23,17 @@ export function heuristicMatch(businessType: string, businessName = "", limit = 
     for (const t of hay) if (q.has(t) || [...q].some((w) => w.length > 4 && (t.startsWith(w) || w.startsWith(t)))) score += 1;
     // Universal agents get a small floor so there are always three suggestions.
     if (["lead-qualifier", "appointment-reminder", "satisfaction-survey"].includes(a.key)) score += 0.5;
+    // Male voices are the stronger ones in the current voice pair; break ties in their favour.
+    if (a.gender === "male") score += 0.25;
     return { a, score };
   }).sort((x, y) => y.score - x.score);
   return scored.slice(0, limit).map(({ a }) => ({ key: a.key, name: a.name, role: a.role, reason: `${a.role} for ${a.industry.toLowerCase()}.` }));
 }
 
 export function matchPrompt(businessType: string, businessName: string): string {
-  const list = AGENT_CATALOG.map((a) => `- ${a.key}: ${a.name}, ${a.role} — for ${a.industry}. ${a.tagline}`).join("\n");
+  const list = AGENT_CATALOG.map((a) => `- ${a.key}: ${a.name} (${a.gender} voice), ${a.role} — for ${a.industry}. ${a.tagline}`).join("\n");
   return `A visitor runs this business: "${businessName || "unnamed"}" — ${businessType}.
-Pick the THREE agents from the catalog below that would help that business most, best first. For each, give one short reason (max 18 words) written to the visitor, naming a concrete call the agent would make for them.
+Pick the THREE agents from the catalog below that would help that business most, best first. When two agents fit equally well, prefer the male-voiced one (our strongest voices). For each, give one short reason (max 18 words) written to the visitor, naming a concrete call the agent would make for them.
 Answer as JSON: {"matches":[{"key":"<key>","reason":"<reason>"}, ...]} — keys must come from the list.
 
 Catalog:

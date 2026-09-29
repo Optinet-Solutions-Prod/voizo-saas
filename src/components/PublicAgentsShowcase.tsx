@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { AlertCircle, Loader2, Pause, Phone, Play, Sparkles, Wand2 } from "lucide-react";
+import { AlertCircle, Loader2, Pause, Phone, Play, Sparkles, Star, Wand2 } from "lucide-react";
 import AgentGallery, { type GalleryAgent } from "./AgentGallery";
 import AgentDemoModal, { avatarStyle, loadVisitor, saveVisitor, type VisitorDetails } from "./AgentDemoModal";
 import { DEMO_DETAILS_EVENT } from "./TryItNow";
@@ -130,7 +130,7 @@ export default function PublicAgentsShowcase({ agents, featured, compact }: {
                   <div className="flex items-center gap-3">
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white" style={avatarStyle(a.gender)}>{a.name[0]}</span>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-[var(--text-1)]">{i === 0 && <span className="mr-1.5 rounded-md bg-primary/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">Best fit</span>}{a.name}</p>
+                      <p className="truncate text-sm font-semibold text-[var(--text-1)]">{i === 0 && <span className="mr-1.5 rounded-md bg-primary/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">Best fit</span>}{a.name}{a.gender === "male" && <span className="ml-1.5 inline-flex items-center gap-0.5 align-middle text-[10px] font-medium text-amber-300" title="One of our strongest voices"><Star size={10} /> Recommended</span>}</p>
                       <p className="truncate text-xs text-[var(--text-3)]">{a.role}</p>
                     </div>
                   </div>
@@ -148,7 +148,7 @@ export default function PublicAgentsShowcase({ agents, featured, compact }: {
 
       {/* ── Gallery ── */}
       <div className="mt-8">
-        <AgentGallery compact={compact} agents={featured ? agents.slice(0, featured) : agents} onTry={openAgent} highlightKeys={suggestedKeys} />
+        <AgentGallery compact={compact} agents={featured ? agents.slice(0, featured) : agents} onTry={openAgent} highlightKeys={suggestedKeys} recommendGender="male" />
       </div>
 
       {open && (

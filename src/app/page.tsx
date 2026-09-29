@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import PublicAgentsShowcase from "@/components/PublicAgentsShowcase";
 import TryItNowButton from "@/components/TryItNow";
-import { AGENT_CATALOG, publicAgent } from "@/lib/agents/catalog";
+import { AGENT_CATALOG, publicAgent, showcaseOrder } from "@/lib/agents/catalog";
 import { sampleUrl } from "@/lib/agents/entitlements";
 
 export const metadata: Metadata = {
@@ -285,7 +285,7 @@ export default function LandingPage() {
               </Link>
             </div>
             <div className="mt-10">
-              <PublicAgentsShowcase compact featured={8} agents={AGENT_CATALOG.map((a) => ({ ...publicAgent(a), sampleUrl: sampleUrl(a.key) }))} />
+              <PublicAgentsShowcase compact featured={8} agents={showcaseOrder(AGENT_CATALOG).map((a) => ({ ...publicAgent(a), sampleUrl: sampleUrl(a.key) }))} />
             </div>
           </div>
         </section>

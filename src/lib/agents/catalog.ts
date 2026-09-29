@@ -648,6 +648,11 @@ export const AGENT_BY_KEY: Record<string, AgentTemplate> = Object.fromEntries(AG
 export const FREE_AGENT_KEYS = AGENT_CATALOG.filter((a) => a.tier === "free").map((a) => a.key);
 
 /** What the marketing pages may show: everything except the prompts and flow internals. */
+/** Showcase order: male-voiced agents first (the stronger voices), catalog order within each group. */
+export function showcaseOrder<T extends { gender: "female" | "male" }>(list: T[]): T[] {
+  return [...list].sort((a, b) => (a.gender === "male" ? 0 : 1) - (b.gender === "male" ? 0 : 1));
+}
+
 export function publicAgent(a: AgentTemplate): Omit<AgentTemplate, "persona" | "flow"> {
   const rest: Partial<AgentTemplate> = { ...a };
   delete rest.persona;

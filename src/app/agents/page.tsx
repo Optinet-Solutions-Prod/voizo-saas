@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { ArrowRight } from "lucide-react";
-import { AGENT_CATALOG, publicAgent } from "@/lib/agents/catalog";
+import { AGENT_CATALOG, publicAgent, showcaseOrder } from "@/lib/agents/catalog";
 import { sampleUrl } from "@/lib/agents/entitlements";
 import PublicAgentsShowcase from "@/components/PublicAgentsShowcase";
 
@@ -14,7 +14,7 @@ const PRIMARY = "#4d90f0";
 
 // Public gallery: listen to every agent; three are free to use, the rest unlock per organization.
 export default function AgentsPage() {
-  const agents = AGENT_CATALOG.map((a) => ({ ...publicAgent(a), sampleUrl: sampleUrl(a.key) }));
+  const agents = showcaseOrder(AGENT_CATALOG).map((a) => ({ ...publicAgent(a), sampleUrl: sampleUrl(a.key) }));
   const free = agents.filter((a) => a.tier === "free").length;
   return (
     <div className="relative min-h-screen text-[var(--text-1)]">

@@ -22,15 +22,17 @@ export interface MicState {
   error: string | null;
 }
 
+const NO_AUDIO_HINT = "The call was ended by the server right after connecting. That happens when no microphone audio reaches it: check the mic isn't muted or in use by another app (Teams, Zoom), pick the right input device in the browser, then try again.";
+
 export function explainVapiError(err: unknown): string {
   const text = vapiErrorText(err, "The call could not be started.");
   if (/did-not-receive-customer-audio|customer-audio/i.test(text)) return "Vapi didn't receive any sound from your microphone. Allow the microphone for this site and check the input device, then try again.";
   if (/permission|NotAllowedError|denied/i.test(text)) return "Microphone access was blocked. Click the lock icon in the address bar, allow the microphone, and reload.";
   if (/NotFoundError|no audio|not found/i.test(text)) return "No microphone was found. Plug one in or pick a different input device.";
-  if (/meeting has ended|ejected/i.test(text)) return "The call ended.";
+  if (/meeting has ended|ejected|room was deleted|Exiting meeting/i.test(text)) return NO_AUDIO_HINT;
   if (/401|unauthori[sz]ed|public key/i.test(text)) return "The Vapi public key is missing or wrong on this deployment.";
   if (/Failed to fetch|NetworkError|ERR_|load failed|blocked/i.test(text)) return "The browser couldn't reach Vapi's call service (api.vapi.ai / daily.co). An ad-blocker, privacy extension, VPN or firewall is the usual cause — try a normal Chrome window without extensions.";
-  if (/daily|room|join/i.test(text)) return `The audio room couldn't be joined: ${text}. Check that daily.co isn't blocked by an extension or firewall.`;
+  if (/daily|room|join/i.test(text)) return `The audio room couldn't be joined (${text}). If this keeps happening, an extension, VPN or firewall may be blocking daily.co.`;
   return text;
 }
 
@@ -48,6 +50,7 @@ export function useVapiWebCall() {
   const rafRef = useRef<number | null>(null);
   const ctxRef = useRef<AudioContext | null>(null);
   const timerRef = useRef<number | null>(null);
+  const liveRef = useRef(false);
 
   const stopMeter = useCallback(() => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -130,13 +133,26 @@ export function useVapiWebCall() {
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const Vapi = require("@vapi-ai/web").default;
-      const vapi = new Vapi(publicKey);
+      // Hand Daily the exact track that just passed the level check, so the audio it sends is
+      // the audio we metered — not a second device grab that can come back silent on Windows.
+      const track = streamRef.current?.getAudioTracks()[0];
+      const vapi = new Vapi(publicKey, undefined, undefined, track ? { audioSource: track } : undefined);
       vapiRef.current = vapi;
+      liveRef.current = false;
       vapi.on("call-start", () => {
+        liveRef.current = true;
         setStatus("live");
         timerRef.current = window.setInterval(() => setSeconds((n) => n + 1), 1000);
+        // Make sure Daily is actually sending our microphone; unmute if it isn't.
+        try {
+          const daily = vapi.getDailyCallObject?.();
+          const state = daily?.participants?.().local?.tracks?.audio?.state as string | undefined;
+          console.info("[vapi] local audio track", state ?? "unknown", track?.label ?? "");
+          if (state && state !== "playable" && state !== "sendable" && state !== "loading") { vapi.setMuted(false); daily?.setLocalAudio?.(true); }
+        } catch { /* best effort */ }
       });
       vapi.on("call-end", () => {
+        liveRef.current = false;
         setStatus("ended");
         if (timerRef.current) window.clearInterval(timerRef.current);
         timerRef.current = null;
@@ -168,7 +184,9 @@ export function useVapiWebCall() {
       vapi.on("error", (e: unknown) => {
         console.error("[vapi] error", e);
         const text = vapiErrorText(e, "");
-        if (/meeting has ended|ejected/i.test(text)) { setStatus("ended"); return; }
+        // The room vanishing during a live call is just the end of the call; before the call is
+        // live it means the server hung up on us — almost always because no mic audio arrived.
+        if (/meeting has ended|ejected|room was deleted|Exiting meeting/i.test(text) && liveRef.current) { setStatus("ended"); return; }
         reported = explainVapiError(e);
         setError(reported);
         setStatus("error");
