@@ -8,6 +8,8 @@ import { platformElevenLabsKey } from "../voices/orgVoices";
 // metadata, so nothing piles up across server instances.
 
 const VAPI = "https://api.vapi.ai";
+// Bump when composeDemoAssistant changes; assistants created with an older version are patched.
+const DEMO_VERSION = 2;
 const cache = new Map<string, string>();
 
 async function vapi(path: string, init: RequestInit = {}) {
@@ -24,14 +26,16 @@ export async function demoAssistantId(agent: AgentTemplate): Promise<string> {
   const list = await vapi(`/assistant?limit=100`).then((r) => (r.ok ? r.json() : [])).catch(() => []);
   const found = (Array.isArray(list) ? list : []).find(
     (a: { metadata?: { voizoDemo?: boolean; agentKey?: string } }) => a.metadata?.voizoDemo && a.metadata?.agentKey === agent.key,
-  ) as { id: string } | undefined;
-  if (found) { cache.set(agent.key, found.id); return found.id; }
+  ) as { id: string; metadata?: { voizoDemoVersion?: number } } | undefined;
   const platformKey = platformElevenLabsKey();
   const base = composeDemoAssistant(agent, { company: "", firstName: "" });
-  const r = await vapi(`/assistant`, {
-    method: "POST",
-    body: JSON.stringify({ ...base, name: `Demo · ${agent.key}`, ...(platformKey ? { credentials: [{ provider: "11labs", apiKey: platformKey }] } : {}) }),
-  });
+  const body = { ...base, name: `Demo · ${agent.key}`, metadata: { ...base.metadata, voizoDemoVersion: DEMO_VERSION }, ...(platformKey ? { credentials: [{ provider: "11labs", apiKey: platformKey }] } : {}) };
+  if (found) {
+    if (found.metadata?.voizoDemoVersion !== DEMO_VERSION) await vapi(`/assistant/${found.id}`, { method: "PATCH", body: JSON.stringify(body) }).catch(() => {});
+    cache.set(agent.key, found.id);
+    return found.id;
+  }
+  const r = await vapi(`/assistant`, { method: "POST", body: JSON.stringify(body) });
   if (!r.ok) throw new Error(`Vapi refused to create the demo assistant: ${(await r.text()).slice(0, 200)}`);
   const created = (await r.json()) as { id: string };
   cache.set(agent.key, created.id);

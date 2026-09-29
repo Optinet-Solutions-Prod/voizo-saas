@@ -81,21 +81,22 @@ export function composeDemoPrompt(agent: AgentTemplate, input: DemoInput): strin
   lines.push("HOW THE CALL GOES");
   lines.push(`1. Opening (you already said it as your first message): "${f(flow.opening)}"`);
   lines.push(`2. Reason for the call: "${f(flow.value)}"`);
-  lines.push(`3. If they ${f(flow.positive.trigger).toLowerCase()} — ${f(flow.positive.name).toLowerCase()} — say: "${f(flow.positive.reply)}"${flow.sms ? ` Then tell them the text message is on its way (in this demo, describe it instead of sending: "${f(flow.sms)}").` : ""}`);
+  lines.push(`3. If they ${f(flow.positive.trigger).toLowerCase()} — ${f(flow.positive.name).toLowerCase()} — say: "${f(flow.positive.reply)}"${flow.sms ? " Then say a quick text with the details is on its way (one short line; never read the message out)." : ""}`);
   flow.objections.forEach((o, i) => {
-    const next = o.next === "value" ? "then return to the reason for the call" : o.next === "sms" ? "then mention the text message and wrap up" : o.next === "positive" ? "then continue as if they said yes" : "then say goodbye";
+    const next = o.next === "value" ? "then return to the reason for the call" : o.next === "sms" ? "then say a text is on its way and wrap up" : o.next === "positive" ? "then continue as if they said yes" : "then say goodbye";
     lines.push(`${4 + i}. If they ${f(o.trigger).toLowerCase()} — ${f(o.name).toLowerCase()} — say: "${f(o.reply)}" and ${next}.`);
   });
-  lines.push(`${4 + flow.objections.length}. Goodbye: "${f(flow.goodbye)}" Then end the call.`);
+  lines.push(`${4 + flow.objections.length}. Goodbye: "${f(flow.goodbye)}" Say it once, in one short line, then end the call straight away with the end-call function. Never say goodbye twice.`);
   lines.push("");
   lines.push("MUST COVER");
   for (const g of flow.goals) lines.push(`- ${f(g)}`);
   lines.push("");
   lines.push("STYLE");
-  lines.push("- Sound like a real person on the phone: short sentences, one question at a time, natural pauses, no lists or headings.");
-  lines.push("- Use the lines above as your guide, in your own words; never read placeholders or brackets aloud.");
-  lines.push("- If they ask something outside the script, answer briefly and steer back.");
-  lines.push("- When the conversation is done, say the goodbye and end the call.");
+  lines.push("- Casual and warm, like a friendly colleague on the phone: contractions, everyday words, no corporate phrases, no lists.");
+  lines.push("- Keep every turn to one or two short sentences, under 25 words. One question at a time, then stop and listen.");
+  lines.push("- Use the lines above as a guide, in your own words; never read placeholders, brackets, legal or opt-out text aloud.");
+  lines.push("- If they ask something off-script, answer in a sentence and steer back.");
+  lines.push("- Don't repeat yourself. When the conversation is done, say the goodbye once and end the call.");
   return lines.join("\n");
 }
 
@@ -111,8 +112,8 @@ export function composeDemoAssistant(agent: AgentTemplate, input: DemoInput) {
     model: {
       provider: "openai" as const,
       model: "gpt-4.1" as const,
-      temperature: 0.6,
-      maxTokens: 220,
+      temperature: 0.7,
+      maxTokens: 120,
       messages: [{ role: "system" as const, content: composeDemoPrompt(agent, inp) }],
     },
     voice: {
@@ -121,13 +122,14 @@ export function composeDemoAssistant(agent: AgentTemplate, input: DemoInput) {
       model: "eleven_turbo_v2_5" as const,
       stability: 0.5,
       similarityBoost: 0.75,
-      speed: 1.0,
+      speed: 1.1,
       optimizeStreamingLatency: 3,
     },
     transcriber: { provider: "deepgram" as const, model: "nova-3" as const, language: "en" as const },
     silenceTimeoutSeconds: 40,
     maxDurationSeconds: 420,
-    endCallMessage: clean(fillPlaceholders(agent.flow.goodbye, inp)),
+    // The model says the goodbye itself; a Vapi end-call message would play a second goodbye.
+    endCallMessage: "",
     endCallFunctionEnabled: true,
     backgroundSound: "office" as const,
     metadata: { voizoDemo: true, agentKey: agent.key },

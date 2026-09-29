@@ -5,6 +5,7 @@ import {
   ShieldCheck, Sparkles, Workflow,
 } from "lucide-react";
 import PublicAgentsShowcase from "@/components/PublicAgentsShowcase";
+import TryItNowButton from "@/components/TryItNow";
 import { AGENT_CATALOG, publicAgent } from "@/lib/agents/catalog";
 import { sampleUrl } from "@/lib/agents/entitlements";
 
@@ -209,20 +210,18 @@ export default function LandingPage() {
               and shows you what every call achieved.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
-              <Link
-                href="/login"
+              <TryItNowButton
                 className="inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white shadow-lg transition hover:brightness-110"
                 style={{ background: PRIMARY, boxShadow: `0 8px 24px ${PRIMARY}40` }}
+              />
+              <Link
+                href="/login"
+                className="inline-flex items-center gap-2 rounded-xl border border-[var(--border-2)] bg-[var(--bg-card)] px-5 py-3 text-sm font-semibold text-[var(--text-1)] transition hover:bg-[var(--bg-hover)]"
               >
                 Open the console <ArrowRight size={16} />
               </Link>
-              <a
-                href="#how"
-                className="inline-flex items-center gap-2 rounded-xl border border-[var(--border-2)] bg-[var(--bg-card)] px-5 py-3 text-sm font-semibold text-[var(--text-1)] transition hover:bg-[var(--bg-hover)]"
-              >
-                See how it works
-              </a>
             </div>
+            <p className="mt-3 text-xs text-[var(--text-4)]">Take a live call from an AI agent in your browser. No account, no setup.</p>
             <ul className="mt-10 flex flex-wrap gap-x-6 gap-y-2 text-sm text-[var(--text-3)]">
               {["Natural-sounding voices", "Recurring & real-time campaigns", "Built-in call QA"].map((t) => (
                 <li key={t} className="flex items-center gap-2">

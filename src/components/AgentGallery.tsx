@@ -88,8 +88,9 @@ export default function AgentGallery({ agents, currency = "USD", onInstall, inst
             </div>
             {onTry && !onInstall && (
               <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-4">
-                <button type="button" onClick={() => toggle(a)} disabled={!a.sampleUrl} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[var(--border-2)] bg-[var(--bg-elevated)] px-3 text-xs font-medium text-[var(--text-1)] hover:bg-[var(--bg-hover)] disabled:opacity-50">{isPlaying ? <Pause size={13} /> : <Play size={13} />} {isPlaying ? "Pause" : "Listen"}</button>
-                <button type="button" onClick={() => onTry(a)} className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-white hover:brightness-110" style={{ background: PRIMARY }} title="Enter your name and business, then talk to this agent in your browser"><Phone size={13} /> Talk to {a.name.split(" ")[0]}</button>
+                <span className="mr-auto text-[11px] text-[var(--text-4)]">Listen · Talk live</span>
+                <button type="button" onClick={() => toggle(a)} disabled={!a.sampleUrl} aria-label={isPlaying ? `Pause ${a.name}'s sample` : `Listen to ${a.name}`} title={isPlaying ? "Pause" : "Listen to a sample"} className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--border-2)] bg-[var(--bg-elevated)] text-[var(--text-1)] transition hover:bg-[var(--bg-hover)] disabled:opacity-50">{isPlaying ? <Pause size={16} /> : <Play size={16} className="ml-0.5" />}</button>
+                <button type="button" onClick={() => onTry(a)} aria-label={`Talk to ${a.name}`} title={`Talk to ${a.name} live in your browser`} className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-white transition hover:brightness-110" style={{ background: PRIMARY }}><Phone size={16} /></button>
               </div>
             )}
             {onInstall && (
