@@ -6,6 +6,8 @@ import type { AgentTemplate } from "./catalog";
 export interface DemoInput {
   company: string;
   firstName: string;
+  /** What the business does (from the public demo form); makes the call about their business. */
+  businessType?: string;
   /** Override the agent's library voice (an ElevenLabs voice id). */
   voiceId?: string;
 }
@@ -73,7 +75,8 @@ export function composeDemoPrompt(agent: AgentTemplate, input: DemoInput): strin
   const lines: string[] = [];
   lines.push(f(agent.persona));
   lines.push("");
-  lines.push(`This is a live demonstration call. The person on the line is ${input.firstName}, who asked to hear how you handle a "${agent.role}" call for ${input.company}. Treat them as the customer and run the call for real: they already know you are an AI, so don't break character to say so unless they ask.`);
+  lines.push(`This is a live demonstration call. The person on the line is ${input.firstName}, who asked to hear how you handle a "${agent.role}" call for ${input.company}${input.businessType ? ` (${clean(input.businessType)})` : ""}. Treat them as the customer and run the call for real: they already know you are an AI, so don't break character to say so unless they ask.`);
+  if (input.businessType) lines.push(`Make every detail fit a business like that (${clean(input.businessType)}): the products, the reasons for the call, the examples you give.`);
   lines.push("");
   lines.push("HOW THE CALL GOES");
   lines.push(`1. Opening (you already said it as your first message): "${f(flow.opening)}"`);

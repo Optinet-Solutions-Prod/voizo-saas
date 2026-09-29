@@ -4,7 +4,7 @@ import {
   ArrowRight, BarChart3, Bot, CalendarClock, CheckCircle2, MessageSquareText, PhoneCall,
   ShieldCheck, Sparkles, Workflow,
 } from "lucide-react";
-import AgentGallery from "@/components/AgentGallery";
+import PublicAgentsShowcase from "@/components/PublicAgentsShowcase";
 import { AGENT_CATALOG, publicAgent } from "@/lib/agents/catalog";
 import { sampleUrl } from "@/lib/agents/entitlements";
 
@@ -266,15 +266,15 @@ export default function LandingPage() {
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div className="max-w-2xl">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em]" style={{ color: PRIMARY }}>Pre-built agents</p>
-                <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">Hear them before you hire them</h2>
-                <p className="mt-4 text-[var(--text-2)]">Twenty agents for the calls businesses make most: reminders, lead follow-up, payments, renewals, surveys. Three are free with every account. Press play.</p>
+                <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">Hear them, then talk to them</h2>
+                <p className="mt-4 text-[var(--text-2)]">Twenty agents for the calls businesses make most: reminders, lead follow-up, payments, renewals, surveys. Listen to any of them, or enter your name and business and take a live call from one, right here, no account needed. Three are free with every account.</p>
               </div>
               <Link href="/agents" className="inline-flex items-center gap-2 rounded-xl border border-[var(--border-2)] bg-[var(--bg-card)] px-4 py-2.5 text-sm font-semibold text-[var(--text-1)] transition hover:bg-[var(--bg-hover)]">
                 See all 20 agents <ArrowRight size={15} />
               </Link>
             </div>
             <div className="mt-10">
-              <AgentGallery compact agents={AGENT_CATALOG.slice(0, 8).map((a) => ({ ...publicAgent(a), sampleUrl: sampleUrl(a.key) }))} />
+              <PublicAgentsShowcase compact featured={8} agents={AGENT_CATALOG.map((a) => ({ ...publicAgent(a), sampleUrl: sampleUrl(a.key) }))} />
             </div>
           </div>
         </section>

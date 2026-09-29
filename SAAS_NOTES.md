@@ -223,3 +223,8 @@ when calling goes live. The set was:
 - [ ] Env configured for the new project
 - [ ] Calling providers wired (Vapi, etc.)
 - No campaigns / data seeded (by design)
+
+## Landing-page demo (2026-09-29)
+- Public `/api/public/demo-call` (no sign-in): 3 calls per visitor per hour, global daily cap `PUBLIC_DEMO_DAILY_CAP` (default 150, counted from Vapi call log), 4-minute calls.
+- `/api/public/agent-match`: OpenAI (gpt-4.1-mini) ranks the catalog for a business type; keyword fallback if the key is missing.
+- Landing page + /agents: "Which agent fits your business?" panel, Listen / Talk buttons on every card, modal with name, business name, business type. Business type is fed into the agent prompt.

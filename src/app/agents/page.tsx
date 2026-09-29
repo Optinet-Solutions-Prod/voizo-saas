@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { ArrowRight } from "lucide-react";
 import { AGENT_CATALOG, publicAgent } from "@/lib/agents/catalog";
 import { sampleUrl } from "@/lib/agents/entitlements";
-import AgentGallery from "@/components/AgentGallery";
+import PublicAgentsShowcase from "@/components/PublicAgentsShowcase";
 
 export const metadata: Metadata = {
   title: "Pre-built voice agents — VOIZO",
@@ -36,10 +36,10 @@ export default function AgentsPage() {
         <p className="text-xs font-semibold uppercase tracking-[0.18em]" style={{ color: PRIMARY }}>Pre-built agents</p>
         <h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-5xl">Twenty agents, ready to call today</h1>
         <p className="mt-4 max-w-2xl text-[var(--text-2)]">
-          Each one is a complete, editable script: the opening, the reason for the call, the replies customers actually give, the follow-up text and the goodbye. Press play to hear how they sound. {free} are free with every account; the rest unlock per organization or come with the Pro plan.
+          Each one is a complete, editable script: the opening, the reason for the call, the replies customers actually give, the follow-up text and the goodbye. Press play to hear how they sound, or enter your name and business and talk to one live in your browser. {free} are free with every account; the rest unlock per organization or come with the Pro plan.
         </p>
         <div className="mt-10">
-          <AgentGallery agents={agents} />
+          <PublicAgentsShowcase agents={agents} />
         </div>
         <div className="mt-14 rounded-3xl px-8 py-12 text-center" style={{ background: `linear-gradient(135deg, ${PRIMARY}, #3a6fd0 55%, #6b5cd6)` }}>
           <h2 className="text-2xl font-bold text-white sm:text-3xl">Make them yours</h2>

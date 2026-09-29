@@ -15,13 +15,17 @@ export interface GalleryAgent {
 
 const PRIMARY = "#4d90f0";
 
-export default function AgentGallery({ agents, currency = "USD", onInstall, installing, compact }: {
+export default function AgentGallery({ agents, currency = "USD", onInstall, installing, compact, onTry, highlightKeys = [] }: {
   agents: GalleryAgent[];
   currency?: "USD" | "EUR";
   /** In-app: install handler; absent on marketing pages. */
   onInstall?: (agent: GalleryAgent) => void;
   installing?: string | null;
   compact?: boolean;
+  /** Marketing pages: open the demo modal (listen, or talk live) for this agent. */
+  onTry?: (agent: GalleryAgent) => void;
+  /** Agents the matcher suggested; drawn with a "Suggested for you" badge. */
+  highlightKeys?: string[];
 }) {
   const [playing, setPlaying] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -46,8 +50,11 @@ export default function AgentGallery({ agents, currency = "USD", onInstall, inst
       {agents.map((a) => {
         const isPlaying = playing === a.key;
         const initials = a.name[0];
+        const suggested = highlightKeys.includes(a.key);
+        const Body = onTry ? "button" : "div";
         return (
-          <article key={a.key} className="glow-card flex flex-col rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-5" style={{ "--glow-color": a.tier === "free" ? "#2fb673" : PRIMARY } as React.CSSProperties}>
+          <article key={a.key} className={`glow-card relative flex flex-col rounded-2xl border bg-[var(--bg-card)] p-5 ${suggested ? "border-primary/60" : "border-[var(--border)]"}`} style={{ "--glow-color": a.tier === "free" ? "#2fb673" : PRIMARY } as React.CSSProperties}>
+            {suggested && <span className="absolute -top-2.5 right-4 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white" style={{ background: PRIMARY }}>Suggested for you</span>}
             <div className="flex items-start gap-3">
               <button type="button" onClick={() => toggle(a)} disabled={!a.sampleUrl} aria-label={isPlaying ? `Pause ${a.name}'s sample` : `Play ${a.name}'s sample`}
                 className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-white transition hover:brightness-110 disabled:opacity-50"
@@ -55,7 +62,7 @@ export default function AgentGallery({ agents, currency = "USD", onInstall, inst
                 {isPlaying && <span className="lp-ping absolute inset-0 rounded-full bg-white/30" />}
                 {isPlaying ? <Pause size={18} /> : a.sampleUrl ? <Play size={18} className="ml-0.5" /> : <span className="text-sm font-bold">{initials}</span>}
               </button>
-              <div className="min-w-0 flex-1">
+              <Body type={onTry ? "button" : undefined} onClick={onTry ? () => onTry(a) : undefined} className={`min-w-0 flex-1 text-left ${onTry ? "cursor-pointer rounded-lg -m-1 p-1 hover:bg-[var(--bg-hover)]" : ""}`} title={onTry ? `Listen to ${a.name} or talk live` : undefined}>
                 <div className="flex flex-wrap items-center gap-2">
                   <h3 className="text-base font-semibold text-[var(--text-1)]">{a.name}</h3>
                   {a.tier === "free" ? (
@@ -68,7 +75,7 @@ export default function AgentGallery({ agents, currency = "USD", onInstall, inst
                 </div>
                 <p className="text-sm font-medium text-[var(--text-2)]">{a.role}</p>
                 <p className="text-xs text-[var(--text-3)]">{a.industry}</p>
-              </div>
+              </Body>
             </div>
             <p className="mt-4 text-sm leading-relaxed text-[var(--text-2)]">{compact ? a.tagline : a.description}</p>
             {!compact && (
@@ -79,6 +86,12 @@ export default function AgentGallery({ agents, currency = "USD", onInstall, inst
             <div className="mt-4 flex flex-wrap items-center gap-1.5">
               {a.tags.slice(0, 3).map((t) => <span key={t} className="rounded-md bg-[var(--bg-elevated)] px-2 py-0.5 text-[11px] text-[var(--text-3)]">{t}</span>)}
             </div>
+            {onTry && !onInstall && (
+              <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-4">
+                <button type="button" onClick={() => toggle(a)} disabled={!a.sampleUrl} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[var(--border-2)] bg-[var(--bg-elevated)] px-3 text-xs font-medium text-[var(--text-1)] hover:bg-[var(--bg-hover)] disabled:opacity-50">{isPlaying ? <Pause size={13} /> : <Play size={13} />} {isPlaying ? "Pause" : "Listen"}</button>
+                <button type="button" onClick={() => onTry(a)} className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-white hover:brightness-110" style={{ background: PRIMARY }} title="Enter your name and business, then talk to this agent in your browser"><Phone size={13} /> Talk to {a.name.split(" ")[0]}</button>
+              </div>
+            )}
             {onInstall && (
               <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-4">
                 <a href={`/agents/try?agent=${a.key}`} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 text-xs font-semibold text-primary hover:bg-primary/20" title="Talk to this agent in your browser"><Phone size={13} /> Try live call</a>

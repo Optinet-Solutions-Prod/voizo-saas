@@ -1,13 +1,14 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AlertCircle, Headphones, Loader2, Mic, MicOff, Phone, PhoneOff, Play, RotateCcw, Sparkles } from "lucide-react";
+import { AlertCircle, Headphones, Loader2, Phone, Play, RotateCcw } from "lucide-react";
 import { SectionTick } from "../../analytics/SectionIsland";
 import { useOrg } from "@/lib/orgContext";
 import { useVapiWebCall } from "@/lib/useVapiWebCall";
 import { useVoiceOptions } from "@/lib/useVoiceOptions";
 import type { GalleryAgent } from "@/components/AgentGallery";
+import LiveCallPanel, { formatSeconds } from "@/components/LiveCallPanel";
 
 const PRIMARY = "#4d90f0";
 
@@ -24,13 +25,11 @@ export default function TryAgentClient() {
   const [apiError, setApiError] = useState<string | null>(null);
   const voices = useVoiceOptions();
   const call = useVapiWebCall();
-  const transcriptRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetch("/api/agents", { cache: "no-store" }).then(async (r) => { if (r.ok) setAgents(((await r.json()).agents ?? []) as GalleryAgent[]); }).catch(() => {});
   }, []);
   useEffect(() => { if (org.org?.name && !company) setCompany(org.org.name); }, [org.org?.name, company]);
-  useEffect(() => { transcriptRef.current?.scrollTo({ top: transcriptRef.current.scrollHeight, behavior: "smooth" }); }, [call.transcript]);
 
   const agent = useMemo(() => agents?.find((a) => a.key === selected) ?? null, [agents, selected]);
   const inCall = call.status === "connecting" || call.status === "live" || call.status === "mic";
@@ -58,8 +57,6 @@ export default function TryAgentClient() {
     }
   }
 
-  const mm = String(Math.floor(call.seconds / 60)).padStart(2, "0");
-  const ss = String(call.seconds % 60).padStart(2, "0");
   const inputCls = "h-11 w-full rounded-xl border border-[var(--border-2)] bg-[var(--bg-elevated)] px-3.5 text-sm text-[var(--text-1)] outline-none placeholder:text-[var(--text-4)] focus:border-[#4d90f0] focus:ring-4 focus:ring-[#4d90f0]/15 disabled:opacity-60";
 
   return (
@@ -137,7 +134,7 @@ export default function TryAgentClient() {
                 <div role="alert" className="flex items-start gap-2.5 rounded-xl border border-red-500/25 bg-red-500/10 px-3.5 py-3 text-sm text-red-300"><AlertCircle size={16} className="mt-0.5 shrink-0" /><span>{apiError ?? call.error}</span></div>
               )}
               {call.status === "ended" && !call.error && (
-                <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3.5 py-3 text-sm text-emerald-200">Call ended after {mm}:{ss}. Try another agent, or the same one with different answers.</div>
+                <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3.5 py-3 text-sm text-emerald-200">Call ended after {formatSeconds(call.seconds)}. Try another agent, or the same one with different answers.</div>
               )}
               <button type="submit" disabled={preparing || !agent || !firstName.trim() || !company.trim()} className="mt-1 inline-flex h-12 items-center justify-center gap-2 rounded-xl text-sm font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60" style={{ background: PRIMARY, boxShadow: `0 8px 24px ${PRIMARY}33` }}>
                 {preparing ? <Loader2 size={16} className="animate-spin" /> : <Phone size={16} />} {call.status === "ended" ? "Call again" : "Start the call"}
@@ -145,44 +142,7 @@ export default function TryAgentClient() {
               <p className="flex items-center gap-1.5 text-[11px] text-[var(--text-4)]"><Headphones size={12} /> Use headphones if you can; your browser will ask for the microphone first.</p>
             </form>
           ) : (
-            <div className="flex flex-1 flex-col gap-3">
-              {/* status row */}
-              <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] px-3.5 py-3">
-                <span className={`relative flex h-9 w-9 items-center justify-center rounded-full ${call.status === "live" ? "bg-emerald-500/15 text-emerald-400" : "bg-amber-500/15 text-amber-300"}`}>
-                  {call.status === "live" && <span className="lp-ping absolute inset-0 rounded-full bg-emerald-400/40" />}
-                  {call.status === "mic" ? <Mic size={16} /> : call.status === "connecting" ? <Loader2 size={16} className="animate-spin" /> : <Phone size={16} />}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-[var(--text-1)]">{call.status === "mic" ? "Checking your microphone…" : call.status === "connecting" ? "Connecting to the agent…" : call.assistantSpeaking ? `${agent?.name ?? "Agent"} is speaking` : "Listening — go ahead and talk"}</p>
-                  <p className="text-[11px] text-[var(--text-3)]">{call.mic.deviceLabel ? `Mic: ${call.mic.deviceLabel}` : "Mic: waiting for permission"}</p>
-                </div>
-                <span className="font-mono text-sm text-[var(--text-2)]">{mm}:{ss}</span>
-                <button type="button" onClick={call.stop} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-red-600 px-3 text-xs font-semibold text-white hover:bg-red-500"><PhoneOff size={13} /> End</button>
-              </div>
-              {/* meters */}
-              <div className="grid grid-cols-2 gap-3 text-[11px] text-[var(--text-3)]">
-                <div>
-                  <div className="mb-1 flex items-center gap-1.5">{call.mic.ok ? <Mic size={12} /> : <MicOff size={12} />} You</div>
-                  <div className="h-2 overflow-hidden rounded-full bg-[var(--bg-elevated)]"><div className="h-full rounded-full bg-emerald-400 transition-[width] duration-75" style={{ width: `${Math.round(call.mic.level * 100)}%` }} /></div>
-                </div>
-                <div>
-                  <div className="mb-1 flex items-center gap-1.5"><Sparkles size={12} /> {agent?.name ?? "Agent"}</div>
-                  <div className="h-2 overflow-hidden rounded-full bg-[var(--bg-elevated)]"><div className="h-full rounded-full transition-[width] duration-75" style={{ width: `${Math.round(Math.min(1, call.assistantLevel * 3) * 100)}%`, background: PRIMARY }} /></div>
-                </div>
-              </div>
-              {call.status === "live" && call.mic.level < 0.02 && call.seconds > 6 && (
-                <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200">Your microphone level is flat. If the agent can&apos;t hear you, check the input device in your browser or system settings.</p>
-              )}
-              {/* transcript */}
-              <div ref={transcriptRef} className="min-h-[220px] max-h-[40vh] flex-1 space-y-2 overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--bg-app)] p-3">
-                {call.transcript.length === 0 && <p className="text-xs text-[var(--text-4)]">The conversation will appear here as you speak.</p>}
-                {call.transcript.map((l, i) => (
-                  <div key={i} className={`flex ${l.role === "assistant" ? "justify-start" : "justify-end"}`}>
-                    <p className={`max-w-[85%] rounded-2xl px-3 py-2 text-[13px] leading-snug ${l.role === "assistant" ? "bg-[var(--bg-elevated)] text-[var(--text-1)] rounded-bl-md" : "text-white rounded-br-md"} ${l.final ? "" : "opacity-70"}`} style={l.role === "assistant" ? undefined : { background: PRIMARY }}>{l.text}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <LiveCallPanel call={call} agentName={agent?.name ?? "Agent"} />
           )}
           {call.status === "ended" && (
             <button type="button" onClick={call.reset} className="mt-3 inline-flex items-center gap-1.5 self-start text-xs text-[var(--text-3)] hover:text-[var(--text-1)]"><RotateCcw size={12} /> Clear</button>
