@@ -10,18 +10,32 @@
 // yields the same natural line and the agent never speaks "{{playerName}}".
 // Script authors opt in by writing {{playerName}} where a bare removal stays
 // grammatical ("Hi {{playerName}}, it's Tom" → "Hi, it's Tom").
+//
+// Conditional blocks (identity check, 2026-10-01): where a bare removal can NOT
+// stay grammatical — "am I speaking with {{playerName}}?" — authors wrap the
+// two wordings: {{#playerName}}am I speaking with {{playerName}}{{else}}who am
+// I speaking with{{/playerName}}. The first branch renders when the variable is
+// set, the {{else}} branch (optional, default empty) when it is missing. Blocks
+// resolve before plain tokens and never nest.
 
 const TOKEN = /\{\{\s*([\w.-]+)\s*\}\}/g;
+const BLOCK = /\{\{#\s*([\w.-]+)\s*\}\}([\s\S]*?)(?:\{\{\s*else\s*\}\}([\s\S]*?))?\{\{\/\s*\1\s*\}\}/g;
+
+const valueOf = (vars: Record<string, unknown> | null | undefined, key: string): string => {
+  const v = vars?.[key];
+  return typeof v === "string" && v.trim() ? v.trim() : "";
+};
 
 export function substituteVars(
   text: string,
   vars: Record<string, unknown> | null | undefined,
 ): string {
   if (!text.includes("{{")) return text; // fast path — most lines have no tokens
-  const replaced = text.replace(TOKEN, (_m, key: string) => {
-    const v = vars?.[key];
-    return typeof v === "string" && v.trim() ? v.trim() : "";
-  });
+  const branched = text.includes("{{#")
+    ? text.replace(BLOCK, (_m, key: string, whenSet: string, whenMissing: string | undefined) =>
+        valueOf(vars, key) ? whenSet : (whenMissing ?? ""))
+    : text;
+  const replaced = branched.replace(TOKEN, (_m, key: string) => valueOf(vars, key));
   // Tidy the seams left by stripped tokens — MID-LINE only: armed briefings are
   // newline-joined, indented bullet menus, so the tidy must never eat a newline
   // (would merge two menu options) nor line-leading indentation (review finding

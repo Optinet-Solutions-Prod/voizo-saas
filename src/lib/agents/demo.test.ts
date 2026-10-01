@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AGENT_CATALOG } from "./catalog";
-import { composeDemoAssistant, composeDemoPrompt, fillPlaceholders } from "./demo";
+import { composeDemoAssistant, composeDemoPrompt, demoIdentityQuestion, fillPlaceholders } from "./demo";
 
 const input = { company: "Riverside Dental", firstName: "Chris" };
 
@@ -20,8 +20,13 @@ describe("composeDemoPrompt / composeDemoAssistant", () => {
       expect(prompt).not.toMatch(/\{\{|\}\}/);
       expect(prompt).toContain("Riverside Dental");
       expect(prompt).toContain("Chris");
+      // greeting first, then the identity check by name as its own step, then the reason for the call
+      expect(prompt).toContain(`1. Opening (you already said it as your first message): "${composeDemoAssistant(a, input).firstMessage}"`);
+      expect(prompt).toContain('2. Identity check — as soon as they answer, ask: "Just to check, am I speaking with Chris?"');
+      expect(prompt).toContain("3. Reason for the call:");
       const asst = composeDemoAssistant(a, input);
       expect(asst.firstMessage).not.toMatch(/\{\{/);
+      expect(asst.firstMessage).not.toMatch(/speaking with|is this/i);
       expect(asst.voice.voiceId).toBe(a.voiceId);
       expect(asst.model.messages[0].content).toBe(prompt);
     }
@@ -29,6 +34,11 @@ describe("composeDemoPrompt / composeDemoAssistant", () => {
   it("falls back to neutral words for blank input", () => {
     const asst = composeDemoAssistant(AGENT_CATALOG[0], { company: "  ", firstName: "" });
     expect(asst.firstMessage).toContain("our company");
-    expect(asst.firstMessage).toContain("there");
+    expect(asst.model.messages[0].content).toContain('ask: "Just to check, who am I speaking with?"');
+    expect(asst.model.messages[0].content).not.toContain("speaking with there");
+  });
+  it("asks by name when one is given", () => {
+    expect(demoIdentityQuestion(" Chris ")).toBe("Just to check, am I speaking with Chris?");
+    expect(demoIdentityQuestion("there")).toBe("Just to check, who am I speaking with?");
   });
 });

@@ -1,9 +1,10 @@
 // Builds a Script Builder script for a catalog agent in the same architecture the production
-// team used for their best-performing script (2026-09): an agent-first opener, a pitch that
-// hints there is more, a details step that offers the text message, follow-up-question loops
-// that never "end on a dead beat", a polite decline route, a floating Call Goal checklist and
-// two goodbyes. Content is generic and brand-safe; the company name is filled in at install and
-// the customer's name stays as the engine variable {{playerName}}.
+// team used for their best-performing script (2026-09): an agent-first opener, an identity
+// check by name right after it (2026-10-01), a pitch that hints there is more, a details step
+// that offers the text message, follow-up-question loops that never "end on a dead beat", a
+// polite decline route, a floating Call Goal checklist and three goodbyes. Content is generic
+// and brand-safe; the company name is filled in at install and the customer's name stays as
+// the engine variable {{playerName}}.
 //
 // Pure: returns a spec with ids already generated (inject `uuid` for deterministic tests).
 // install.ts persists it with the same handler shapes the builder creates by hand:
@@ -70,6 +71,12 @@ export interface BuildOptions {
   uuid?: () => string;
 }
 
+/** The identity check spoken right after the greeting (Chris, 2026-10-01). It branches on the
+ *  engine variable so a contact with no name on file is asked who is speaking, never
+ *  "am I speaking with?" with a hole in it. */
+export const IDENTITY_CHECK_LINE =
+  "Just to check, {{#playerName}}am I speaking with {{playerName}}{{else}}who am I speaking with{{/playerName}}?";
+
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 40) || "reply";
 const snip = (s: string, n = 40) => (s.length > n ? s.slice(0, n - 1).trimEnd() + "…" : s);
 
@@ -106,6 +113,9 @@ export function buildAgentScript(agent: AgentTemplate, opts: BuildOptions): Scri
   const dWrapUp = detector("d:wrap_up", "Customer is wrapping up the call", "Customer is wrapping up the call — thanks, ok, sure, sounds good, bye");
   const dDecline = detector("d:decline", "Customer declines or wants no more contact", "Customer says they don't want the text message, doesn't want to be contacted, or isn't interested at all");
   const dObjections = f.objections.map((o, i) => detector(`d:obj${i}`, o.name, `Customer says something like: ${o.trigger}`));
+  // Identity check replies (the first thing the customer says after being asked by name).
+  const dIsThem = detector("d:is_them", "Confirms it's them", "Customer confirms they are the person asked for — yes, speaking, that's me, this is she or he — or tells you their name");
+  const dNotThem = detector("d:not_them", "Wrong person or not available", "Customer says they are not that person, it's the wrong number, or the person asked for isn't available or can't come to the phone right now");
 
   // Playbook members: answers the agent can draw on at any point.
   const members: HandlerSpec[] = [
@@ -119,6 +129,7 @@ export function buildAgentScript(agent: AgentTemplate, opts: BuildOptions): Scri
   ];
   const goodbyeA = line("l:goodbye", "Goodbye", "The call is complete", f.goodbye, "end_call");
   const goodbyeB = line("l:goodbye_declined", "Goodbye after a decline", "The customer declined; end politely", "No problem at all. Thanks for your time — take care.", "end_call");
+  const goodbyeWrong = line("l:goodbye_wrong_person", "Goodbye — wrong person", "Not the person we were calling for, or they're not available; apologise and end", "Sorry for the mix-up — I'll leave it there for now. Have a good day.", "end_call");
 
   // ── Nodes ──
   const nodes: NodeSpec[] = [];
@@ -143,9 +154,22 @@ export function buildAgentScript(agent: AgentTemplate, opts: BuildOptions): Scri
   const WRAP_QUICK = "ok, okay, thank you, thanks, sure, yeah, yep, alright, bye, thx";
   const COLLECTION = "__collection__"; // placeholder replaced at install
 
-  // Start
+  // Start — the greeting alone; the name question is its own turn right after it.
   const cStart = anyC();
   const start = node("Start call - Opener", { mode: "agent_first", opening: fill(f.opening), openingDelivery: "verbatim", connectors: [cStart] }, 80, -80, { type: "start" });
+
+  // Identity check (Chris, 2026-10-01): "Just to check, am I speaking with <first name>?".
+  // The engine renders {{playerName}} at every push and re-pushes this opening stage with the
+  // real name the moment the call connects (scriptEngine/entryStage.ts); with no name on file
+  // the {{else}} branch asks who is speaking instead. Confirmed (or anything else) → the pitch;
+  // wrong person / not available → apologise and end.
+  const cIdYes = intentC(dIsThem, "yes, yeah, yep, yes it is, speaking, that's me, this is she, this is he, correct, it is, I am");
+  const cIdNo = intentC(dNotThem);
+  const cIdAny = anyC();
+  const identityCheck = node("Identity check", {
+    contentType: "collection", collectionId: COLLECTION, connectors: [cIdYes, cIdNo, cIdAny],
+    statements: [IDENTITY_CHECK_LINE],
+  }, 96, 96);
 
   // Call Goal (floating)
   node("Call Goal", {
@@ -161,7 +185,7 @@ export function buildAgentScript(agent: AgentTemplate, opts: BuildOptions): Scri
       `So {{playerName}}, the reason I'm calling is: ${fill(f.value)}`,
       "Hint that there's a bit more to it than that and get them to react in your own way. Don't end on a dead beat.",
     ],
-  }, 96, 96);
+  }, 96, 216);
 
   // Details + text message
   const cDetFollow = intentC(dFollowUp);
@@ -175,7 +199,7 @@ export function buildAgentScript(agent: AgentTemplate, opts: BuildOptions): Scri
       ...(f.sms ? ["Let them know you'll send everything over by text message so they've got the details in one place, and ask if this is still the best number for them. Never read a phone number or email address out loud."] : []),
       "Remind them of the next step and why it's worth doing today — lightly, without pressure. Don't end on a dead beat.",
     ],
-  }, 96, 336);
+  }, 96, 456);
 
   // Follow-up chain (four boxes, like the reference script)
   const followUp = (label: string, statement: string, x: number, y: number) => {
@@ -203,9 +227,13 @@ export function buildAgentScript(agent: AgentTemplate, opts: BuildOptions): Scri
   // Ends
   const endA = node("End Call", { contentType: "end" }, 96, 800, { scenarioKey: goodbyeA.key });
   const endB = node("End Call", { contentType: "end" }, 256, 1280, { scenarioKey: goodbyeB.key });
+  const endWrong = node("End Call - wrong person", { contentType: "end" }, 520, 60, { scenarioKey: goodbyeWrong.key });
 
   // ── Edges ──
-  link(start, cStart, pitch);
+  link(start, cStart, identityCheck);
+  link(identityCheck, cIdYes, pitch);
+  link(identityCheck, cIdNo, endWrong);
+  link(identityCheck, cIdAny, pitch);
   link(pitch, cPitch, details);
   link(details, cDetFollow, f1.n);
   link(details, cDetWrap, endA);

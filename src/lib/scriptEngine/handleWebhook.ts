@@ -24,6 +24,7 @@ import {
 } from "@/lib/scriptEngine/lab-db";
 import { checkDelivery, checkWaitTimeout } from "@/lib/scriptEngine/lab-watchdog";
 import { composeArmedBriefing } from "@/lib/scriptEngine/lab-briefing";
+import { armEntryStageWithVariables } from "@/lib/scriptEngine/entryStage";
 import { findEntryNode, nodeById, pickNextEdge, contentTypeOf } from "@/lib/scriptEngine/lab-flow";
 import { classifyUtterance, type Classification } from "@/lib/scriptEngine/lab-router";
 import { resolveCallScriptId } from "@/lib/scriptEngine/resolveScript";
@@ -378,6 +379,12 @@ export async function handleWebhook(message: VapiMessage): Promise<NextResponse>
       // (QStash/EC2) only if a script ever needs sub-5s silence routing.
       if (message.status !== "ended")
         after(() => Promise.all([checkDelivery(callId, controlUrlHint), checkWaitTimeout(callId, controlUrlHint)]));
+      // Identity check / greet-by-name (2026-10-01): the moment the call connects,
+      // push the entry stage again rendered with this call's variables, so the
+      // model's first reply after the greeting ("Just to check, am I speaking
+      // with {{playerName}}?") carries the real name — the prompt's own copy
+      // was token-stripped at clone time. No-op without variables (entryStage.ts).
+      if (message.status === "in-progress") after(() => armEntryStageWithVariables(callId, controlUrlHint));
       return NextResponse.json({});
 
     case "speech-update":

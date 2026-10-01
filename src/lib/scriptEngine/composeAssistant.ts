@@ -117,7 +117,11 @@ const SERVER_MESSAGES = ["tool-calls", "transcript", "status-update", "speech-up
 // keeping the legacy {{name}} -> "there" generic greeting. Author names
 // ({{playerName}}) render live wherever the engine PUSHES a stage (armed
 // briefings / expected text / goodbye); the opening / entry-stage / standing
-// banks are prompt-only and never pushed, so nameless is the honest result.
+// banks are prompt-only and never pushed, so nameless is the honest result —
+// EXCEPT the entry stage, which entryStage.ts pushes again with the live
+// variables the moment the call connects (identity check, 2026-10-01).
+// Conditional blocks ({{#playerName}}…{{else}}…{{/playerName}}) render their
+// else branch here, so a nameless clone still reads naturally.
 // substituteVars fast-paths token-free text, so existing scripts are byte-identical.
 const stripCloneTokens = (s: string) => substituteVars(s, { name: "there" });
 

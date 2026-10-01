@@ -5,8 +5,10 @@
 // qualification & callback, payment reminders, reactivation / win-back, surveys, renewals,
 // abandoned-cart recovery, recruitment screening, and industry variants (dental, real estate,
 // insurance, automotive, solar, hospitality, education, logistics, iGaming, non-profit).
-// Each agent here is a complete, installable Script Builder script: opening → reason for the
-// call → the customer's likely replies → SMS / goal / goodbye.
+// Each agent here is a complete, installable Script Builder script: greeting → identity check
+// ("Just to check, am I speaking with <first name>?" — added after the greeting by scriptGraph.ts
+// and demo.ts, never written into `opening`) → reason for the call → the customer's likely
+// replies → SMS / goal / goodbye.
 //
 // Three are free for every organization; the rest are unlocked per organization
 // (agent_purchases). Pure data — no server imports — so the landing page can read it too.
@@ -29,6 +31,7 @@ export interface AgentObjection {
 }
 
 export interface AgentFlow {
+  /** The greeting alone (no name): the identity check is a separate turn right after it. */
   opening: string;
   value: string;
   positive: { intentKey: string; name: string; trigger: string; reply: string };
@@ -96,7 +99,7 @@ export const AGENT_CATALOG: AgentTemplate[] = [
     sampleText: "Hi, this is Ava calling from Riverside Dental. I'm just confirming your appointment with Dr. Patel tomorrow at ten thirty. Does that time still work for you? If not, I can move it right now, and I'll text you the details either way.",
     persona: common("Ava", "{{company}}, a clinic"),
     flow: {
-      opening: "Hi, this is Ava calling from {{company}}. Am I speaking with {{first_name}}?",
+      opening: "Hi, this is Ava calling from {{company}}.",
       value: "I'm calling to confirm your appointment on {{appointment_date}} at {{appointment_time}}. Does that still work for you?",
       positive: { intentKey: "confirmed", name: "Confirms the appointment", trigger: "Yes, that works / I'll be there", reply: "Perfect, you're all set. I'll text you the address and the time now. See you then!" },
       objections: [
@@ -124,8 +127,8 @@ export const AGENT_CATALOG: AgentTemplate[] = [
     sampleText: "Hi, this is Leo from Brightline. You requested a quote on our website a few minutes ago, so I'm following up while it's fresh. Can I ask you three quick questions to point you to the right specialist? It takes under a minute.",
     persona: common("Leo"),
     flow: {
-      opening: "Hi, this is Leo from {{company}}. Am I speaking with {{first_name}}? You asked about {{product}} on our website.",
-      value: "I'd love to point you to the right person. Can I ask three quick questions: what are you looking to solve, roughly when do you want to start, and what's your budget range?",
+      opening: "Hi, this is Leo from {{company}}.",
+      value: "You asked about {{product}} on our website, and I'd love to point you to the right person. Can I ask three quick questions: what are you looking to solve, roughly when do you want to start, and what's your budget range?",
       positive: { intentKey: "qualified", name: "Answers the questions", trigger: "Gives answers to the questions", reply: "That's really helpful, thank you. The best next step is a short call with one of our specialists. I'll text you a link to pick a time." },
       objections: [
         { intentKey: "not_now", name: "Not a good time", trigger: "I'm busy / call me later", reply: "Of course. I'll text you a link so you can pick a time that suits you.", next: "sms" },
@@ -152,8 +155,8 @@ export const AGENT_CATALOG: AgentTemplate[] = [
     sampleText: "Hello, this is Maya calling from Northwind on behalf of the customer care team. You recently spoke with our support desk, and I'd love thirty seconds of feedback. On a scale from zero to ten, how likely are you to recommend us to a friend?",
     persona: common("Maya"),
     flow: {
-      opening: "Hello, this is Maya from {{company}}. Is this {{first_name}}? I'm calling about your recent experience with us.",
-      value: "This takes under a minute. On a scale from zero to ten, how likely are you to recommend {{company}} to a friend or colleague? And what's the main reason for your score?",
+      opening: "Hello, this is Maya from {{company}}.",
+      value: "It's about your recent experience with us, and it takes under a minute. On a scale from zero to ten, how likely are you to recommend {{company}} to a friend or colleague? And what's the main reason for your score?",
       positive: { intentKey: "gives_score", name: "Gives a score", trigger: "Says a number and a reason", reply: "Thank you, that's really useful. I've noted your score and your comments for the team." },
       objections: [
         { intentKey: "no_time", name: "No time", trigger: "Not now / I'm busy", reply: "Understood. I'll text you a one-question link instead so you can answer when it suits you.", next: "sms" },
@@ -180,7 +183,7 @@ export const AGENT_CATALOG: AgentTemplate[] = [
     sampleText: "Hi, this is Noah calling from Metro Energy. This is a friendly reminder that your payment of eighty-four dollars is due on Friday. I can text you a secure link to pay in a couple of taps, or set up a date that works better for you. Which would you prefer?",
     persona: common("Noah") + " Never threaten or imply consequences; this is a courtesy reminder.",
     flow: {
-      opening: "Hi, this is Noah from {{company}}. Am I speaking with {{first_name}}?",
+      opening: "Hi, this is Noah from {{company}}.",
       value: "This is a friendly reminder that a payment of {{amount}} is due on {{due_date}}. I can text you a secure link to pay, or we can agree a date that works better. What would you prefer?",
       positive: { intentKey: "will_pay", name: "Will pay now", trigger: "Send me the link / I'll pay today", reply: "Great, I'm texting the secure link now. Thanks for sorting that." },
       objections: [
@@ -208,7 +211,7 @@ export const AGENT_CATALOG: AgentTemplate[] = [
     sampleText: "Hi, this is Sofia from Lumen Home. I noticed you left a few things in your basket earlier, including the oak side table. I just wanted to check nothing went wrong at checkout, and I can text you a link with ten percent off if you'd like to finish your order today.",
     persona: common("Sofia"),
     flow: {
-      opening: "Hi, this is Sofia from {{company}}. Is this {{first_name}}?",
+      opening: "Hi, this is Sofia from {{company}}.",
       value: "You left a few items in your basket earlier. I wanted to check nothing went wrong at checkout, and I can text you a link with {{discount}} off if you'd like to finish your order today.",
       positive: { intentKey: "wants_link", name: "Wants the link", trigger: "Yes send it / I'll finish it", reply: "Lovely, the link with your discount is on its way now." },
       objections: [
@@ -236,7 +239,7 @@ export const AGENT_CATALOG: AgentTemplate[] = [
     sampleText: "Good afternoon, this is Ethan calling from Harbor Insurance. Your car policy is due for renewal on the fifteenth. I'm calling to make sure you stay covered and to see whether you'd like one of our advisers to review the price with you before it renews.",
     persona: common("Ethan") + " Do not give financial advice; offer an adviser for anything beyond the basics.",
     flow: {
-      opening: "Good afternoon, this is Ethan from {{company}}. Am I speaking with {{first_name}}?",
+      opening: "Good afternoon, this is Ethan from {{company}}.",
       value: "Your {{policy_type}} policy renews on {{renewal_date}}. I'm calling to make sure you stay covered, and to offer a quick review with an adviser in case there's a better option this year.",
       positive: { intentKey: "book_adviser", name: "Wants an adviser", trigger: "Yes, review it / call me", reply: "Great, I'll text you a link to pick a time with an adviser." },
       objections: [
@@ -264,8 +267,8 @@ export const AGENT_CATALOG: AgentTemplate[] = [
     sampleText: "Hi, this is Grace from Kingsway Estates. You enquired about the two-bedroom flat on Elm Street earlier today. I'd love to get you booked in for a viewing. Are you looking to move in the next couple of months, and do you already have a mortgage in principle?",
     persona: common("Grace"),
     flow: {
-      opening: "Hi, this is Grace from {{company}}. Am I speaking with {{first_name}}? You enquired about {{property}}.",
-      value: "I'd love to help you see it. Are you hoping to move in the next couple of months, is your budget around {{price}}, and do you have financing in place?",
+      opening: "Hi, this is Grace from {{company}}.",
+      value: "You enquired about {{property}}, and I'd love to help you see it. Are you hoping to move in the next couple of months, is your budget around {{price}}, and do you have financing in place?",
       positive: { intentKey: "book_viewing", name: "Wants a viewing", trigger: "Yes, book a viewing", reply: "Wonderful. I'll text you a link with the available viewing slots." },
       objections: [
         { intentKey: "more_info", name: "Wants details first", trigger: "Send me the details / brochure", reply: "Of course. I'll text you the brochure and floor plan now.", next: "sms" },
@@ -292,8 +295,8 @@ export const AGENT_CATALOG: AgentTemplate[] = [
     sampleText: "Hello, this is Marcus calling from Crestline Finance about your account. Before we continue, can you confirm your date of birth for me? Thank you. Your account shows a balance of one hundred and twenty dollars past due, and I'd like to help you clear it in the easiest way today.",
     persona: common("Marcus") + " Verify identity before discussing the balance. Never disclose details to anyone else. No threats, no legal language; offer options.",
     flow: {
-      opening: "Hello, this is Marcus from {{company}} about your account. Am I speaking with {{first_name}}? For security, could you confirm your date of birth?",
-      value: "Thank you. Your account has a balance of {{amount}} that's now past due. I can text a secure link to pay today, or set up a short plan. Which is easier for you?",
+      opening: "Hello, this is Marcus from {{company}} about your account.",
+      value: "A balance of {{amount}} on your account is now past due. Before I go into the details, for security, could you confirm your date of birth? Once that's confirmed, I can text a secure link to pay today, or set up a short plan — whichever is easier for you.",
       positive: { intentKey: "pay_now", name: "Will pay now", trigger: "I'll pay / send the link", reply: "Thank you. The secure link is on its way to your phone now." },
       objections: [
         { intentKey: "payment_plan", name: "Needs a plan", trigger: "I can't pay it all / instalments", reply: "That's fine. I can note a first payment on {{plan_date}} and text you the plan details.", next: "sms" },
@@ -320,8 +323,8 @@ export const AGENT_CATALOG: AgentTemplate[] = [
     sampleText: "Hi, this is Isla from Pulse Fitness. It's been a few months since we saw you, and we've missed you. I wanted to check how things are going, and let you know we can restart your membership with the first month free if you'd like to come back.",
     persona: common("Isla"),
     flow: {
-      opening: "Hi, this is Isla from {{company}}. Is this {{first_name}}? It's been a while since we saw you.",
-      value: "I wanted to check how things are going, and let you know we can welcome you back with {{offer}}. Would that be of interest?",
+      opening: "Hi, this is Isla from {{company}}.",
+      value: "It's been a while since we saw you. I wanted to check how things are going, and let you know we can welcome you back with {{offer}}. Would that be of interest?",
       positive: { intentKey: "come_back", name: "Wants to come back", trigger: "Yes / sounds good", reply: "Brilliant. I'm texting you the link to reactivate with {{offer}} right now." },
       objections: [
         { intentKey: "reason_left", name: "Explains why they left", trigger: "Too expensive / didn't use it / moved", reply: "That makes sense, thank you for telling me. I'll text the offer in case it helps, no pressure at all.", next: "sms" },
@@ -348,8 +351,8 @@ export const AGENT_CATALOG: AgentTemplate[] = [
     sampleText: "Hi there, this is Jack from SunPath Solar. You asked about solar panels for your home. To see what you could save, I just need to know if you own the property and roughly what your monthly electricity bill looks like. Then I can book your free survey.",
     persona: common("Jack"),
     flow: {
-      opening: "Hi, this is Jack from {{company}}. Am I speaking with {{first_name}}? You asked about {{product}}.",
-      value: "To see whether it's worth it for you, I have four quick questions: do you own the property, what type of home is it, roughly what's your monthly energy bill, and when would you like to start?",
+      opening: "Hi, this is Jack from {{company}}.",
+      value: "You asked about {{product}}. To see whether it's worth it for you, I have four quick questions: do you own the property, what type of home is it, roughly what's your monthly energy bill, and when would you like to start?",
       positive: { intentKey: "book_survey", name: "Books the survey", trigger: "Yes, book it / answers the questions", reply: "Great news, you look like a good fit. I'll text you a link to book your free survey." },
       objections: [
         { intentKey: "renting", name: "Renting", trigger: "I rent / not the owner", reply: "Thanks for letting me know. The installation needs the owner's approval, so this may not be the right fit right now.", next: "goodbye" },
@@ -376,8 +379,8 @@ export const AGENT_CATALOG: AgentTemplate[] = [
     sampleText: "Hi, this is Priya from Meridian Talent about the warehouse team leader role you applied for. Congratulations, your application stood out. I have three quick questions about your availability and experience, and then I'd love to get you booked in for an interview.",
     persona: common("Priya"),
     flow: {
-      opening: "Hi, this is Priya from {{company}} about the {{role}} position you applied for. Is this {{first_name}}?",
-      value: "Your application stood out. Three quick questions: are you still interested, can you work {{schedule}}, and do you have {{requirement}}?",
+      opening: "Hi, this is Priya from {{company}}.",
+      value: "It's about the {{role}} position you applied for — your application stood out. Three quick questions: are you still interested, can you work {{schedule}}, and do you have {{requirement}}?",
       positive: { intentKey: "screen_pass", name: "Meets the criteria", trigger: "Yes to the questions", reply: "That's great. The next step is a short interview. I'll text you a link to pick a slot." },
       objections: [
         { intentKey: "found_job", name: "Found another job", trigger: "I've accepted something else", reply: "Congratulations on the new role! I'll update your application. All the best.", next: "goodbye" },
@@ -404,7 +407,7 @@ export const AGENT_CATALOG: AgentTemplate[] = [
     sampleText: "Hi, this is Oliver from Hillcrest Motors. Our records show your Corolla is due for its annual service next month. We've got slots available on Tuesday and Thursday mornings, and a courtesy car if you need one. Shall I book you in?",
     persona: common("Oliver", "{{company}}, a service centre"),
     flow: {
-      opening: "Hi, this is Oliver from {{company}}. Am I speaking with {{first_name}}?",
+      opening: "Hi, this is Oliver from {{company}}.",
       value: "Your {{vehicle}} is due for {{service_type}} around {{due_date}}. We have slots available next week and a courtesy car if you need one. Shall I book you in?",
       positive: { intentKey: "book_service", name: "Wants to book", trigger: "Yes, book it", reply: "Great. I'll text you the booking link so you can pick the exact time." },
       objections: [
@@ -432,7 +435,7 @@ export const AGENT_CATALOG: AgentTemplate[] = [
     sampleText: "Hi, this is Chloe from the Atlas Growth Summit team. We're hosting our annual conference on the twelfth of November in Manchester, and as a past attendee you're invited with early-bird pricing. Can I count you in, or text you the details to decide later?",
     persona: common("Chloe"),
     flow: {
-      opening: "Hi, this is Chloe from {{company}}. Is this {{first_name}}?",
+      opening: "Hi, this is Chloe from {{company}}.",
       value: "We're hosting {{event}} on {{event_date}} at {{venue}}, and you're invited. Can I count you in, or would you like the details by text to decide later?",
       positive: { intentKey: "rsvp_yes", name: "Will attend", trigger: "Yes, count me in", reply: "Fantastic. I'll text you the registration link to reserve your place." },
       objections: [
@@ -460,7 +463,7 @@ export const AGENT_CATALOG: AgentTemplate[] = [
     sampleText: "Hi, this is Daniel from Ledgerly. Your free trial wraps up in three days, so I wanted to check in. Have you had a chance to connect your bank account yet? If you'd like, I can text you a link to continue with twenty percent off your first three months.",
     persona: common("Daniel"),
     flow: {
-      opening: "Hi, this is Daniel from {{company}}. Is this {{first_name}}?",
+      opening: "Hi, this is Daniel from {{company}}.",
       value: "Your {{plan}} {{expires_or_renews}} on {{date}}. Quick check: how has it been going, and is there anything that would make it more useful for you?",
       positive: { intentKey: "continue", name: "Wants to continue", trigger: "Yes, keep it / upgrade me", reply: "Great to hear. I'll text you the link to continue with {{offer}}." },
       objections: [
@@ -488,7 +491,7 @@ export const AGENT_CATALOG: AgentTemplate[] = [
     sampleText: "Good afternoon, this is Zara calling from The Harbour Grill. I'm confirming your table for four tomorrow evening at seven thirty. Is that still right? If you'd like, I can also reserve the terrace for you, the weather looks lovely.",
     persona: common("Zara"),
     flow: {
-      opening: "Good afternoon, this is Zara from {{company}}. Am I speaking with {{first_name}}?",
+      opening: "Good afternoon, this is Zara from {{company}}.",
       value: "I'm confirming your reservation for {{party_size}} on {{date}} at {{time}}. Is that still right, or has anything changed?",
       positive: { intentKey: "confirmed", name: "Confirms", trigger: "Yes, that's right", reply: "Perfect. Your table is confirmed and I'll text you the details. We look forward to seeing you." },
       objections: [
@@ -516,8 +519,8 @@ export const AGENT_CATALOG: AgentTemplate[] = [
     sampleText: "Hi, this is Liam from Northgate College. You downloaded our prospectus for the Digital Marketing diploma last week. The next intake starts in September and places are filling up, so I wanted to see if you had any questions, and whether you'd like to book a chat with a course adviser.",
     persona: common("Liam"),
     flow: {
-      opening: "Hi, this is Liam from {{company}}. Is this {{first_name}}? You requested information about {{course}}.",
-      value: "The next intake starts {{start_date}} and it's {{duration}}. Do you have any questions I can answer, and would you like a call with a course adviser?",
+      opening: "Hi, this is Liam from {{company}}.",
+      value: "You requested information about {{course}}. The next intake starts {{start_date}} and it's {{duration}}. Do you have any questions I can answer, and would you like a call with a course adviser?",
       positive: { intentKey: "book_adviser", name: "Wants an adviser call", trigger: "Yes, book a call / sign me up", reply: "Great. I'll text you a link to pick a time with an adviser." },
       objections: [
         { intentKey: "fees", name: "Asks about cost", trigger: "How much does it cost / funding", reply: "The fee is {{fee}} and there are payment plans and funding options. I'll text the full breakdown.", next: "sms" },
@@ -544,7 +547,7 @@ export const AGENT_CATALOG: AgentTemplate[] = [
     sampleText: "Hi, this is Hannah from Orchard & Vine. As one of our club members, you get first access to our autumn sale, which starts Friday with twenty-five percent off everything. I can text you your personal code right now so it's ready to use.",
     persona: common("Hannah"),
     flow: {
-      opening: "Hi, this is Hannah from {{company}}. Is this {{first_name}}?",
+      opening: "Hi, this is Hannah from {{company}}.",
       value: "As a {{program}} member you get early access to {{offer}}, starting {{start_date}}. Shall I text you your personal code?",
       positive: { intentKey: "wants_code", name: "Wants the code", trigger: "Yes please", reply: "Lovely, your code is on its way by text now. Enjoy!" },
       objections: [
@@ -572,7 +575,7 @@ export const AGENT_CATALOG: AgentTemplate[] = [
     sampleText: "Hey, this is Victor calling from Lucky Seven Casino. We haven't seen you at the tables for a while, so we've put a welcome-back bonus on your account: a hundred percent match on your next deposit, plus fifty free spins. Would you like me to text you the link to claim it?",
     persona: common("Victor") + " Only discuss offers with the account holder, never encourage chasing losses, and end the call at once if they ask not to be contacted about gambling.",
     flow: {
-      opening: "Hey, this is Victor from {{company}}. Am I speaking with {{first_name}}?",
+      opening: "Hey, this is Victor from {{company}}.",
       value: "We haven't seen you for a while and there's a welcome-back bonus on your account: {{bonus}}. Would you like me to text you the link to claim it?",
       positive: { intentKey: "claim_bonus", name: "Wants the bonus", trigger: "Yes, send it", reply: "Great, the link is on its way to your phone now. Good luck!" },
       objections: [
@@ -600,8 +603,8 @@ export const AGENT_CATALOG: AgentTemplate[] = [
     sampleText: "Hello, this is Amara calling from the Riverbank Trust. I'm calling simply to say thank you. Your gift last spring helped us plant over two thousand trees along the estuary. If you'd ever consider making that a small monthly gift, I can text you a link, but mostly, thank you.",
     persona: common("Amara") + " Gratitude first; never pressure.",
     flow: {
-      opening: "Hello, this is Amara from {{company}}. Is this {{first_name}}? I'm calling to say thank you.",
-      value: "Your gift of {{amount}} helped {{impact}}. If you'd ever consider a small monthly gift, I can text you a link, but mostly I wanted to say thank you.",
+      opening: "Hello, this is Amara from {{company}}.",
+      value: "Simply to say thank you: your gift of {{amount}} helped {{impact}}. If you'd ever consider a small monthly gift, I can text you a link, but there's no pressure at all.",
       positive: { intentKey: "give_monthly", name: "Will give monthly", trigger: "Yes, set that up", reply: "That's wonderful, thank you. I'll text you the link to set it up." },
       objections: [
         { intentKey: "one_off", name: "Prefers one-off", trigger: "Maybe a one-off / not monthly", reply: "Absolutely. I'll text the link and you can give whatever suits you.", next: "sms" },
@@ -628,7 +631,7 @@ export const AGENT_CATALOG: AgentTemplate[] = [
     sampleText: "Hi, this is Ben from Swift Logistics. Your order from Lumen Home is scheduled for delivery tomorrow between nine and one. Will someone be home to receive it? And is there anything the driver should know, like a gate code or a side entrance?",
     persona: common("Ben"),
     flow: {
-      opening: "Hi, this is Ben from {{company}}. Am I speaking with {{first_name}}?",
+      opening: "Hi, this is Ben from {{company}}.",
       value: "Your {{order}} is scheduled for {{date}} between {{window}}. Will someone be there, and is there anything the driver should know, like a gate code?",
       positive: { intentKey: "confirmed", name: "Confirms", trigger: "Yes, that's fine / gives instructions", reply: "Perfect, I've noted that. I'll text you the tracking link so you can follow the driver tomorrow." },
       objections: [

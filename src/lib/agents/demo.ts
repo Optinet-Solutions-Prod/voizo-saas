@@ -68,6 +68,12 @@ function clean(s: string): string {
   return s.replace(/\s+/g, " ").trim();
 }
 
+/** "Just to check, am I speaking with Chris?" — or, with no usable name, who is speaking. */
+export function demoIdentityQuestion(firstName: string): string {
+  const name = clean(firstName);
+  return name && name.toLowerCase() !== "there" ? `Just to check, am I speaking with ${name}?` : "Just to check, who am I speaking with?";
+}
+
 /** The system prompt for a demo call: persona + the whole flow as guidance. */
 export function composeDemoPrompt(agent: AgentTemplate, input: DemoInput): string {
   const f = (s: string) => clean(fillPlaceholders(s, input));
@@ -80,14 +86,17 @@ export function composeDemoPrompt(agent: AgentTemplate, input: DemoInput): strin
   lines.push("");
   lines.push("HOW THE CALL GOES");
   lines.push(`1. Opening (you already said it as your first message): "${f(flow.opening)}"`);
-  lines.push(`2. Reason for the call: "${f(flow.value)}"`);
-  lines.push(`3. If they ${f(flow.positive.trigger).toLowerCase()} — ${f(flow.positive.name).toLowerCase()} — say: "${f(flow.positive.reply)}"${flow.sms ? " Then say a quick text with the details is on its way (one short line; never read the message out)." : ""}`);
+  // Identity check by name right after the greeting (Chris, 2026-10-01) — the same step the
+  // installed scripts run (scriptGraph.ts); no usable name → ask who is speaking instead.
+  lines.push(`2. Identity check — as soon as they answer, ask: "${demoIdentityQuestion(input.firstName)}" If they confirm (or give their name), carry on. If it's the wrong person or they're not available, apologise for the mix-up, say you'll leave it there, and end the call.`);
+  lines.push(`3. Reason for the call: "${f(flow.value)}"`);
+  lines.push(`4. If they ${f(flow.positive.trigger).toLowerCase()} — ${f(flow.positive.name).toLowerCase()} — say: "${f(flow.positive.reply)}"${flow.sms ? " Then say a quick text with the details is on its way (one short line; never read the message out)." : ""}`);
   flow.objections.forEach((o, i) => {
     const next = o.next === "value" ? "then return to the reason for the call" : o.next === "sms" ? "then say a text is on its way and wrap up" : o.next === "positive" ? "then continue as if they said yes" : "then say goodbye";
-    lines.push(`${4 + i}. If they ${f(o.trigger).toLowerCase()} — ${f(o.name).toLowerCase()} — say: "${f(o.reply)}" and ${next}.`);
+    lines.push(`${5 + i}. If they ${f(o.trigger).toLowerCase()} — ${f(o.name).toLowerCase()} — say: "${f(o.reply)}" and ${next}.`);
   });
-  lines.push(`${4 + flow.objections.length}. Wrap-up: one short, warm line of reassurance — what's agreed, what happens next, and that there's nothing more they need to do (for example: "You're all set, ${input.firstName} — that's on its way and there's nothing else you need to do. Any questions, just give us a shout.").`);
-  lines.push(`${5 + flow.objections.length}. Goodbye: "${f(flow.goodbye)}" Say it once, right after the wrap-up, then end the call straight away with the end-call function. Never say goodbye twice.`);
+  lines.push(`${5 + flow.objections.length}. Wrap-up: one short, warm line of reassurance — what's agreed, what happens next, and that there's nothing more they need to do (for example: "You're all set, ${input.firstName} — that's on its way and there's nothing else you need to do. Any questions, just give us a shout.").`);
+  lines.push(`${6 + flow.objections.length}. Goodbye: "${f(flow.goodbye)}" Say it once, right after the wrap-up, then end the call straight away with the end-call function. Never say goodbye twice.`);
   lines.push("");
   lines.push("MUST COVER");
   for (const g of flow.goals) lines.push(`- ${f(g)}`);

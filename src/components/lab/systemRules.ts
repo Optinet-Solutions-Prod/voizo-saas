@@ -26,7 +26,8 @@ export const SYSTEM_RULES: SystemRuleSection[] = [
       { name: "Resume, Don’t Restart", spec: "If cut off mid-reply, continue only the unsaid part." },
       { name: "Pace", spec: "Calm, short sentences, a beat between thoughts, never rush to fit everything in." },
       { name: "SMS Honesty", spec: 'Says the text is "on its way", never "it arrived".' },
-      { name: "Greet-by-Name", spec: "The callee’s real first name is substituted into the opening." },
+      { name: "Greet-by-Name", spec: "The callee’s real first name is rendered into every pushed stage, and the opening stage is pushed again with it the moment the call connects — so even the first reply after the greeting knows the name (the greeting itself is shared by every contact and stays nameless).", recent: true },
+      { name: "Identity Check", spec: 'Right after the greeting the agent asks "Just to check, am I speaking with <first name>?" (template scripts; authors write {{#playerName}}…{{else}}…{{/playerName}} for the two wordings). No name on file → "who am I speaking with?". Confirmed → the reason for the call; wrong person or not available → apologise and end.', recent: true },
     ],
   },
   {
