@@ -88,10 +88,8 @@ export default function AgentGallery({ agents, currency = "USD", onInstall, inst
               {a.tags.slice(0, 3).map((t) => <span key={t} className="rounded-md bg-[var(--bg-elevated)] px-2 py-0.5 text-[11px] text-[var(--text-3)]">{t}</span>)}
             </div>
             {onTry && !onInstall && (
-              <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-4">
-                <span className="mr-auto text-[11px] text-[var(--text-4)]">Listen · Talk live</span>
-                <button type="button" onClick={() => toggle(a)} disabled={!a.sampleUrl} aria-label={isPlaying ? `Pause ${a.name}'s sample` : `Listen to ${a.name}`} title={isPlaying ? "Pause" : "Listen to a sample"} className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--border-2)] bg-[var(--bg-elevated)] text-[var(--text-1)] transition hover:bg-[var(--bg-hover)] disabled:opacity-50">{isPlaying ? <Pause size={16} /> : <Play size={16} className="ml-0.5" />}</button>
-                <button type="button" onClick={() => onTry(a)} aria-label={`Talk to ${a.name}`} title={`Talk to ${a.name} live in your browser`} className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-[var(--accent-fg)] transition hover:brightness-110" style={{ background: "var(--accent)" }}><Phone size={16} /></button>
+              <div className="mt-4 border-t border-[var(--border)] pt-4">
+                <button type="button" onClick={() => onTry(a)} aria-label={`Test call with ${a.name}`} title={`Talk to ${a.name} live in your browser`} className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold text-[var(--accent-fg)] transition hover:brightness-110" style={{ background: "var(--accent)" }}><Phone size={16} /> Test call</button>
               </div>
             )}
             {onInstall && (
