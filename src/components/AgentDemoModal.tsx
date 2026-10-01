@@ -14,7 +14,6 @@ const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
 // business name and business type and talk to it live in the browser. No sign-in; the server
 // applies the cost guards.
 
-const PRIMARY = "#4d90f0";
 const STORAGE = "voizo.demo.visitor";
 
 export interface VisitorDetails {
@@ -109,7 +108,7 @@ export default function AgentDemoModal({ agent, initial, onClose, onDetails }: {
     }
   }
 
-  const inputCls = "h-11 w-full rounded-xl border border-[var(--border-2)] bg-[var(--bg-elevated)] px-3.5 text-sm text-[var(--text-1)] outline-none placeholder:text-[var(--text-4)] focus:border-[#4d90f0] focus:ring-4 focus:ring-[#4d90f0]/15 disabled:opacity-60";
+  const inputCls = "h-11 w-full rounded-xl border border-[var(--border-2)] bg-[var(--bg-elevated)] px-3.5 text-sm text-[var(--text-1)] outline-none placeholder:text-[var(--text-4)] focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent)]/15 disabled:opacity-60";
   const first = agent.name.split(" ")[0];
 
   return (
@@ -141,7 +140,7 @@ export default function AgentDemoModal({ agent, initial, onClose, onDetails }: {
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-[var(--text-1)]">Listen to {first}</p>
                     <p className="text-[11px] text-[var(--text-3)]">{agent.sampleUrl ? "A short recorded sample of this agent's voice and style." : "Sample not available yet."}</p>
-                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--bg-app)]"><div className="h-full rounded-full transition-[width] duration-200" style={{ width: `${Math.round(progress * 100)}%`, background: PRIMARY }} /></div>
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--bg-app)]"><div className="h-full rounded-full transition-[width] duration-200" style={{ width: `${Math.round(progress * 100)}%`, background: "var(--accent)" }} /></div>
                   </div>
                 </div>
                 <blockquote className="mt-3 text-[12.5px] italic leading-relaxed text-[var(--text-3)]">“{agent.sampleText.length > 200 ? agent.sampleText.slice(0, 200).trimEnd() + "…" : agent.sampleText}”</blockquote>
@@ -176,7 +175,7 @@ export default function AgentDemoModal({ agent, initial, onClose, onDetails }: {
                 )}
                 {call.status === "ended" && !call.error && <CallSummaryCard agentKey={agent.key} firstName={firstName} company={company} transcript={call.transcript} seconds={call.seconds} />}
                 {TURNSTILE_SITE_KEY && <Turnstile key={captchaKey} siteKey={TURNSTILE_SITE_KEY} action="demo_call" onToken={setCaptcha} />}
-                <button type="submit" disabled={preparing || !firstName.trim() || !company.trim() || (Boolean(TURNSTILE_SITE_KEY) && !captcha)} className="mt-1 inline-flex h-12 items-center justify-center gap-2 rounded-xl text-sm font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60" style={{ background: PRIMARY, boxShadow: `0 8px 24px ${PRIMARY}33` }}>
+                <button type="submit" disabled={preparing || !firstName.trim() || !company.trim() || (Boolean(TURNSTILE_SITE_KEY) && !captcha)} className="mt-1 inline-flex h-12 items-center justify-center gap-2 rounded-xl text-sm font-semibold text-[var(--accent-fg)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60" style={{ background: "var(--accent)", boxShadow: "0 8px 24px color-mix(in srgb, var(--accent) 20%, transparent)" }}>
                   {preparing ? <Loader2 size={16} className="animate-spin" /> : <Phone size={16} />} {call.status === "ended" ? `Call ${first} again` : `Start the call with ${first}`}
                 </button>
                 <p className="flex items-center gap-1.5 text-[11px] text-[var(--text-4)]"><Headphones size={12} /> {first} calls you in the browser. Use headphones if you can; your browser will ask for the microphone first. Demo calls last up to 4 minutes.</p>

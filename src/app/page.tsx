@@ -1,13 +1,16 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import {
-  ArrowRight, BarChart3, Bot, CalendarClock, CheckCircle2, MessageSquareText, PhoneCall,
-  MessageCircle, ShieldCheck, Sparkles, Workflow, Zap,
+  ArrowRight, Ban, BarChart3, Bot, CalendarClock, Check, ChevronRight, Clock, FileCheck, Mail,
+  MessageCircle, MessageSquareText, PhoneCall, Server, Smartphone, Sparkles, UserX, Users,
+  Workflow, Zap,
 } from "lucide-react";
+import MarketingLogo from "@/components/MarketingLogo";
 import PublicAgentsShowcase from "@/components/PublicAgentsShowcase";
 import TryItNowButton from "@/components/TryItNow";
 import { AGENT_CATALOG, publicAgent, showcaseOrder } from "@/lib/agents/catalog";
 import { sampleUrl } from "@/lib/agents/entitlements";
+import { MARKETING_SHELL } from "@/lib/marketingFonts";
 
 export const metadata: Metadata = {
   title: "VOIZO — Calls on the go. Agents on the go.",
@@ -16,59 +19,39 @@ export const metadata: Metadata = {
 };
 
 // Public landing page (the middleware leaves "/" open). Server-rendered, no data fetches.
-// Colors come from the theme tokens so it follows the dark/light toggle like the console.
-
-const PRIMARY = "#4d90f0";
+// Restyled after deepgram.com (Chris, 2026-10-01): black ground, hairline borders, one green
+// accent, mono eyebrow labels, and the reference's section order — centered hero, capability
+// strip, product shot, featured product (the agents), platform grid, pipeline diagram, three
+// journeys, a "built for scale" panel, final CTA, multi-column footer. Everything visual comes
+// from the .dg-site theme in globals.css; the console keeps its own look.
 
 const FEATURES = [
-  {
-    icon: Bot,
-    title: "AI voice agents",
-    body: "Give each agent a voice, a persona and a prompt. Every campaign runs its own frozen copy, so editing an agent never disturbs a live campaign.",
-    tint: "#4d90f0",
-  },
-  {
-    icon: Workflow,
-    title: "Script builder & lab",
-    body: "Map the conversation as a flow of stages and answers, then test it with a real call in the lab before a single customer hears it.",
-    tint: "#8b7cf6",
-  },
-  {
-    icon: CalendarClock,
-    title: "Campaigns that run themselves",
-    body: "One-off, recurring or real-time campaigns with calling windows, per-country caller IDs and concurrency limits you control.",
-    tint: "#22b8a7",
-  },
-  {
-    icon: MessageSquareText,
-    title: "SMS follow-up",
-    body: "Send the offer by text after the call, with consent rules per campaign and de-duplication so nobody gets the same message twice.",
-    tint: "#f0a04d",
-  },
-  {
-    icon: Sparkles,
-    title: "AI call reviews",
-    body: "An LLM judge scores conversations against your rubric, and a review queue lets your team label the calls that matter.",
-    tint: "#e46fa5",
-  },
-  {
-    icon: BarChart3,
-    title: "Analytics that add up",
-    body: "Reach, pickups, conversations, opt-ins and cost per campaign, with exports for your CRM and a daily snapshot of the numbers.",
-    tint: "#5fb85f",
-  },
-  {
-    icon: Zap,
-    title: "On the go, ready as it is",
-    body: "Phone numbers, SMS, email and a SIP trunk come with your account. Pick an agent, add your brand, press start. Anytime, anywhere.",
-    tint: "#f0c94d",
-  },
-  {
-    icon: MessageCircle,
-    title: "WhatsApp calling",
-    body: "Reach customers on WhatsApp through Meta's Business Calling API, alongside mobile and landline numbers, from the same campaign.",
-    tint: "#25d366",
-  },
+  { icon: Bot, title: "AI voice agents", body: "Give each agent a voice, a persona and a prompt. Every campaign runs its own frozen copy, so editing an agent never disturbs a live campaign." },
+  { icon: Workflow, title: "Script builder & lab", body: "Map the conversation as a flow of stages and answers, then test it with a real call in the lab before a single customer hears it." },
+  { icon: CalendarClock, title: "Campaigns that run themselves", body: "One-off, recurring or real-time campaigns with calling windows, per-country caller IDs and concurrency limits you control." },
+  { icon: MessageSquareText, title: "SMS follow-up", body: "Send the offer by text after the call, with consent rules per campaign and de-duplication so nobody gets the same message twice." },
+  { icon: Sparkles, title: "AI call reviews", body: "An LLM judge scores conversations against your rubric, and a review queue lets your team label the calls that matter." },
+  { icon: BarChart3, title: "Analytics that add up", body: "Reach, pickups, conversations, opt-ins and cost per campaign, with exports for your CRM and a daily snapshot of the numbers." },
+  { icon: Zap, title: "On the go, ready as it is", body: "Phone numbers, SMS, email and a SIP trunk come with your account. Pick an agent, add your brand, press start. Anytime, anywhere." },
+  { icon: MessageCircle, title: "WhatsApp calling", body: "Reach customers on WhatsApp through Meta's Business Calling API, alongside mobile and landline numbers, from the same campaign." },
+];
+
+const CAPABILITIES = [
+  { icon: Smartphone, label: "Mobile & landline" },
+  { icon: MessageCircle, label: "WhatsApp calling" },
+  { icon: MessageSquareText, label: "SMS follow-up" },
+  { icon: Mail, label: "Email follow-up" },
+  { icon: Server, label: "SIP trunk included" },
+  { icon: PhoneCall, label: "Numbers per country" },
+];
+
+const PIPELINE = [
+  { icon: Users, label: "Audience", sub: "Upload a list or sync a segment" },
+  { icon: Bot, label: "Agent", sub: "Voice, persona and script" },
+  { icon: PhoneCall, label: "Call", sub: "Mobile, landline or WhatsApp" },
+  { icon: MessageSquareText, label: "Follow-up", sub: "SMS and email, consent-aware" },
+  { icon: Sparkles, label: "AI review", sub: "Scored against your rubric" },
+  { icon: BarChart3, label: "Analytics", sub: "Reach, outcomes and cost" },
 ];
 
 const STEPS = [
@@ -77,91 +60,92 @@ const STEPS = [
   { n: "03", title: "Review and improve", body: "Read transcripts, let the AI judge score them, and tune the script from what works." },
 ];
 
-const TRANSCRIPT = [
-  { who: "agent", text: "Hi, it's Ava calling. Have you got a minute?" },
-  { who: "person", text: "Sure, what's it about?" },
-  { who: "agent", text: "You have a welcome offer waiting. Shall I text you the details?" },
-  { who: "person", text: "Yes, go ahead." },
+const JOURNEYS = [
+  {
+    icon: Zap,
+    title: "Start on the go",
+    body: "Phone numbers, SMS, email and a SIP trunk come with your account. Pick an agent, add your brand, press start.",
+    points: ["VOIZO numbers with per-country caller IDs", "SMS and email follow-ups sent for you", "WhatsApp calling once your number is enabled"],
+    cta: { label: "Take a live call", href: "#agents" },
+  },
+  {
+    icon: Workflow,
+    title: "Build your own agent",
+    body: "Write the persona, map the conversation as stages and answers, and test it with a real call in the lab.",
+    points: ["Script builder with reply detectors", "Lab calls before any customer hears it", "An AI judge scores every conversation"],
+    cta: { label: "See how it works", href: "#how" },
+  },
+  {
+    icon: Server,
+    title: "Bring your own carrier",
+    body: "Keep your numbers, your SIP trunk and your senders. Switch with one setting, no rebuild.",
+    points: ["Your SIP trunk, Squaretalk, Twilio or FreeSWITCH", "Your SMS and email providers, encrypted at rest", "Mix and match: VOIZO fills in whatever you don't connect"],
+    cta: { label: "Open the console", href: "/login" },
+  },
 ];
 
-function Logo() {
-  return (
-    <Link href="/" className="flex items-center gap-2.5" aria-label="VOIZO home">
-      <span
-        className="w-9 h-9 rounded-xl flex items-center justify-center"
-        style={{ background: "linear-gradient(145deg,#4d90f0,#3a6fd0)", boxShadow: "0 2px 10px rgba(77,144,240,.35)" }}
-      >
-        <span className="text-white text-sm font-bold">V</span>
-      </span>
-      <span className="font-bold tracking-tight text-[var(--text-1)]">VOIZO</span>
-    </Link>
-  );
+const RAILS = [
+  { icon: Ban, title: "Do-not-call & suppression", body: "Both lists are checked before every single dial." },
+  { icon: Clock, title: "Calling windows", body: "Calls only go out inside each campaign's hours." },
+  { icon: FileCheck, title: "Consent rules", body: "SMS follows the consent mode you choose per campaign." },
+  { icon: UserX, title: "Opt-outs honoured", body: "A request to stop is honoured automatically." },
+];
+
+const FOOTER = [
+  { title: "Product", links: [{ label: "Pre-built agents", href: "/agents" }, { label: "Platform", href: "#features" }, { label: "How it works", href: "#how" }, { label: "Pricing", href: "/pricing" }] },
+  { title: "Try it", links: [{ label: "Take a live call", href: "#agents" }, { label: "Which agent fits?", href: "#agents" }, { label: "All 20 agents", href: "/agents" }] },
+  { title: "Account", links: [{ label: "Log in", href: "/login" }, { label: "Create an account", href: "/signup" }] },
+];
+
+const TRANSCRIPT = [
+  { who: "agent", text: "Hi, it's Ava calling from Riverside Dental." },
+  { who: "person", text: "Hi, yes?" },
+  { who: "agent", text: "Just to check, am I speaking with Chris?" },
+  { who: "person", text: "Speaking." },
+  { who: "agent", text: "Great. I'm calling to confirm your appointment tomorrow at ten thirty. Does that still work for you?" },
+  { who: "person", text: "Yes, that's fine." },
+];
+
+function NavLink({ href, className, children }: { href: string; className?: string; children: React.ReactNode }) {
+  return href.startsWith("#") ? <a href={href} className={className}>{children}</a> : <Link href={href} className={className}>{children}</Link>;
 }
 
 function CallCard() {
   return (
-    <div className="lp-float relative w-full max-w-md">
-      {/* soft glow behind the card */}
-      <div
-        aria-hidden
-        className="absolute -inset-6 rounded-[2rem] blur-3xl opacity-40"
-        style={{ background: `radial-gradient(60% 60% at 50% 40%, ${PRIMARY}, transparent)` }}
-      />
-      <div className="relative rounded-3xl border border-[var(--border-2)] bg-[var(--bg-card)] shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
+    <div className="relative">
+      <div aria-hidden className="pointer-events-none absolute -inset-10 rounded-[2rem] opacity-25 blur-3xl" style={{ background: "radial-gradient(60% 60% at 50% 40%, #00f099, transparent 70%)" }} />
+      <div className="relative overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-2xl">
+        <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-3.5">
           <div className="flex items-center gap-3">
-            <span className="relative flex h-9 w-9 items-center justify-center rounded-full" style={{ background: `${PRIMARY}22` }}>
-              <span className="lp-ping absolute inset-0 rounded-full" style={{ background: `${PRIMARY}55` }} />
-              <PhoneCall size={16} style={{ color: PRIMARY }} />
+            <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-[var(--accent)]/15">
+              <span className="lp-ping absolute inset-0 rounded-full bg-[var(--accent)]/40" />
+              <PhoneCall size={14} className="text-[var(--accent)]" />
             </span>
-            <div className="leading-tight">
-              <p className="text-sm font-semibold text-[var(--text-1)]">Live call</p>
-              <p className="text-[11px] text-[var(--text-3)]">Agent “Ava” · sample conversation</p>
-            </div>
+            <p className="text-sm font-semibold">Live call</p>
           </div>
-          <span className="font-mono text-xs text-[var(--text-2)]">00:42</span>
+          <span className="dg-mono text-xs text-[var(--text-3)]">00:42</span>
         </div>
-
-        {/* waveform */}
-        <div className="flex items-center justify-center gap-[3px] h-14 px-5 border-b border-[var(--border)]" aria-hidden>
-          {Array.from({ length: 36 }).map((_, i) => (
+        <div className="flex h-14 items-center justify-center gap-[3px] border-b border-[var(--border)] px-5" aria-hidden>
+          {Array.from({ length: 48 }).map((_, i) => (
             <span
               key={i}
               className="lp-wave-bar w-[3px] rounded-full"
-              style={{
-                height: `${20 + ((i * 37) % 60)}%`,
-                background: i % 5 === 0 ? PRIMARY : "var(--border-2)",
-                animationDelay: `${(i % 9) * 0.11}s`,
-              }}
+              style={{ height: `${20 + ((i * 37) % 60)}%`, background: i % 5 === 0 ? "var(--accent)" : "var(--border-2)", animationDelay: `${(i % 9) * 0.11}s` }}
             />
           ))}
         </div>
-
-        <div className="space-y-2.5 px-5 py-4">
+        <div className="space-y-2.5 px-5 py-5">
           {TRANSCRIPT.map((line, i) => (
             <div key={i} className={`flex ${line.who === "agent" ? "justify-start" : "justify-end"}`}>
               <p
-                className={`max-w-[80%] rounded-2xl px-3.5 py-2 text-[13px] leading-snug ${
-                  line.who === "agent"
-                    ? "bg-[var(--bg-elevated)] text-[var(--text-1)] rounded-bl-md"
-                    : "text-white rounded-br-md"
+                className={`max-w-[78%] rounded-lg px-3.5 py-2 text-[13px] leading-snug ${
+                  line.who === "agent" ? "bg-[var(--bg-elevated)] text-[var(--text-1)]" : "bg-[var(--accent)] text-[var(--accent-fg)]"
                 }`}
-                style={line.who === "agent" ? undefined : { background: PRIMARY }}
               >
                 {line.text}
               </p>
             </div>
           ))}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2 px-5 py-3.5 border-t border-[var(--border)] bg-[var(--bg-panel)]">
-          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium text-emerald-400 bg-emerald-500/10">
-            <CheckCircle2 size={12} /> Opted in
-          </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium text-[var(--text-2)] bg-[var(--bg-elevated)]">
-            <MessageSquareText size={12} /> SMS queued
-          </span>
-          <span className="ml-auto text-[11px] text-[var(--text-3)]">AI score pending</span>
         </div>
       </div>
     </div>
@@ -169,118 +153,89 @@ function CallCard() {
 }
 
 export default function LandingPage() {
+  const year = new Date().getFullYear();
   return (
-    <div className="relative min-h-screen overflow-x-hidden text-[var(--text-1)]">
-      {/* backdrop: a primary-tinted glow over the app ground (the global dot-field shows through) */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-[720px] -z-[1]"
-        style={{ background: `radial-gradient(50% 60% at 50% 0%, ${PRIMARY}2e, transparent 70%)` }}
-      />
-
+    <div className={`${MARKETING_SHELL} relative min-h-screen overflow-x-hidden bg-[var(--bg-app)] text-[var(--text-1)]`}>
       {/* ── Nav ── */}
-      <header className="sticky top-0 z-30 border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--bg-app)_80%,transparent)] backdrop-blur-md">
-        <nav className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-          <Logo />
-          <div className="hidden md:flex items-center gap-8 text-sm text-[var(--text-2)]">
-            <a href="#features" className="hover:text-[var(--text-1)] transition-colors">Features</a>
-            <a href="#agents" className="hover:text-[var(--text-1)] transition-colors">Agents</a>
-            <a href="#how" className="hover:text-[var(--text-1)] transition-colors">How it works</a>
-            <Link href="/pricing" className="hover:text-[var(--text-1)] transition-colors">Pricing</Link>
+      <header className="sticky top-0 z-30 border-b border-[var(--border)] bg-black/80 backdrop-blur-md">
+        <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
+          <MarketingLogo />
+          <div className="hidden items-center gap-7 text-sm text-[var(--text-2)] md:flex">
+            <a href="#agents" className="transition-colors hover:text-[var(--text-1)]">Agents</a>
+            <a href="#features" className="transition-colors hover:text-[var(--text-1)]">Platform</a>
+            <a href="#how" className="transition-colors hover:text-[var(--text-1)]">How it works</a>
+            <Link href="/pricing" className="transition-colors hover:text-[var(--text-1)]">Pricing</Link>
           </div>
-          <Link
-            href="/login"
-            className="inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold text-white transition hover:brightness-110"
-            style={{ background: PRIMARY }}
-          >
-            Sign in <ArrowRight size={15} />
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/login" className="dg-btn dg-btn-sm text-[var(--text-2)] hover:text-[var(--text-1)]">Log in</Link>
+            <Link href="/signup" className="dg-btn dg-btn-sm dg-btn-primary">Sign up free</Link>
+          </div>
         </nav>
       </header>
+      {/* announcement bar, like the reference's promo strip under the nav */}
+      <div className="border-b border-[var(--border)] bg-[var(--bg-panel)]">
+        <a href="#agents" className="mx-auto flex max-w-7xl items-center justify-center gap-2.5 px-4 py-2 text-xs text-[var(--text-2)] transition-colors hover:text-[var(--text-1)]">
+          <span className="dg-eyebrow">New</span>
+          <span>Agents now confirm who they&apos;re speaking with, by name. Take a live call to hear it</span>
+          <ArrowRight size={13} />
+        </a>
+      </div>
 
       <main>
         {/* ── Hero ── */}
-        <section className="mx-auto grid max-w-6xl items-center gap-14 px-4 pb-20 pt-16 sm:px-6 md:pt-24 lg:grid-cols-[1.1fr_1fr]">
-          <div>
-            <span className="inline-flex items-center gap-2 rounded-full border border-[var(--border-2)] bg-[var(--bg-card)] px-3 py-1 text-xs text-[var(--text-2)]">
-              <span className="h-1.5 w-1.5 rounded-full" style={{ background: PRIMARY }} />
-              Ready as it is · anytime, anywhere
-            </span>
-            <h1 className="mt-6 text-[2rem] font-bold leading-[1.08] tracking-tight sm:text-5xl lg:text-[3.1rem]">
-              Calls on the go.
-              <br />
-              <span
-                className="bg-clip-text text-transparent"
-                style={{ backgroundImage: `linear-gradient(90deg, ${PRIMARY}, #8b7cf6)` }}
-              >
-                Agents on the go.
-              </span>
-            </h1>
-            <p className="mt-6 max-w-xl text-base leading-relaxed text-[var(--text-2)] sm:text-lg">
-              VOIZO is ready as it is, anytime, anywhere. Pick an agent, add your brand and start
-              calling on our numbers, SIP trunk, SMS and email, with nothing to set up. Or bring your
-              own carrier, numbers and senders. Calls reach mobiles, landlines and WhatsApp.
-            </p>
-            <div className="mt-9 flex flex-wrap items-center gap-3">
-              <TryItNowButton
-                className="inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white shadow-lg transition hover:brightness-110"
-                style={{ background: PRIMARY, boxShadow: `0 8px 24px ${PRIMARY}40` }}
-              />
-              <Link
-                href="/login"
-                className="inline-flex items-center gap-2 rounded-xl border border-[var(--border-2)] bg-[var(--bg-card)] px-5 py-3 text-sm font-semibold text-[var(--text-1)] transition hover:bg-[var(--bg-hover)]"
-              >
-                Open the console <ArrowRight size={16} />
-              </Link>
-            </div>
-            <p className="mt-3 text-xs text-[var(--text-4)]">Take a live call from an AI agent in your browser. No account, no setup.</p>
-            <ul className="mt-10 flex flex-wrap gap-x-6 gap-y-2 text-sm text-[var(--text-3)]">
-              {["Numbers, SMS, email & SIP trunk included", "Bring your own carrier if you prefer", "Mobile, landline & WhatsApp"].map((t) => (
-                <li key={t} className="flex items-center gap-2">
-                  <CheckCircle2 size={15} style={{ color: PRIMARY }} /> {t}
-                </li>
-              ))}
-            </ul>
+        <section className="mx-auto max-w-4xl px-4 pb-12 pt-20 text-center sm:px-6 md:pt-28">
+          <p className="dg-eyebrow">Voice agents for outbound calls</p>
+          <h1 className="dg-display mt-5 text-4xl leading-[1.05] sm:text-6xl lg:text-[4.5rem]">
+            Calls on the go.
+            <br />
+            <span className="dg-gradient-text">Agents on the go.</span>
+          </h1>
+          <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-[var(--text-3)] sm:text-lg">
+            VOIZO is ready as it is, anytime, anywhere. Pick an agent, add your brand and start calling on our
+            numbers, SIP trunk, SMS and email, with nothing to set up. Or bring your own carrier, numbers and
+            senders. Calls reach mobiles, landlines and WhatsApp.
+          </p>
+          <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
+            <TryItNowButton className="dg-btn dg-btn-primary" />
+            <Link href="/login" className="dg-btn dg-btn-secondary">
+              Open the console <ArrowRight size={15} />
+            </Link>
           </div>
-          <div className="flex justify-center lg:justify-end">
+          <p className="mt-4 text-xs text-[var(--text-4)]">Take a live call from an AI agent in your browser. No account, no setup.</p>
+        </section>
+
+        {/* ── Capability strip (the reference's trust bar) ── */}
+        <section aria-label="What is included" className="border-y border-[var(--border)]">
+          <ul className="mx-auto flex max-w-7xl flex-wrap items-center justify-center gap-x-10 gap-y-3 px-4 py-5 sm:px-6">
+            {CAPABILITIES.map(({ icon: Icon, label }) => (
+              <li key={label} className="dg-mono flex items-center gap-2 text-[11px] uppercase tracking-[0.08em] text-[var(--text-3)]">
+                <Icon size={14} className="text-[var(--accent)]" /> {label}
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        {/* ── Product shot ── */}
+        <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6">
+          <div className="mx-auto max-w-3xl">
             <CallCard />
           </div>
         </section>
 
-        {/* ── Features ── */}
-        <section id="features" className="scroll-mt-20 mx-auto max-w-6xl px-4 py-20 sm:px-6">
-          <div className="max-w-2xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em]" style={{ color: PRIMARY }}>Features</p>
-            <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">Everything a calling team needs, in one console</h2>
-            <p className="mt-4 text-[var(--text-2)]">From the first draft of a script to the report on how it performed.</p>
-          </div>
-          <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {FEATURES.map(({ icon: Icon, title, body, tint }) => (
-              <div
-                key={title}
-                className="glow-card rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-6"
-                style={{ "--glow-color": tint } as React.CSSProperties}
-              >
-                <span className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ background: `${tint}1f`, color: tint }}>
-                  <Icon size={19} />
-                </span>
-                <h3 className="mt-5 font-semibold text-[var(--text-1)]">{title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-[var(--text-2)]">{body}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* ── Pre-built agents (Phase 5): listen to the samples ── */}
-        <section id="agents" className="scroll-mt-20 border-t border-[var(--border)] bg-[var(--bg-panel)]">
-          <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
-            <div className="flex flex-wrap items-end justify-between gap-4">
+        {/* ── Featured: the pre-built agents (listen, then talk) ── */}
+        <section id="agents" className="scroll-mt-16 border-t border-[var(--border)] bg-[var(--bg-panel)]">
+          <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6">
+            <div className="flex flex-wrap items-end justify-between gap-6">
               <div className="max-w-2xl">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em]" style={{ color: PRIMARY }}>Pre-built agents</p>
-                <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">Hear them, then talk to them</h2>
-                <p className="mt-4 text-[var(--text-2)]">Twenty agents for the calls businesses make most: reminders, lead follow-up, payments, renewals, surveys. Listen to any of them, or enter your name and business and take a live call from one, right here, no account needed. Three are free with every account.</p>
+                <p className="dg-eyebrow">Pre-built agents</p>
+                <h2 className="dg-display mt-3 text-3xl sm:text-5xl">Hear them, then talk to them</h2>
+                <p className="mt-4 text-[var(--text-3)]">
+                  Twenty agents for the calls businesses make most: reminders, lead follow-up, payments, renewals,
+                  surveys. Listen to any of them, or enter your name and business and take a live call from one, right
+                  here, no account needed. Three are free with every account.
+                </p>
               </div>
-              <Link href="/agents" className="inline-flex items-center gap-2 rounded-xl border border-[var(--border-2)] bg-[var(--bg-card)] px-4 py-2.5 text-sm font-semibold text-[var(--text-1)] transition hover:bg-[var(--bg-hover)]">
+              <Link href="/agents" className="dg-btn dg-btn-secondary">
                 See all 20 agents <ArrowRight size={15} />
               </Link>
             </div>
@@ -290,93 +245,164 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* ── On the go, or bring your own ── */}
-        <section id="on-the-go" className="scroll-mt-20 mx-auto max-w-6xl px-4 py-20 sm:px-6">
+        {/* ── Platform grid ── */}
+        <section id="features" className="mx-auto max-w-7xl scroll-mt-16 px-4 py-20 sm:px-6">
           <div className="max-w-2xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em]" style={{ color: PRIMARY }}>Two ways to run</p>
-            <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">On the go, or bring your own</h2>
-            <p className="mt-4 text-[var(--text-2)]">Start on VOIZO&apos;s infrastructure today and switch to your own carrier whenever you like. One setting, no rebuild.</p>
+            <p className="dg-eyebrow">The platform</p>
+            <h2 className="dg-display mt-3 text-3xl sm:text-5xl">One console to run your whole calling operation</h2>
+            <p className="mt-4 text-[var(--text-3)]">From the first draft of a script to the report on how it performed.</p>
           </div>
-          <div className="mt-12 grid gap-4 md:grid-cols-2">
-            <div className="rounded-2xl border p-7" style={{ borderColor: `${PRIMARY}66`, background: `linear-gradient(160deg, ${PRIMARY}1f, transparent 60%)` }}>
-              <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-white" style={{ background: PRIMARY }}><Zap size={20} /></span>
-              <h3 className="mt-5 text-xl font-semibold">Agents on the go</h3>
-              <p className="mt-1 text-sm font-medium" style={{ color: PRIMARY }}>Ready as it is, anytime, anywhere.</p>
-              <ul className="mt-5 space-y-2.5 text-sm text-[var(--text-2)]">
-                {["VOIZO phone numbers with per-country caller IDs", "VOIZO SIP trunk for every campaign call", "SMS and email follow-ups sent for you", "WhatsApp calling once your number is enabled"].map((t) => (
-                  <li key={t} className="flex items-start gap-2"><CheckCircle2 size={16} className="mt-0.5 shrink-0" style={{ color: PRIMARY }} /> {t}</li>
-                ))}
-              </ul>
-            </div>
-            <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-7">
-              <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--bg-elevated)] text-[var(--text-1)]"><PhoneCall size={20} /></span>
-              <h3 className="mt-5 text-xl font-semibold">Bring your own</h3>
-              <p className="mt-1 text-sm font-medium text-[var(--text-3)]">Your carrier, your numbers, your senders.</p>
-              <ul className="mt-5 space-y-2.5 text-sm text-[var(--text-2)]">
-                {["Your own phone numbers, tested from the console", "Your SIP trunk, Squaretalk, Twilio or FreeSWITCH", "Your SMS and email providers, encrypted at rest", "Mix and match: VOIZO fills in whatever you don't connect"].map((t) => (
-                  <li key={t} className="flex items-start gap-2"><CheckCircle2 size={16} className="mt-0.5 shrink-0 text-[var(--text-3)]" /> {t}</li>
-                ))}
-              </ul>
-            </div>
+          <div className="mt-12 grid gap-px overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--border)] sm:grid-cols-2 lg:grid-cols-4">
+            {FEATURES.map(({ icon: Icon, title, body }) => (
+              <div key={title} className="bg-[var(--bg-card)] p-6 transition-colors hover:bg-[var(--bg-elevated)]">
+                <Icon size={20} className="text-[var(--accent)]" />
+                <h3 className="mt-5 font-semibold">{title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-[var(--text-3)]">{body}</p>
+              </div>
+            ))}
           </div>
         </section>
 
-        {/* ── How it works ── */}
-        <section id="how" className="scroll-mt-20 border-y border-[var(--border)] bg-[var(--bg-panel)]">
-          <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em]" style={{ color: PRIMARY }}>How it works</p>
-            <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">From idea to live calls in three steps</h2>
-            <ol className="mt-12 grid gap-6 md:grid-cols-3">
-              {STEPS.map((s) => (
-                <li key={s.n} className="relative rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-6">
-                  <span className="font-mono text-sm font-semibold" style={{ color: PRIMARY }}>{s.n}</span>
-                  <h3 className="mt-3 text-lg font-semibold">{s.title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-[var(--text-2)]">{s.body}</p>
+        {/* ── Pipeline + three steps ── */}
+        <section id="how" className="scroll-mt-16 border-y border-[var(--border)] bg-[var(--bg-panel)]">
+          <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6">
+            <div className="max-w-2xl">
+              <p className="dg-eyebrow">How it works</p>
+              <h2 className="dg-display mt-3 text-3xl sm:text-5xl">One flow from audience to answered call</h2>
+              <p className="mt-4 text-[var(--text-3)]">Every campaign runs the same pipeline, whether it calls fifty people or fifty thousand.</p>
+            </div>
+            <ol className="mt-12 grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+              {PIPELINE.map(({ icon: Icon, label, sub }, i) => (
+                <li key={label} className="dg-card relative p-5">
+                  <span className="dg-mono text-[11px] text-[var(--text-4)]">0{i + 1}</span>
+                  <Icon size={20} className="mt-3 text-[var(--accent)]" />
+                  <p className="mt-3 font-semibold">{label}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-[var(--text-3)]">{sub}</p>
+                  {i < PIPELINE.length - 1 && (
+                    <ChevronRight size={16} className="absolute -right-3.5 top-1/2 hidden -translate-y-1/2 text-[var(--text-4)] lg:block" aria-hidden />
+                  )}
                 </li>
               ))}
             </ol>
+            <ol className="mt-12 grid gap-6 md:grid-cols-3">
+              {STEPS.map((s) => (
+                <li key={s.n} className="border-t border-[var(--border)] pt-5">
+                  <span className="dg-mono text-sm text-[var(--accent)]">{s.n}</span>
+                  <h3 className="mt-3 text-lg font-semibold">{s.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-[var(--text-3)]">{s.body}</p>
+                </li>
+              ))}
+            </ol>
+            <div className="mt-12">
+              <TryItNowButton className="dg-btn dg-btn-primary" />
+            </div>
           </div>
         </section>
 
-        {/* ── Compliance ── */}
-        <section id="compliance" className="scroll-mt-20 mx-auto max-w-6xl px-4 py-20 sm:px-6">
-          <div className="grid items-center gap-10 rounded-3xl border border-[var(--border)] bg-[var(--bg-card)] p-8 sm:p-12 lg:grid-cols-[auto_1fr]">
-            <span className="flex h-16 w-16 items-center justify-center rounded-2xl" style={{ background: `${PRIMARY}1f`, color: PRIMARY }}>
-              <ShieldCheck size={30} />
-            </span>
-            <div>
-              <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Safety rails built in</h2>
-              <p className="mt-3 max-w-3xl text-[var(--text-2)]">
-                Do-not-call and suppression lists are checked before every dial, calls only go out inside
-                each campaign’s calling window, SMS follows the consent rule you choose, and opt-outs are
-                honoured automatically.
-              </p>
+        {/* ── Three ways in ── */}
+        <section id="run" className="mx-auto max-w-7xl scroll-mt-16 px-4 py-20 sm:px-6">
+          <div className="max-w-2xl">
+            <p className="dg-eyebrow">Choose your way in</p>
+            <h2 className="dg-display mt-3 text-3xl sm:text-5xl">On the go, build your own, or bring your own</h2>
+            <p className="mt-4 text-[var(--text-3)]">Start on VOIZO&apos;s infrastructure today and switch to your own carrier whenever you like. One setting, no rebuild.</p>
+          </div>
+          <div className="mt-12 grid gap-4 md:grid-cols-3">
+            {JOURNEYS.map(({ icon: Icon, title, body, points, cta }) => (
+              <div key={title} className="dg-card flex flex-col p-7">
+                <span className="flex h-10 w-10 items-center justify-center rounded-md bg-[var(--accent)]/12 text-[var(--accent)]">
+                  <Icon size={19} />
+                </span>
+                <h3 className="mt-5 text-xl font-semibold">{title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-[var(--text-3)]">{body}</p>
+                <ul className="mt-5 space-y-2.5 text-sm text-[var(--text-2)]">
+                  {points.map((t) => (
+                    <li key={t} className="flex items-start gap-2">
+                      <Check size={15} className="mt-0.5 shrink-0 text-[var(--accent)]" /> {t}
+                    </li>
+                  ))}
+                </ul>
+                <NavLink href={cta.href} className="mt-7 inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--accent)] hover:underline">
+                  {cta.label} <ArrowRight size={14} />
+                </NavLink>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* ── Built for scale: the safety rails ── */}
+        <section id="safety" className="mx-auto max-w-7xl scroll-mt-16 px-4 pb-20 sm:px-6">
+          <div className="relative overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-8 sm:p-12">
+            <div aria-hidden className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full opacity-30 blur-3xl" style={{ background: "var(--dg-gradient)" }} />
+            <div className="relative grid gap-10 lg:grid-cols-[1fr_1.2fr]">
+              <div>
+                <p className="dg-eyebrow">Built for scale</p>
+                <h2 className="dg-display mt-3 text-3xl sm:text-4xl">Safety rails built in</h2>
+                <p className="mt-4 text-[var(--text-3)]">
+                  Do-not-call and suppression lists are checked before every dial, calls only go out inside each
+                  campaign&apos;s calling window, SMS follows the consent rule you choose, and opt-outs are honoured
+                  automatically.
+                </p>
+                <Link href="/login" className="dg-btn dg-btn-secondary mt-8">
+                  Open the console <ArrowRight size={15} />
+                </Link>
+              </div>
+              <ul className="grid gap-3 sm:grid-cols-2">
+                {RAILS.map(({ icon: Icon, title, body }) => (
+                  <li key={title} className="rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] p-5">
+                    <Icon size={18} className="text-[var(--accent)]" />
+                    <p className="mt-3 text-sm font-semibold">{title}</p>
+                    <p className="mt-1 text-xs leading-relaxed text-[var(--text-3)]">{body}</p>
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
         </section>
 
         {/* ── Final CTA ── */}
-        <section className="mx-auto max-w-6xl px-4 pb-24 sm:px-6">
-          <div
-            className="relative overflow-hidden rounded-3xl px-8 py-14 text-center sm:px-12"
-            style={{ background: `linear-gradient(135deg, ${PRIMARY}, #3a6fd0 55%, #6b5cd6)` }}
-          >
-            <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">Ready to put your agents to work?</h2>
-            <p className="mx-auto mt-4 max-w-xl text-white/80">Sign in to build an agent, test it in the lab and launch your first campaign.</p>
-            <Link
-              href="/login"
-              className="mt-8 inline-flex items-center gap-2 rounded-xl bg-white px-6 py-3 text-sm font-semibold text-[#1f3f7a] transition hover:bg-white/90"
-            >
-              Sign in <ArrowRight size={16} />
-            </Link>
+        <section className="border-t border-[var(--border)]">
+          <div className="mx-auto max-w-4xl px-4 py-24 text-center sm:px-6">
+            <h2 className="dg-display text-3xl sm:text-5xl">
+              Put your agents to work
+              <br />
+              <span className="dg-gradient-text">with one sign-in.</span>
+            </h2>
+            <p className="mx-auto mt-5 max-w-xl text-[var(--text-3)]">Create an account, pick an agent, add your brand and launch your first campaign today.</p>
+            <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
+              <Link href="/signup" className="dg-btn dg-btn-primary">
+                Sign up free <ArrowRight size={15} />
+              </Link>
+              <a href="#agents" className="dg-btn dg-btn-secondary">Talk to an agent</a>
+            </div>
           </div>
         </section>
       </main>
 
-      <footer className="border-t border-[var(--border)]">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 py-8 text-sm text-[var(--text-3)] sm:flex-row sm:px-6">
-          <Logo />
-          <p>© {new Date().getFullYear()} VOIZO. All rights reserved.</p>
+      {/* ── Footer ── */}
+      <footer className="border-t border-[var(--border)] bg-[var(--bg-panel)]">
+        <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6">
+          <div className="grid gap-10 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
+            <div>
+              <MarketingLogo />
+              <p className="mt-4 max-w-xs text-sm text-[var(--text-3)]">AI voice agents ready as they are, anytime, anywhere.</p>
+            </div>
+            {FOOTER.map((col) => (
+              <div key={col.title}>
+                <p className="dg-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-3)]">{col.title}</p>
+                <ul className="mt-4 space-y-2.5 text-sm">
+                  {col.links.map((l) => (
+                    <li key={l.label}>
+                      <NavLink href={l.href} className="text-[var(--text-2)] transition-colors hover:text-[var(--text-1)]">{l.label}</NavLink>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+          <div className="mt-12 flex flex-col gap-3 border-t border-[var(--border)] pt-6 text-xs text-[var(--text-4)] sm:flex-row sm:items-center sm:justify-between">
+            <p>© {year} VOIZO. All rights reserved.</p>
+            <p className="dg-mono uppercase tracking-[0.08em]">Numbers · SMS · Email · SIP trunk · WhatsApp</p>
+          </div>
         </div>
       </footer>
     </div>

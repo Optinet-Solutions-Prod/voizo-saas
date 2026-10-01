@@ -9,7 +9,6 @@ import { loadVisitor, saveVisitor, type VisitorDetails } from "./AgentDemoModal"
 // them into view. Picking one there opens the call modal, already filled in.
 
 export const DEMO_DETAILS_EVENT = "voizo:demo-details";
-const PRIMARY = "#4d90f0";
 
 export default function TryItNowButton({ className, style }: { className?: string; style?: React.CSSProperties }) {
   const [open, setOpen] = useState(false);
@@ -37,7 +36,7 @@ export default function TryItNowButton({ className, style }: { className?: strin
     window.dispatchEvent(new CustomEvent<VisitorDetails>(DEMO_DETAILS_EVENT, { detail: d }));
   }
 
-  const inputCls = "h-11 w-full rounded-xl border border-[var(--border-2)] bg-[var(--bg-elevated)] px-3.5 text-sm text-[var(--text-1)] outline-none placeholder:text-[var(--text-4)] focus:border-[#4d90f0] focus:ring-4 focus:ring-[#4d90f0]/15";
+  const inputCls = "h-11 w-full rounded-xl border border-[var(--border-2)] bg-[var(--bg-elevated)] px-3.5 text-sm text-[var(--text-1)] outline-none placeholder:text-[var(--text-4)] focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent)]/15";
 
   return (
     <>
@@ -46,7 +45,7 @@ export default function TryItNowButton({ className, style }: { className?: strin
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 p-0 backdrop-blur-sm sm:items-center sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
           <div role="dialog" aria-modal="true" aria-labelledby="try-title" className="animate-slide-up w-full max-w-md rounded-t-3xl border border-[var(--border)] bg-[var(--bg-card)] p-5 shadow-2xl sm:rounded-3xl sm:p-6">
             <div className="flex items-start gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white" style={{ background: `linear-gradient(145deg,${PRIMARY},#6b5cd6)` }}><Sparkles size={18} /></span>
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[var(--accent-fg)]" style={{ background: "linear-gradient(145deg,var(--accent),var(--accent-2))" }}><Sparkles size={18} /></span>
               <div className="min-w-0 flex-1">
                 <h2 id="try-title" className="text-lg font-semibold text-[var(--text-1)]">Take a call from an AI agent</h2>
                 <p className="text-sm text-[var(--text-2)]">Tell us who you are and we&apos;ll pick the agents that fit your business. Then one of them calls you, right here in the browser.</p>
@@ -66,7 +65,7 @@ export default function TryItNowButton({ className, style }: { className?: strin
                 <label htmlFor="try-type" className="mb-1.5 block text-xs font-medium text-[var(--text-2)]">What does your business do?</label>
                 <input id="try-type" required minLength={3} maxLength={200} value={v.businessType} onChange={(e) => setV({ ...v, businessType: e.target.value })} placeholder="e.g. dental clinic, online casino, gym, car dealership" className={inputCls} />
               </div>
-              <button type="submit" className="mt-1 inline-flex h-12 items-center justify-center gap-2 rounded-xl text-sm font-semibold text-white transition hover:brightness-110" style={{ background: PRIMARY, boxShadow: `0 8px 24px ${PRIMARY}33` }}>
+              <button type="submit" className="mt-1 inline-flex h-12 items-center justify-center gap-2 rounded-xl text-sm font-semibold text-[var(--accent-fg)] transition hover:brightness-110" style={{ background: "var(--accent)", boxShadow: "0 8px 24px color-mix(in srgb, var(--accent) 20%, transparent)" }}>
                 <Sparkles size={16} /> Find my agents
               </button>
               <p className="text-[11px] text-[var(--text-4)]">No account needed. Demo calls last up to 4 minutes.</p>

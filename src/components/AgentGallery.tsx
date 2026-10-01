@@ -13,8 +13,6 @@ export interface GalleryAgent {
   unlocked?: boolean; installedScriptId?: string | null;
 }
 
-const PRIMARY = "#4d90f0";
-
 export default function AgentGallery({ agents, currency = "USD", onInstall, installing, compact, onTry, highlightKeys = [], recommendGender }: {
   agents: GalleryAgent[];
   currency?: "USD" | "EUR";
@@ -55,8 +53,8 @@ export default function AgentGallery({ agents, currency = "USD", onInstall, inst
         const suggested = highlightKeys.includes(a.key);
         const Body = onTry ? "button" : "div";
         return (
-          <article key={a.key} className={`glow-card relative flex flex-col rounded-2xl border bg-[var(--bg-card)] p-5 ${suggested ? "border-primary/60" : "border-[var(--border)]"}`} style={{ "--glow-color": a.tier === "free" ? "#2fb673" : PRIMARY } as React.CSSProperties}>
-            {suggested && <span className="absolute -top-2.5 right-4 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white" style={{ background: PRIMARY }}>Suggested for you</span>}
+          <article key={a.key} className={`glow-card relative flex flex-col rounded-2xl border bg-[var(--bg-card)] p-5 ${suggested ? "border-[var(--accent)]/60" : "border-[var(--border)]"}`} style={{ "--glow-color": a.tier === "free" ? "#2fb673" : "var(--accent)" } as React.CSSProperties}>
+            {suggested && <span className="absolute -top-2.5 right-4 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--accent-fg)]" style={{ background: "var(--accent)" }}>Suggested for you</span>}
             <div className="flex items-start gap-3">
               <button type="button" onClick={() => toggle(a)} disabled={!a.sampleUrl} aria-label={isPlaying ? `Pause ${a.name}'s sample` : `Play ${a.name}'s sample`}
                 className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-white transition hover:brightness-110 disabled:opacity-50"
@@ -71,7 +69,7 @@ export default function AgentGallery({ agents, currency = "USD", onInstall, inst
                   {a.tier === "free" ? (
                     <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-300">Free</span>
                   ) : a.unlocked ? (
-                    <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">Unlocked</span>
+                    <span className="rounded-full border border-[var(--accent)]/30 bg-[var(--accent)]/10 px-2 py-0.5 text-[11px] font-medium text-[var(--accent)]">Unlocked</span>
                   ) : (
                     <span className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-0.5 text-[11px] font-medium text-[var(--text-2)]"><Lock size={10} /> {price(a)}</span>
                   )}
@@ -93,16 +91,16 @@ export default function AgentGallery({ agents, currency = "USD", onInstall, inst
               <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-4">
                 <span className="mr-auto text-[11px] text-[var(--text-4)]">Listen · Talk live</span>
                 <button type="button" onClick={() => toggle(a)} disabled={!a.sampleUrl} aria-label={isPlaying ? `Pause ${a.name}'s sample` : `Listen to ${a.name}`} title={isPlaying ? "Pause" : "Listen to a sample"} className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--border-2)] bg-[var(--bg-elevated)] text-[var(--text-1)] transition hover:bg-[var(--bg-hover)] disabled:opacity-50">{isPlaying ? <Pause size={16} /> : <Play size={16} className="ml-0.5" />}</button>
-                <button type="button" onClick={() => onTry(a)} aria-label={`Talk to ${a.name}`} title={`Talk to ${a.name} live in your browser`} className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-white transition hover:brightness-110" style={{ background: PRIMARY }}><Phone size={16} /></button>
+                <button type="button" onClick={() => onTry(a)} aria-label={`Talk to ${a.name}`} title={`Talk to ${a.name} live in your browser`} className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-[var(--accent-fg)] transition hover:brightness-110" style={{ background: "var(--accent)" }}><Phone size={16} /></button>
               </div>
             )}
             {onInstall && (
               <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-4">
-                <a href={`/agents/try?agent=${a.key}`} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 text-xs font-semibold text-primary hover:bg-primary/20" title="Talk to this agent in your browser"><Phone size={13} /> Try live call</a>
+                <a href={`/agents/try?agent=${a.key}`} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[var(--accent)]/40 bg-[var(--accent)]/10 px-3 text-xs font-semibold text-[var(--accent)] hover:bg-[var(--accent)]/20" title="Talk to this agent in your browser"><Phone size={13} /> Try live call</a>
                 {a.installedScriptId ? (
                   <a href={`/script-builder?id=${a.installedScriptId}`} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 text-xs font-medium text-emerald-300 hover:bg-emerald-500/20"><Check size={13} /> Open in Script Builder</a>
                 ) : a.tier === "free" || a.unlocked ? (
-                  <button type="button" onClick={() => onInstall(a)} disabled={installing !== null && installing !== undefined} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-semibold text-white hover:brightness-110 disabled:opacity-60">
+                  <button type="button" onClick={() => onInstall(a)} disabled={installing !== null && installing !== undefined} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--accent)] px-3 text-xs font-semibold text-[var(--accent-fg)] hover:brightness-110 disabled:opacity-60">
                     {installing === a.key ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} Add to my agents
                   </button>
                 ) : (

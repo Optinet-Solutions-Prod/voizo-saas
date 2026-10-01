@@ -36,7 +36,7 @@ export default function AgentsPage() {
         <p className="text-xs font-semibold uppercase tracking-[0.18em]" style={{ color: PRIMARY }}>Pre-built agents</p>
         <h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-5xl">Twenty agents, ready to call today</h1>
         <p className="mt-4 max-w-2xl text-[var(--text-2)]">
-          Each one is a complete, editable script: the opening, the reason for the call, the replies customers actually give, the follow-up text and the goodbye. Press play to hear how they sound, or enter your name and business and talk to one live in your browser. {free} are free with every account; the rest unlock per organization or come with the Pro plan.
+          Each one is a complete, editable script: the opening, a quick check that it&apos;s the right person by name, the reason for the call, the replies customers actually give, the follow-up text and the goodbye. Press play to hear how they sound, or enter your name and business and talk to one live in your browser. {free} are free with every account; the rest unlock per organization or come with the Pro plan.
         </p>
         <div className="mt-10">
           <PublicAgentsShowcase agents={agents} />

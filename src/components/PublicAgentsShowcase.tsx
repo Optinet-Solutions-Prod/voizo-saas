@@ -10,8 +10,6 @@ import { DEMO_DETAILS_EVENT } from "./TryItNow";
 // an agent opens the demo modal (listen, or talk to it live). Visitor details typed anywhere on
 // the page (matcher, hero "Try it now", call modal) are shared with every modal.
 
-const PRIMARY = "#4d90f0";
-
 interface Match { key: string; name: string; role: string; reason: string }
 
 export default function PublicAgentsShowcase({ agents, featured, compact }: {
@@ -96,16 +94,16 @@ export default function PublicAgentsShowcase({ agents, featured, compact }: {
     void runMatch({ ...visitor, company: company.trim(), businessType: businessType.trim() });
   }
 
-  const inputCls = "h-11 w-full rounded-xl border border-[var(--border-2)] bg-[var(--bg-elevated)] px-3.5 text-sm text-[var(--text-1)] outline-none placeholder:text-[var(--text-4)] focus:border-[#4d90f0] focus:ring-4 focus:ring-[#4d90f0]/15";
+  const inputCls = "h-11 w-full rounded-xl border border-[var(--border-2)] bg-[var(--bg-elevated)] px-3.5 text-sm text-[var(--text-1)] outline-none placeholder:text-[var(--text-4)] focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent)]/15";
   const iconBtn = "inline-flex h-10 w-10 items-center justify-center rounded-xl transition disabled:opacity-50";
   const suggestedKeys = matches?.map((m) => m.key) ?? [];
 
   return (
     <div>
       {/* ── Matcher ── */}
-      <section ref={sectionRef} className="scroll-mt-24 rounded-3xl border border-[var(--border)] bg-[var(--bg-card)] p-5 sm:p-6" style={{ boxShadow: `0 0 0 1px ${PRIMARY}22 inset, 0 20px 60px -30px ${PRIMARY}66` }}>
+      <section ref={sectionRef} className="scroll-mt-24 rounded-3xl border border-[var(--border)] bg-[var(--bg-card)] p-5 sm:p-6" style={{ boxShadow: "0 0 0 1px color-mix(in srgb, var(--accent) 13%, transparent) inset, 0 20px 60px -30px color-mix(in srgb, var(--accent) 40%, transparent)" }}>
         <div className="flex items-start gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white" style={{ background: `linear-gradient(145deg,${PRIMARY},#6b5cd6)` }}><Wand2 size={18} /></span>
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[var(--accent-fg)]" style={{ background: "linear-gradient(145deg,var(--accent),var(--accent-2))" }}><Wand2 size={18} /></span>
           <div>
             <h3 className="text-lg font-semibold text-[var(--text-1)]">Which agent fits your business?</h3>
             <p className="text-sm text-[var(--text-2)]">Tell us what you do and we&apos;ll pick the three agents that would help most. Then listen, or talk to one live.</p>
@@ -114,7 +112,7 @@ export default function PublicAgentsShowcase({ agents, featured, compact }: {
         <form onSubmit={findAgents} className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)_auto]">
           <input aria-label="Business name" maxLength={80} value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Business name (optional)" className={inputCls} />
           <input aria-label="What does your business do?" required minLength={3} maxLength={200} value={businessType} onChange={(e) => setBusinessType(e.target.value)} placeholder="What do you do? e.g. dental clinic with 3 locations" className={inputCls} />
-          <button type="submit" disabled={matching || businessType.trim().length < 3} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60" style={{ background: PRIMARY }}>
+          <button type="submit" disabled={matching || businessType.trim().length < 3} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-semibold text-[var(--accent-fg)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60" style={{ background: "var(--accent)" }}>
             {matching ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />} Find my agents
           </button>
         </form>
@@ -126,18 +124,18 @@ export default function PublicAgentsShowcase({ agents, featured, compact }: {
               if (!a) return null;
               const isPlaying = playing === a.key;
               return (
-                <li key={m.key} className="flex flex-col rounded-2xl border border-primary/30 bg-primary/5 p-4">
+                <li key={m.key} className="flex flex-col rounded-2xl border border-[var(--accent)]/30 bg-[var(--accent)]/5 p-4">
                   <div className="flex items-center gap-3">
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white" style={avatarStyle(a.gender)}>{a.name[0]}</span>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-[var(--text-1)]">{i === 0 && <span className="mr-1.5 rounded-md bg-primary/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">Best fit</span>}{a.name}{a.gender === "male" && <span className="ml-1.5 inline-flex items-center gap-0.5 align-middle text-[10px] font-medium text-amber-300" title="One of our strongest voices"><Star size={10} /> Recommended</span>}</p>
+                      <p className="truncate text-sm font-semibold text-[var(--text-1)]">{i === 0 && <span className="mr-1.5 rounded-md bg-[var(--accent)]/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--accent)]">Best fit</span>}{a.name}{a.gender === "male" && <span className="ml-1.5 inline-flex items-center gap-0.5 align-middle text-[10px] font-medium text-amber-300" title="One of our strongest voices"><Star size={10} /> Recommended</span>}</p>
                       <p className="truncate text-xs text-[var(--text-3)]">{a.role}</p>
                     </div>
                   </div>
                   <p className="mt-3 flex-1 text-[13px] leading-relaxed text-[var(--text-2)]">{m.reason}</p>
                   <div className="mt-3 flex items-center justify-end gap-2">
                     <button type="button" onClick={() => togglePlay(a)} disabled={!a.sampleUrl} aria-label={isPlaying ? `Pause ${a.name}'s sample` : `Listen to ${a.name}`} title={isPlaying ? "Pause" : "Listen to a sample"} className={`${iconBtn} border border-[var(--border-2)] bg-[var(--bg-card)] text-[var(--text-1)] hover:bg-[var(--bg-hover)]`}>{isPlaying ? <Pause size={16} /> : <Play size={16} className="ml-0.5" />}</button>
-                    <button type="button" onClick={() => openAgent(a)} aria-label={`Talk to ${a.name}`} title={`Talk to ${a.name} live`} className={`${iconBtn} text-white hover:brightness-110`} style={{ background: PRIMARY }}><Phone size={16} /></button>
+                    <button type="button" onClick={() => openAgent(a)} aria-label={`Talk to ${a.name}`} title={`Talk to ${a.name} live`} className={`${iconBtn} text-[var(--accent-fg)] hover:brightness-110`} style={{ background: "var(--accent)" }}><Phone size={16} /></button>
                   </div>
                 </li>
               );
