@@ -169,7 +169,7 @@ export default function AgentDemoModal({ agent, initial, onClose, onDetails }: {
                 )}
                 {call.status === "ended" && !call.error && (
                   <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3.5 py-3 text-sm text-emerald-200">
-                    Call ended after {formatSeconds(call.seconds)}. That was {agent.name} calling for {company || "your business"}, with zero setup.
+                    Call ended after {formatSeconds(call.seconds)}. That was {agent.demo?.calls === "to" ? `${agent.name} from ${agent.demo.seller} calling ${company || "your business"}` : `${agent.name} calling for ${company || "your business"}`}, with zero setup.
                     <a href="/signup" className="mt-2 inline-flex items-center gap-1 font-semibold text-emerald-100 hover:underline">Create a free account to make it yours <ArrowRight size={13} /></a>
                   </div>
                 )}

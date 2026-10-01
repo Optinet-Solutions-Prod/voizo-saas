@@ -42,3 +42,28 @@ describe("composeDemoPrompt / composeDemoAssistant", () => {
     expect(demoIdentityQuestion("there")).toBe("Just to check, who am I speaking with?");
   });
 });
+
+describe("demo framing — agents that sell to businesses", () => {
+  const leo = AGENT_CATALOG.find((a) => a.key === "lead-qualifier")!;
+  const barber = { company: "Barvarian", firstName: "Chris", businessType: "barbershop" };
+
+  it("Leo works for the seller and calls the visitor's business about a website", () => {
+    const asst = composeDemoAssistant(leo, barber);
+    expect(asst.firstMessage).toBe("Hi, this is Leo from Brightline.");
+    const prompt = asst.model.messages[0].content;
+    expect(prompt).toContain("You work for Brightline");
+    expect(prompt).toContain("Chris from Barvarian (barbershop)");
+    expect(prompt).toContain('"You asked about a new website for Barvarian on our website');
+    expect(prompt).toMatch(/never speak as if you work for their business/i);
+    expect(prompt).not.toContain("our service");
+    expect(prompt).not.toMatch(/\{\{|\}\}/);
+  });
+
+  it("agents without a framing still call on behalf of the visitor's business", () => {
+    const ava = AGENT_CATALOG.find((a) => a.key === "appointment-reminder")!;
+    const prompt = composeDemoPrompt(ava, barber);
+    expect(composeDemoAssistant(ava, barber).firstMessage).toBe("Hi, this is Ava calling from Barvarian.");
+    expect(prompt).toContain("calling on behalf of Barvarian (barbershop)");
+    expect(prompt).toContain("instead of a vague \"our service\"");
+  });
+});

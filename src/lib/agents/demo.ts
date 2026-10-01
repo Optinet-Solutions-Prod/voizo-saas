@@ -1,7 +1,7 @@
 // "Try an agent": turn a catalog agent into a complete, self-contained Vapi assistant for a
 // browser demo call. No script engine, no webhooks, no database — the whole conversation is in
 // the system prompt, so it works the moment someone enters their name and brand.
-import type { AgentTemplate } from "./catalog";
+import type { AgentDemoFraming, AgentTemplate } from "./catalog";
 
 export interface DemoInput {
   company: string;
@@ -59,9 +59,15 @@ export const DEMO_DEFAULTS: Record<string, string> = {
 };
 
 /** Replace {{placeholders}} with the demo values; unknown ones become a neutral phrase. */
-export function fillPlaceholders(text: string, input: DemoInput): string {
-  const map: Record<string, string> = { ...DEMO_DEFAULTS, company: input.company, first_name: input.firstName, brand: input.company };
-  return text.replace(/\{\{\s*([a-z_]+)\s*\}\}/gi, (_, k: string) => map[k.toLowerCase()] ?? "the details");
+export function fillPlaceholders(text: string, input: DemoInput, framing?: AgentDemoFraming): string {
+  const sub = (t: string, map: Record<string, string>) => t.replace(/\{\{\s*([a-z_]+)\s*\}\}/gi, (_, k: string) => map[k.toLowerCase()] ?? "the details");
+  const base: Record<string, string> = { ...DEMO_DEFAULTS, first_name: input.firstName, business: input.company };
+  // Selling TO the visitor's business: {{company}} is the seller the agent works for, and
+  // {{product}} is what the seller offers that business.
+  const map: Record<string, string> = framing
+    ? { ...base, company: framing.seller, brand: framing.seller, product: sub(framing.product, base) }
+    : { ...base, company: input.company, brand: input.company };
+  return sub(text, map);
 }
 
 function clean(s: string): string {
@@ -76,13 +82,22 @@ export function demoIdentityQuestion(firstName: string): string {
 
 /** The system prompt for a demo call: persona + the whole flow as guidance. */
 export function composeDemoPrompt(agent: AgentTemplate, input: DemoInput): string {
-  const f = (s: string) => clean(fillPlaceholders(s, input));
+  const framing = agent.demo;
+  const f = (s: string) => clean(fillPlaceholders(s, input, framing));
   const flow = agent.flow;
+  const kind = input.businessType ? ` (${clean(input.businessType)})` : "";
   const lines: string[] = [];
   lines.push(f(agent.persona));
   lines.push("");
-  lines.push(`This is a live demonstration call. The person on the line is ${input.firstName}, who asked to hear how you handle a "${agent.role}" call for ${input.company}${input.businessType ? ` (${clean(input.businessType)})` : ""}. Treat them as the customer and run the call for real: they already know you are an AI, so don't break character to say so unless they ask.`);
-  if (input.businessType) lines.push(`Make every detail fit a business like that (${clean(input.businessType)}): the products, the reasons for the call, the examples you give.`);
+  if (framing) {
+    // The agent sells TO businesses: the visitor's business is the prospect being called.
+    lines.push(`This is a live demonstration call. You work for ${framing.seller}, ${framing.sellerAbout}. Your role on this call: ${agent.role}. The person on the line is ${input.firstName} from ${input.company}${kind}, a business owner who just requested a quote from ${framing.seller} for ${f("{{product}}")}. They are your prospect. Run the call for real: they already know you are an AI, so don't break character to say so unless they ask.`);
+    lines.push(f(framing.tailor));
+    if (input.businessType) lines.push(`Make every example fit a business like theirs (${clean(input.businessType)}).`);
+  } else {
+    lines.push(`This is a live demonstration call. Your role on this call: ${agent.role}, calling on behalf of ${input.company}${kind}. The person on the line is ${input.firstName}, who asked to hear how you handle that call for ${input.company}. Treat them as one of ${input.company}'s customers and run the call for real: they already know you are an AI, so don't break character to say so unless they ask.`);
+    if (input.businessType) lines.push(`Make every detail fit a business like that (${clean(input.businessType)}): name the real products or services it would offer instead of a vague "our service", and keep the reasons for the call and your examples true to that kind of business.`);
+  }
   lines.push("");
   lines.push("HOW THE CALL GOES");
   lines.push(`1. Opening (you already said it as your first message): "${f(flow.opening)}"`);
@@ -117,7 +132,7 @@ export function composeDemoAssistant(agent: AgentTemplate, input: DemoInput) {
   const inp = { ...input, company, firstName };
   return {
     name: `Demo · ${agent.name} — ${agent.role}`,
-    firstMessage: clean(fillPlaceholders(agent.flow.opening, inp)),
+    firstMessage: clean(fillPlaceholders(agent.flow.opening, inp, agent.demo)),
     firstMessageMode: "assistant-speaks-first" as const,
     model: {
       provider: "openai" as const,

@@ -64,6 +64,22 @@ export interface AgentTemplate {
   persona: string;
   flow: AgentFlow;
   tags: string[];
+  /** Browser-demo framing (2026-10-01). Absent: the agent calls on behalf of the visitor's
+   *  business and the visitor plays one of its customers. "to": the agent sells TO businesses,
+   *  so the visitor's business is the prospect and the agent works for `seller`. */
+  demo?: AgentDemoFraming;
+}
+
+export interface AgentDemoFraming {
+  calls: "to";
+  /** The company the agent works for in the demo. */
+  seller: string;
+  /** What the seller does, for the model. */
+  sellerAbout: string;
+  /** Fills {{product}}; {{business}} is the visitor's business name. */
+  product: string;
+  /** How to make the pitch fit the prospect's kind of business. */
+  tailor: string;
 }
 
 // One male and one female voice for every example (Chris, 2026-09-29) — see SAMPLE_VOICES in
@@ -140,6 +156,15 @@ export const AGENT_CATALOG: AgentTemplate[] = [
       goodbye: "Thanks for your time today. Speak soon.",
     },
     tags: ["sales", "speed-to-lead", "booking"],
+    // Leo sells to businesses: in the demo he calls the visitor's business about a website,
+    // never on its behalf (Chris, 2026-10-01 — Leo told a barbershop "you asked about our service").
+    demo: {
+      calls: "to",
+      seller: "Brightline",
+      sellerAbout: "a studio that builds websites with online booking for small businesses",
+      product: "a new website for {{business}}",
+      tailor: "Talk about what a good website does for a business like theirs: showing their services and prices, taking bookings online, being found on Google, collecting reviews. You are selling Brightline's website service to them. Never offer their own products or services, never book them in as one of their customers, and never speak as if you work for their business.",
+    },
   },
   {
     key: "satisfaction-survey",

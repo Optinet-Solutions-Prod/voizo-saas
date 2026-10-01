@@ -11,6 +11,8 @@ export interface GalleryAgent {
   tier: "free" | "pro"; priceUsd: number; priceEur: number; gender: "female" | "male"; tags: string[];
   sampleUrl: string | null; sampleText: string;
   unlocked?: boolean; installedScriptId?: string | null;
+  /** Agents that sell to businesses call the visitor's business instead of calling for it. */
+  demo?: { calls: "to"; seller: string };
 }
 
 export default function AgentGallery({ agents, currency = "USD", onInstall, installing, compact, onTry, highlightKeys = [], recommendGender }: {
