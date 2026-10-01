@@ -184,17 +184,19 @@ export default function LandingPage() {
       <main>
         {/* ── Hero ── */}
         <section className="mx-auto max-w-4xl px-4 pb-12 pt-20 text-center sm:px-6 md:pt-28">
-          <p className="dg-eyebrow">Voice agents for outbound calls</p>
-          <h1 className="dg-display mt-5 text-4xl leading-[1.05] sm:text-6xl lg:text-[4.5rem]">
-            Calls on the go.
+          <h1 className="dg-display text-4xl leading-[1.05] sm:text-6xl lg:text-[4.5rem]">
+            AI agents ready to call
             <br />
-            <span className="dg-gradient-text">Agents on the go.</span>
+            <span className="dg-gradient-text">for your business.</span>
           </h1>
-          <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-[var(--text-3)] sm:text-lg">
-            VOIZO is ready as it is, anytime, anywhere. Pick an agent, add your brand and start calling on our
-            numbers, SIP trunk, SMS and email, with nothing to set up. Or bring your own carrier, numbers and
-            senders. Calls reach mobiles, landlines and WhatsApp.
-          </p>
+          <div className="mx-auto mt-6 max-w-2xl space-y-3 text-base leading-relaxed text-[var(--text-3)] sm:text-lg">
+            <p>
+              Choose an agent, add your brand, and start calling with VOIZO&rsquo;s numbers, carrier, SMS, and email
+              infrastructure already in place.
+            </p>
+            <p>Prefer your own setup? Connect your own carrier, numbers, and senders.</p>
+            <p>Reach customers through mobile, landline, and WhatsApp.</p>
+          </div>
           <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
             <TryItNowButton className="dg-btn dg-btn-primary" />
             <Link href="/login" className="dg-btn dg-btn-secondary">
