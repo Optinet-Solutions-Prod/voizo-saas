@@ -15,4 +15,4 @@ const demos = list.filter((x) => x.metadata?.voizoDemo);
 const current = demos.filter((x) => x.metadata?.voizoDemoVersion === DEMO_VERSION).length;
 console.log(`demo assistants: ${demos.length} | at current version: ${current}`);
 const one = demos.find((x) => x.metadata?.agentKey === "appointment-reminder");
-console.log("appointment-reminder → endCallMessage:", JSON.stringify(one?.endCallMessage ?? null), "| voice speed:", one?.voice?.speed, "| maxTokens:", one?.model?.maxTokens);
+console.log("appointment-reminder → endCallMessage:", JSON.stringify(one?.endCallMessage ?? null), "| voice speed:", one?.voice?.speed, "| maxTokens:", one?.model?.maxTokens, "| server:", (one as { server?: { url?: string } })?.server?.url ?? "(none)");

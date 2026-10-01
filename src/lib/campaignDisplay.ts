@@ -10,6 +10,11 @@ const COUNTRY_NAMES: Record<string, string> = {
   IT: "Italy", DE: "Germany", DK: "Denmark", FR: "France", FI: "Finland",
   NO: "Norway", SE: "Sweden", ES: "Spain", GR: "Greece", AE: "UAE",
   ZA: "South Africa", IN: "India", GI: "Gibraltar",
+  NL: "Netherlands", BE: "Belgium", CH: "Switzerland", AT: "Austria", PL: "Poland", PT: "Portugal",
+  TR: "Türkiye", SG: "Singapore", MY: "Malaysia", ID: "Indonesia", TH: "Thailand", VN: "Vietnam",
+  JP: "Japan", KR: "South Korea", CN: "China", HK: "Hong Kong", SA: "Saudi Arabia", BR: "Brazil",
+  MX: "Mexico", AR: "Argentina", CO: "Colombia", CL: "Chile", PE: "Peru", NG: "Nigeria", KE: "Kenya",
+  EG: "Egypt", IL: "Israel", RU: "Russia", UA: "Ukraine", CZ: "Czechia", HU: "Hungary", RO: "Romania",
 };
 
 export interface CampaignDisplay {
@@ -74,7 +79,9 @@ export function formatCampaign(rawName: string | null | undefined): CampaignDisp
 // Mirrors CIO_DEFAULT_WORKSPACE in lib/customerio.ts, which is server-side (env +
 // API-key resolution) and must not reach the client bundle. campaignDisplay.test.ts
 // pins the two literals together so neither can drift unnoticed.
-export const DEFAULT_BRAND_WORKSPACE = "lucky7even";
+// NULL cio_workspace no longer means Lucky7even (supabase-migration-campaign-country.sql made the
+// legacy rows explicit); an unset brand is simply the organization's default brand.
+export const DEFAULT_BRAND_WORKSPACE = "default";
 
 // Operator-facing brand names. A workspace missing here still renders (title-cased
 // from its label) so a newly-configured brand is never blank on the dashboard —
@@ -83,6 +90,7 @@ export const DEFAULT_BRAND_WORKSPACE = "lucky7even";
 // renders in mixed views but cannot be chosen on its own. Roosterbet keeps the spelling the
 // fallback already produced, so no existing label moved.
 const LEGACY_BRAND_NAMES: Record<string, string> = {
+  default: "Default brand",
   lucky7even: "Lucky7even",
   fortuneplay: "Fortune Play",
   roosterbet: "Roosterbet",
@@ -125,7 +133,7 @@ export function brandKey(workspace: string | null | undefined): string {
 }
 
 /** The legacy brand catalog, catalog order. Prefer brandWorkspaces() (org-aware). */
-export const BRAND_WORKSPACES: readonly string[] = Object.keys(LEGACY_BRAND_NAMES);
+export const BRAND_WORKSPACES: readonly string[] = Object.keys(LEGACY_BRAND_NAMES).filter((k) => k !== DEFAULT_BRAND_WORKSPACE);
 
 /** Two-letter glyph for a brand name: initials of two words ("Fortune Play" → FP), else the
  *  first letter and first digit ("Lucky7even" → L7), else the first two letters. */
@@ -291,10 +299,15 @@ export function promptAgentLabel(baseName: string | null | undefined, snippetLab
 // analytics / records / export routes so filter membership can't drift from the dropdown's
 // labels. Structural {id,name} arg keeps this free of dashboardAnalytics types (no import cycle).
 export function campaignIdsForCountry(
-  campaigns: { id: string; name: string | null }[],
+  campaigns: { id: string; name: string | null; country?: string | null }[],
   country: string,
 ): Set<string> {
-  return new Set(
-    campaigns.filter((c) => formatCampaign(c.name).country === country).map((c) => c.id),
-  );
+  return new Set(campaigns.filter((c) => countryLabelOf(c) === country).map((c) => c.id));
+}
+
+/** Friendly country for chips and filters: the explicit column first, the legacy name parse second. */
+export function countryLabelOf(c: { name?: string | null; country?: string | null }): string {
+  const code = (c.country ?? "").trim().toUpperCase();
+  if (code) return COUNTRY_NAMES[code] ?? code;
+  return formatCampaign(c.name).country;
 }

@@ -15,6 +15,7 @@ import { substantiveUserTurnCount } from "./transcriptClassify";
 export interface CampaignRow {
   id: string;
   name: string;
+  country?: string | null; // ISO-2 set by the wizard / number import (tenant-shaped); legacy rows are parsed from the name
   status?: string | null;
   is_test?: boolean | null;
   source?: string | null; // 'production' | 'ghost_portal' — ghost runs are segregated from client analytics
@@ -247,6 +248,12 @@ const COUNTRY_TOKEN = /(?:^|[_\s])([A-Z]{2})(?=[_\s]|$)/;
 export function parseCountryToken(name: string): string {
   const m = (name ?? "").match(COUNTRY_TOKEN);
   return m ? m[1] : "UNKNOWN";
+}
+
+/** The campaign's country: the explicit column first (any tenant), the legacy name token as a fallback. */
+export function campaignCountry(c: { name?: string | null; country?: string | null }): string {
+  const explicit = (c.country ?? "").trim().toUpperCase();
+  return explicit || parseCountryToken(c.name ?? "");
 }
 
 export function daysBetween(startIso: string, endIso: string): number {

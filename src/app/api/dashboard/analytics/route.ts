@@ -184,7 +184,7 @@ export async function GET(request: NextRequest) {
       // cio_workspace: the brand scope shown on the Global Performance header (VOZ-216).
       // parent_campaign_id: lets the client collapse the daily children under their recurring
       // parent in the campaigns filter — read-only, no effect on any metric.
-      "id, name, status, source, is_test, campaign_type, parent_campaign_id, voice_id, vapi_assistant_name, base_assistant_id, cio_workspace, system_prompt, start_at, created_at, end_at, timezone",
+      "id, name, status, source, is_test, campaign_type, parent_campaign_id, voice_id, vapi_assistant_name, base_assistant_id, cio_workspace, country, system_prompt, start_at, created_at, end_at, timezone",
     ),
     // SMS-sent series/columns (Slice 3): windowed, scoped to in-filter campaigns below.
     read(

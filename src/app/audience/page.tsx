@@ -50,7 +50,7 @@ import type { AudienceDepositsResponse } from "../api/audience/deposits/route";
 // from audience surfaces, still visible in the campaign views." Applied as an intersection with
 // what the API actually reports, so a market with no campaigns never becomes a dead tab, and the
 // "QA" pseudo-market the country parser derives from test campaign names cannot appear here.
-const AUDIENCE_MARKETS = ["Australia", "Canada", "New Zealand"] as const;
+// Markets come from the data (every country the organization has dialed), not a fixed list.
 
 // The dashboard's presets (Campaign Performance, Global): [caption, days back incl. today]; 0 = all time.
 const RANGE_PRESETS: [string, number][] = [["7d", 7], ["14d", 14], ["30d", 30], ["60d", 60], ["90d", 90], ["All", 0]];
@@ -240,9 +240,7 @@ export default function AudiencePage() {
   const k = data?.kpis;
   const estimated = !!k && k.connected > 0 && k.voicemailEvaluated / k.connected < 0.8;
 
-  const markets = (data?.options.countries ?? []).filter((c) =>
-    (AUDIENCE_MARKETS as readonly string[]).includes(c.value),
-  );
+  const markets = data?.options.countries ?? [];
   const runDates = (agg?.families ?? []).flatMap((f) => f.runList.map((r) => (r.startAt ?? "").slice(0, 10))).filter(Boolean);
   const familyOptions = (agg?.families ?? []).map((f) => ({ value: f.key, label: f.label }));
   // The words the strip prints for the active filters, taken from the same option lists the table's

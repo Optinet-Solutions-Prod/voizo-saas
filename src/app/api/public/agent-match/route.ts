@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { heuristicMatch, matchPrompt, parseMatches } from "@/lib/agents/match";
-import { clientIp, rateLimit } from "@/lib/rateLimit";
+import { clientIp, guardPublic } from "@/lib/rateLimit";
+import { recordOpenAI } from "@/lib/usage";
+import { getTenant } from "@/lib/tenant";
 
 // POST /api/public/agent-match { businessType, businessName? } → { matches: [{key,name,role,reason}×3], source }
 // Public (landing page). OpenAI ranks when a key exists; keyword heuristic otherwise.
 export async function POST(request: NextRequest) {
-  const rl = rateLimit(`match:${clientIp(request.headers)}`, 20, 60 * 60_000);
+  const rl = await guardPublic("match", clientIp(request.headers), 20, 60 * 60_000);
   if (!rl.ok) return NextResponse.json({ error: "Too many requests — try again in a few minutes." }, { status: 429 });
   let body: { businessType?: string; businessName?: string };
   try {
@@ -22,12 +24,13 @@ export async function POST(request: NextRequest) {
     try {
       const ctrl = new AbortController();
       const t = setTimeout(() => ctrl.abort(), 12_000);
+      const model = "gpt-4.1-mini";
       const r = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
         signal: ctrl.signal,
         body: JSON.stringify({
-          model: "gpt-4.1-mini",
+          model,
           temperature: 0.3,
           response_format: { type: "json_object" },
           messages: [
@@ -38,8 +41,10 @@ export async function POST(request: NextRequest) {
       });
       clearTimeout(t);
       if (r.ok) {
-        const j = (await r.json()) as { choices?: { message?: { content?: string } }[] };
+        const j = (await r.json()) as { id?: string; usage?: { prompt_tokens?: number; completion_tokens?: number }; choices?: { message?: { content?: string } }[] };
         const matches = parseMatches(j.choices?.[0]?.message?.content ?? "", businessType, businessName);
+        const tenant = await getTenant().catch(() => null);
+        void recordOpenAI({ orgId: tenant?.org?.id ?? null, kind: "agent_match", model, usage: j.usage, ref: j.id });
         return NextResponse.json({ matches, source: "openai" });
       }
     } catch {

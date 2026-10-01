@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AGENT_BY_KEY } from "@/lib/agents/catalog";
-import { clientIp, rateLimit } from "@/lib/rateLimit";
+import { clientIp, guardPublic } from "@/lib/rateLimit";
+import { recordOpenAI } from "@/lib/usage";
+import { getTenant } from "@/lib/tenant";
 
 // POST /api/public/call-summary { agentKey, firstName, company, transcript:[{role,text}] }
 // → { outcome, headline, summary, nextStep, highlights } — what the demo call achieved, for the
@@ -12,7 +14,7 @@ export interface CallSummary { outcome: Outcome; headline: string; summary: stri
 const OUTCOMES: Outcome[] = ["agreed", "declined", "callback", "unclear", "no_conversation"];
 
 export async function POST(request: NextRequest) {
-  const rl = rateLimit(`summary:${clientIp(request.headers)}`, 12, 60 * 60_000);
+  const rl = await guardPublic("summary", clientIp(request.headers), 12, 60 * 60_000);
   if (!rl.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   let body: { agentKey?: string; firstName?: string; company?: string; transcript?: { role?: string; text?: string }[] };
   try {
@@ -38,12 +40,13 @@ export async function POST(request: NextRequest) {
     try {
       const ctrl = new AbortController();
       const t = setTimeout(() => ctrl.abort(), 15_000);
+      const model = "gpt-4.1-mini";
       const r = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
         signal: ctrl.signal,
         body: JSON.stringify({
-          model: "gpt-4.1-mini",
+          model,
           temperature: 0.2,
           response_format: { type: "json_object" },
           messages: [
@@ -54,7 +57,7 @@ export async function POST(request: NextRequest) {
       });
       clearTimeout(t);
       if (r.ok) {
-        const j = (await r.json()) as { choices?: { message?: { content?: string } }[] };
+        const j = (await r.json()) as { id?: string; usage?: { prompt_tokens?: number; completion_tokens?: number }; choices?: { message?: { content?: string } }[] };
         const p = JSON.parse(j.choices?.[0]?.message?.content ?? "{}") as Partial<CallSummary>;
         const summary: CallSummary = {
           outcome: OUTCOMES.includes(p.outcome as Outcome) ? (p.outcome as Outcome) : "unclear",
@@ -63,6 +66,8 @@ export async function POST(request: NextRequest) {
           nextStep: (p.nextStep ?? "").toString().trim().slice(0, 300),
           highlights: Array.isArray(p.highlights) ? p.highlights.map((h) => String(h).trim()).filter(Boolean).slice(0, 3) : [],
         };
+        const tenant = await getTenant().catch(() => null);
+        void recordOpenAI({ orgId: tenant?.org?.id ?? null, kind: "call_summary", model, usage: j.usage, ref: j.id });
         return NextResponse.json({ summary, source: "openai" });
       }
     } catch {

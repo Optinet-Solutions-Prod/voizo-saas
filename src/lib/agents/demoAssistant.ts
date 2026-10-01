@@ -9,7 +9,7 @@ import { platformElevenLabsKey } from "../voices/orgVoices";
 
 const VAPI = "https://api.vapi.ai";
 // Bump when composeDemoAssistant changes; assistants created with an older version are patched.
-export const DEMO_VERSION = 3;
+export const DEMO_VERSION = 4;
 const cache = new Map<string, string>();
 
 async function vapi(path: string, init: RequestInit = {}) {
@@ -29,7 +29,10 @@ export async function demoAssistantId(agent: AgentTemplate): Promise<string> {
   ) as { id: string; metadata?: { voizoDemoVersion?: number } } | undefined;
   const platformKey = platformElevenLabsKey();
   const base = composeDemoAssistant(agent, { company: "", firstName: "" });
-  const body = { ...base, name: `Demo · ${agent.key}`, metadata: { ...base.metadata, voizoDemoVersion: DEMO_VERSION }, ...(platformKey ? { credentials: [{ provider: "11labs", apiKey: platformKey }] } : {}) };
+  // End-of-call reports go to our webhook so demo calls are costed per organization.
+  const hook = (process.env.VAPI_WEBHOOK_URL ?? "").replace(/\/+$/, "");
+  const server = hook ? { url: hook.includes("/api/webhooks/") ? hook : `${hook}/api/webhooks/vapi/end-of-call`, secret: process.env.VAPI_WEBHOOK_SECRET || process.env.VAPI_PRIVATE_KEY } : undefined;
+  const body = { ...base, name: `Demo · ${agent.key}`, metadata: { ...base.metadata, voizoDemoVersion: DEMO_VERSION }, ...(server ? { server } : {}), ...(platformKey ? { credentials: [{ provider: "11labs", apiKey: platformKey }] } : {}) };
   if (found) {
     if (found.metadata?.voizoDemoVersion !== DEMO_VERSION) await vapi(`/assistant/${found.id}`, { method: "PATCH", body: JSON.stringify(body) }).catch(() => {});
     cache.set(agent.key, found.id);
@@ -43,7 +46,7 @@ export async function demoAssistantId(agent: AgentTemplate): Promise<string> {
 }
 
 /** Per-call overrides for the browser: everything that varies, no secrets. */
-export function demoOverrides(agent: AgentTemplate, input: DemoInput, extra: { maxDurationSeconds?: number; publicDemo?: boolean } = {}) {
+export function demoOverrides(agent: AgentTemplate, input: DemoInput, extra: { maxDurationSeconds?: number; publicDemo?: boolean; orgId?: string } = {}) {
   const a = composeDemoAssistant(agent, input);
   return {
     firstMessage: a.firstMessage,
@@ -52,7 +55,7 @@ export function demoOverrides(agent: AgentTemplate, input: DemoInput, extra: { m
     voice: a.voice,
     endCallMessage: a.endCallMessage,
     ...(extra.maxDurationSeconds ? { maxDurationSeconds: extra.maxDurationSeconds } : {}),
-    metadata: { voizoDemo: true, agentKey: agent.key, company: input.company, firstName: input.firstName, ...(extra.publicDemo ? { voizoPublicDemo: true } : {}) },
+    metadata: { voizoDemo: true, agentKey: agent.key, company: input.company, firstName: input.firstName, ...(extra.publicDemo ? { voizoPublicDemo: true } : {}), ...(extra.orgId ? { orgId: extra.orgId } : {}) },
   };
 }
 

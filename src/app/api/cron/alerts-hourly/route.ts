@@ -95,6 +95,19 @@ export async function GET(request: NextRequest) {
   }
 
   // ── Compute staleness per expected cron ──
+  // Vapi rejections (2026-10-01): a burst of provider/pipeline errors in the last hour is an alert.
+  try {
+    const sinceIso = new Date(Date.now() - 3_600_000).toISOString();
+    const { data: recent } = await supabaseAdmin.from("calls_v2").select("ended_reason").gte("created_at", sinceIso).not("ended_reason", "is", null).limit(2000);
+    const reasons = (recent ?? []).map((r) => String((r as { ended_reason?: string }).ended_reason ?? ""));
+    const bad = reasons.filter((r) => /pipeline-error|error-|assistant-request-failed|unknown-error|provider|rejected/i.test(r));
+    if (reasons.length >= 5 && bad.length / reasons.length >= 0.3) {
+      const top = [...bad.reduce((m, r) => m.set(r, (m.get(r) ?? 0) + 1), new Map<string, number>())].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([r, n]) => `${r}: ${n}`);
+      await postSlackAlert("ALERT", "Vapi is rejecting or failing calls", [`${bad.length} of ${reasons.length} calls in the last hour ended in a provider error`, ...top]);
+    }
+  } catch (e) {
+    console.warn("[alerts-hourly] vapi failure check skipped:", (e as Error)?.message);
+  }
   const nowMs = Date.now();
   const heartbeatMap = new Map(
     (heartbeats ?? []).map((h) => [h.name as string, h.last_success_at as string]),

@@ -126,5 +126,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true });
   }
 
+  // Demo calls (landing page / Try an agent) have no calls_v2 row: cost them per organization and stop.
+  {
+    const m = (body.message ?? body) as Record<string, unknown>;
+    const call = (m.call ?? {}) as Record<string, unknown>;
+    const meta = (((call.assistantOverrides as Record<string, unknown> | undefined)?.metadata ?? call.metadata ?? (m.assistant as Record<string, unknown> | undefined)?.metadata) ?? null) as Record<string, unknown> | null;
+    if (meta?.voizoDemo) {
+      if (m.type === "end-of-call-report") {
+        const { recordDemoCallUsage } = await import("@/lib/demoUsage");
+        await recordDemoCallUsage(m, call, meta);
+      }
+      return NextResponse.json({ ok: true, demo: true });
+    }
+  }
   return processEndOfCall(message);
 }

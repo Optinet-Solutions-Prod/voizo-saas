@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const assistantId = await demoAssistantId(agent);
-    const overrides = demoOverrides(agent, { company, firstName, voiceId });
+    const overrides = demoOverrides(agent, { company, firstName, voiceId }, { orgId: tenant.org?.id });
     return NextResponse.json({ assistantId, overrides, publicKey, agent: { key: agent.key, name: agent.name, role: agent.role } });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Could not prepare the call" }, { status: 502 });

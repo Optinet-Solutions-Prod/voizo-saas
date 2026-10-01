@@ -6,6 +6,7 @@ import { ArrowRight, CreditCard, Loader2 } from "lucide-react";
 import { useOrg } from "@/lib/orgContext";
 import { PLAN_BY_KEY, formatMoney } from "@/lib/pricing";
 import { Card, Notice, RoleBadge, api, inputCls, primaryBtn } from "./ui";
+import OrgUsageCard from "@/components/OrgUsageCard";
 
 export default function OrganizationTab() {
   const org = useOrg();
@@ -35,6 +36,7 @@ export default function OrganizationTab() {
 
   return (
     <div className="grid gap-4">
+      <OrgUsageCard />
       <Card title="Plan" description="What your organization is on today. Plans are set by VOIZO for now; card self-service is coming."
         action={<Link href="/pricing" className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] px-3 text-xs font-medium text-[var(--text-2)] hover:text-[var(--text-1)]">Compare plans <ArrowRight size={13} /></Link>}>
         <div className="flex flex-wrap items-center gap-4">

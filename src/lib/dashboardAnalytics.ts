@@ -19,7 +19,7 @@
  */
 import {
   safeDiv,
-  parseCountryToken,
+  campaignCountry, parseCountryToken,
   CONNECTED_STATUSES,
   TERMINAL_NONCONNECT,
 } from "./campaignAnalytics";
@@ -45,6 +45,7 @@ export interface DashCallRow {
 export interface DashCampaignRow {
   id: string;
   name: string;
+  country?: string | null; // ISO-2 (tenant-shaped); legacy rows fall back to the name token
   status?: string | null; // running | paused | completed | inactive | draft ...
   source?: string | null; // 'ghost_portal' => hard-excluded
   is_test?: boolean | null;
@@ -350,7 +351,7 @@ export function computeCampaignRollups(
       ...rate,
       id,
       name: camp.name,
-      country: parseCountryToken(camp.name),
+      country: campaignCountry(camp),
       status: camp.status ?? "draft",
       scheduleType: camp.campaign_type === "recurring" ? "recurring" : "fixed",
       voiceId: camp.voice_id ?? null,
@@ -828,7 +829,7 @@ export function computeCampaignTable(
       return {
         id: c.id,
         name: c.name,
-        country: parseCountryToken(c.name),
+        country: campaignCountry(c),
         cioWorkspace: c.cio_workspace ?? null,
         displayStatus: deriveDisplayStatus({
           rawStatus: c.status ?? null,
@@ -979,7 +980,7 @@ export function computeCampaignTableFromRollup(
       return {
         id: c.id,
         name: c.name,
-        country: parseCountryToken(c.name),
+        country: campaignCountry(c),
         cioWorkspace: c.cio_workspace ?? null,
         displayStatus: deriveDisplayStatus({
           rawStatus: c.status ?? null,
@@ -1798,7 +1799,7 @@ export function computeToday(
     .map((c) => ({
       id: c.id,
       name: c.name,
-      country: parseCountryToken(c.name),
+      country: campaignCountry(c),
       cioWorkspace: c.cio_workspace ?? null,
       voiceId: c.voice_id ?? null,
       agentLabel: c.vapi_assistant_name ?? null,
@@ -2257,7 +2258,7 @@ export function computeTodayFromRollup(
       return {
         id: c.id,
         name: c.name,
-        country: parseCountryToken(c.name),
+        country: campaignCountry(c),
         cioWorkspace: c.cio_workspace ?? null,
         voiceId: c.voice_id ?? null,
         agentLabel: c.vapi_assistant_name ?? null,

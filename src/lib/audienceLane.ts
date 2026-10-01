@@ -24,6 +24,7 @@ export interface LaneCampaign {
   id: string;
   name: string | null;
   cio_workspace?: string | null;
+  country?: string | null;
 }
 
 export interface FamilyCampaign extends LaneCampaign {

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseServer";
 import { fetchAllRows, fetchRowsIn } from "@/lib/supabaseFetchAll";
 import { deriveAttemptTag, isSmsSent, type DashCallRow } from "@/lib/dashboardAnalytics";
-import { parseCountryToken } from "@/lib/campaignAnalytics";
+import { campaignCountry, parseCountryToken } from "@/lib/campaignAnalytics";
 import { brandKey, brandLabel } from "@/lib/campaignDisplay";
 import { rangeToWindow } from "@/lib/rangeWindow";
 import { csvCell, CSV_BOM } from "@/lib/download";
@@ -158,7 +158,7 @@ export async function GET(request: NextRequest) {
     const campaigns = (await fetchAllRows(
       supabaseAdmin,
       "campaigns_v2",
-      "id, name, cio_workspace, source, is_test, parent_campaign_id, campaign_type, start_at",
+      "id, name, cio_workspace, country, source, is_test, parent_campaign_id, campaign_type, start_at",
       "id",
     )) as unknown as Camp[];
     const live = campaigns.filter((c) => c.source !== "ghost_portal" && c.is_test !== true);
@@ -218,7 +218,7 @@ export async function GET(request: NextRequest) {
       const lines = all.map((r) => {
         const c = r.last_campaign_id ? labelOf.get(r.last_campaign_id) : undefined;
         return [
-          r.phone_e164, r.display_name ?? "", brandLabel(c?.cio_workspace), parseCountryToken(c?.name ?? "") || "",
+          r.phone_e164, r.display_name ?? "", brandLabel(c?.cio_workspace), campaignCountry(c ?? {}) || "",
           r.last_campaign_id ? label(r.last_campaign_id) : "", r.first_at ?? "", r.last_at ?? "", r.calls,
           r.reached ? "yes" : "no", r.spoke_with === true ? "yes" : "no", r.texted ? "yes" : "no", r.delivered ? "yes" : "no",
           r.dep_after, Number(r.dep_after_eur).toFixed(2), r.first_dep_after_at ?? "", r.last_dep_at ?? "", r.cio_known ? "yes" : "no record",
@@ -304,7 +304,7 @@ export async function GET(request: NextRequest) {
       rows.push({
         phone: ph,
         name: r.display_name ?? group.find((n) => n.display_name)?.display_name ?? null,
-        market: parseCountryToken(labelOf.get(leadCampaign)?.name ?? "") || "",
+        market: campaignCountry(labelOf.get(leadCampaign) ?? {}) || "",
         campaignId: leadCampaign,
         campaignLabel: leadCampaign ? label(leadCampaign) : "",
         alsoIn: families.filter((f) => f !== familyOf(leadCampaign)).map((f) => { const anyRun = group.find((n) => familyOf(n.campaign_id) === f); return anyRun ? label(anyRun.campaign_id) : f.slice(0, 8); }),

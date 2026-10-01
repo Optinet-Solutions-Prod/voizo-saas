@@ -5,6 +5,7 @@ import { Loader2, ShieldCheck, Unlock } from "lucide-react";
 import { AGENT_CATALOG } from "@/lib/agents/catalog";
 import { PLANS } from "@/lib/pricing";
 import { Card, Notice, api, dangerBtn, primaryBtn, selectCls } from "./ui";
+import OrgCostsCard from "@/components/OrgCostsCard";
 
 // VOIZO staff only (auth app_metadata.role = "admin"): unlock paid agents for any organization
 // until card checkout exists. The tab is hidden from everyone else.
@@ -67,6 +68,7 @@ export default function PlatformTab() {
     <div className="grid gap-4">
       <Notice kind="info"><span className="inline-flex items-center gap-1.5"><ShieldCheck size={14} /> You see this tab because your account is marked as VOIZO platform staff.</span></Notice>
       {msg && <Notice kind={msg.kind}>{msg.text}</Notice>}
+      <OrgCostsCard />
       <Card title="Set an organization's plan" description="Pro and Scale include all twenty agents; Free and Starter get the three free ones plus unlocks.">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div className="flex-1">

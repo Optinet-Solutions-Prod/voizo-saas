@@ -6,6 +6,9 @@ import { useVapiWebCall } from "@/lib/useVapiWebCall";
 import LiveCallPanel, { formatSeconds } from "./LiveCallPanel";
 import type { GalleryAgent } from "./AgentGallery";
 import CallSummaryCard from "./CallSummaryCard";
+import Turnstile from "./Turnstile";
+
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
 
 // Public demo modal (landing page, /agents): listen to the agent's sample, or enter your name,
 // business name and business type and talk to it live in the browser. No sign-in; the server
@@ -53,6 +56,8 @@ export default function AgentDemoModal({ agent, initial, onClose, onDetails }: {
   const [preparing, setPreparing] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
+  const [captcha, setCaptcha] = useState<string | null>(null);
+  const [captchaKey, setCaptchaKey] = useState(0);
   const [progress, setProgress] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const call = useVapiWebCall();
@@ -91,7 +96,9 @@ export default function AgentDemoModal({ agent, initial, onClose, onDetails }: {
     setApiError(null);
     setPreparing(true);
     try {
-      const r = await fetch("/api/public/demo-call", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: agent.key, ...v }) });
+      const r = await fetch("/api/public/demo-call", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: agent.key, ...v, turnstileToken: captcha ?? undefined }) });
+      setCaptcha(null);
+      setCaptchaKey((k) => k + 1);
       const j = await r.json();
       if (!r.ok) throw new Error(j.error ?? "Could not prepare the call");
       await call.start(j.publicKey, j.assistantId, j.overrides);
@@ -168,7 +175,8 @@ export default function AgentDemoModal({ agent, initial, onClose, onDetails }: {
                   </div>
                 )}
                 {call.status === "ended" && !call.error && <CallSummaryCard agentKey={agent.key} firstName={firstName} company={company} transcript={call.transcript} seconds={call.seconds} />}
-                <button type="submit" disabled={preparing || !firstName.trim() || !company.trim()} className="mt-1 inline-flex h-12 items-center justify-center gap-2 rounded-xl text-sm font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60" style={{ background: PRIMARY, boxShadow: `0 8px 24px ${PRIMARY}33` }}>
+                {TURNSTILE_SITE_KEY && <Turnstile key={captchaKey} siteKey={TURNSTILE_SITE_KEY} action="demo_call" onToken={setCaptcha} />}
+                <button type="submit" disabled={preparing || !firstName.trim() || !company.trim() || (Boolean(TURNSTILE_SITE_KEY) && !captcha)} className="mt-1 inline-flex h-12 items-center justify-center gap-2 rounded-xl text-sm font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60" style={{ background: PRIMARY, boxShadow: `0 8px 24px ${PRIMARY}33` }}>
                   {preparing ? <Loader2 size={16} className="animate-spin" /> : <Phone size={16} />} {call.status === "ended" ? `Call ${first} again` : `Start the call with ${first}`}
                 </button>
                 <p className="flex items-center gap-1.5 text-[11px] text-[var(--text-4)]"><Headphones size={12} /> {first} calls you in the browser. Use headphones if you can; your browser will ask for the microphone first. Demo calls last up to 4 minutes.</p>

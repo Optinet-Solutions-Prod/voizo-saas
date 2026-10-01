@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseServer";
 import { fetchAllRows } from "@/lib/supabaseFetchAll";
-import { parseCountryToken } from "@/lib/campaignAnalytics";
+import { campaignCountry, parseCountryToken } from "@/lib/campaignAnalytics";
 import { deriveDisplayStatus, type DisplayStatus } from "@/lib/dashboardAnalytics";
 import { campaignLabeller, familyKeyOf, laneCampaignIds, type FamilyCampaign } from "@/lib/audienceLane";
 
@@ -121,7 +121,7 @@ export async function GET(request: NextRequest) {
     const campaigns = (await fetchAllRows(
       supabaseAdmin,
       "campaigns_v2",
-      "id, name, cio_workspace, source, is_test, parent_campaign_id, campaign_type, start_at, end_at, status",
+      "id, name, cio_workspace, country, source, is_test, parent_campaign_id, campaign_type, start_at, end_at, status",
       "id",
     )) as unknown as (FamilyCampaign & { source: string | null; is_test: boolean | null; end_at: string | null; status: string | null })[];
     const live = campaigns.filter((c) => c.source !== "ghost_portal" && c.is_test !== true);
@@ -165,7 +165,7 @@ export async function GET(request: NextRequest) {
       return {
         key,
         label: label(head.id),
-        market: parseCountryToken((runs[0] ?? head).name ?? "") || "",
+        market: campaignCountry(runs[0] ?? head) || "",
         runs: runs.length,
         members: null,
         status: best === "scheduled" ? "running" : best,

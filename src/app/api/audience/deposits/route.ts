@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
     const campaigns = (await fetchAllRows(
       supabaseAdmin,
       "campaigns_v2",
-      "id, name, cio_workspace, source, is_test, parent_campaign_id, campaign_type, start_at",
+      "id, name, cio_workspace, country, source, is_test, parent_campaign_id, campaign_type, start_at",
       "id",
     )) as unknown as Camp[];
     const live = campaigns.filter((c) => c.source !== "ghost_portal" && c.is_test !== true);

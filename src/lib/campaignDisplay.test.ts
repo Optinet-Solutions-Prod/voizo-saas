@@ -14,10 +14,13 @@ import {
 import { CIO_DEFAULT_WORKSPACE } from "./customerio";
 
 describe("brandLabel (VOZ-216 — which brand is this campaign?)", () => {
-  it("the client-side default brand CANNOT drift from the server's routing default", () => {
-    // A mismatch would label every legacy (NULL cio_workspace) campaign as the
-    // wrong brand on the dashboard while routing kept using the real default.
-    expect(DEFAULT_BRAND_WORKSPACE).toBe(CIO_DEFAULT_WORKSPACE);
+  it("the display default is the tenant-neutral 'default' brand; legacy routing keeps its own default", () => {
+    // Since 2026-10-01 a NULL cio_workspace is labelled "Default brand" (any tenant), while the
+    // internal Customer.io / SMS routing still falls back to the Lucky7even keys for NULL rows.
+    // That split is safe because supabase-migration-campaign-country.sql backfilled every legacy
+    // NULL row to an explicit "lucky7even" slug, so no row is labelled one way and routed another.
+    expect(DEFAULT_BRAND_WORKSPACE).toBe("default");
+    expect(CIO_DEFAULT_WORKSPACE).toBe("lucky7even");
   });
 
   it("maps the configured brands to their operator-facing names", () => {
@@ -26,9 +29,9 @@ describe("brandLabel (VOZ-216 — which brand is this campaign?)", () => {
   });
 
   it("treats NULL/blank as the default brand (pre-VOZ-198 rows)", () => {
-    expect(brandLabel(null)).toBe("Lucky7even");
-    expect(brandLabel(undefined)).toBe("Lucky7even");
-    expect(brandLabel("   ")).toBe("Lucky7even");
+    expect(brandLabel(null)).toBe("Default brand");
+    expect(brandLabel(undefined)).toBe("Default brand");
+    expect(brandLabel("   ")).toBe("Default brand");
   });
 
   it("renders an unmapped future brand instead of going blank", () => {
@@ -40,6 +43,7 @@ describe("brandLabel (VOZ-216 — which brand is this campaign?)", () => {
 describe("distinctBrandLabels (aggregate-panel brand scope)", () => {
   it("dedupes, folds NULL into the default, and sorts alphabetically", () => {
     expect(distinctBrandLabels(["fortuneplay", "lucky7even", null, "lucky7even"])).toEqual([
+      "Default brand",
       "Fortune Play",
       "Lucky7even",
     ]);

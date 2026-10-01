@@ -117,6 +117,12 @@ function truncateDetails(details: string[]): string[] {
  * never logs the webhook URL. Returns true only on 2xx. `logContext` appears in
  * error logs only (never the message body / URL).
  */
+/** Unhandled exception in a cron/webhook (instrumentation.onRequestError) or a provider rejection. */
+export async function postSlackError(title: string, details: string[]): Promise<boolean> {
+  const text = [`VOIZO ERROR - ${title}`, ...truncateDetails(details).map((d) => `- ${d}`)].join("\n");
+  return postToSlack(text, `severity=ERROR title="${title}"`);
+}
+
 async function postToSlack(text: string, logContext: string): Promise<boolean> {
   const webhookUrl = process.env.SLACK_ALERT_WEBHOOK_URL;
   if (!webhookUrl) {
