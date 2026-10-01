@@ -86,6 +86,11 @@ export function composeDemoPrompt(agent: AgentTemplate, input: DemoInput): strin
   const f = (s: string) => clean(fillPlaceholders(s, input, framing));
   const flow = agent.flow;
   const kind = input.businessType ? ` (${clean(input.businessType)})` : "";
+  // What the agent promises to send (Chris, 2026-10-01: Leo hung up without mentioning it).
+  const followUp = flow.sms
+    ? "a text message with the details, and an email copy too if they'd prefer"
+    : "an email with the details";
+  const followUpExample = flow.sms ? "I'll text you the details now, and email them too if that's easier." : "I'll email you the details now.";
   const lines: string[] = [];
   lines.push(f(agent.persona));
   lines.push("");
@@ -107,21 +112,30 @@ export function composeDemoPrompt(agent: AgentTemplate, input: DemoInput): strin
   lines.push(`3. Reason for the call: "${f(flow.value)}"`);
   lines.push(`4. If they ${f(flow.positive.trigger).toLowerCase()} — ${f(flow.positive.name).toLowerCase()} — say: "${f(flow.positive.reply)}"${flow.sms ? " Then say a quick text with the details is on its way (one short line; never read the message out)." : ""}`);
   flow.objections.forEach((o, i) => {
-    const next = o.next === "value" ? "then return to the reason for the call" : o.next === "sms" ? "then say a text is on its way and wrap up" : o.next === "positive" ? "then continue as if they said yes" : "then say goodbye";
+    const next = o.next === "value" ? "then return to the reason for the call" : o.next === "sms" ? "then say a text is on its way and ask if there's anything else they'd like to know" : o.next === "positive" ? "then continue as if they said yes" : "then move to the wrap-up";
     lines.push(`${5 + i}. If they ${f(o.trigger).toLowerCase()} — ${f(o.name).toLowerCase()} — say: "${f(o.reply)}" and ${next}.`);
   });
-  lines.push(`${5 + flow.objections.length}. Wrap-up: one short, warm line of reassurance — what's agreed, what happens next, and that there's nothing more they need to do (for example: "You're all set, ${input.firstName} — that's on its way and there's nothing else you need to do. Any questions, just give us a shout.").`);
-  lines.push(`${6 + flow.objections.length}. Goodbye: "${f(flow.goodbye)}" Say it once, right after the wrap-up, then end the call straight away with the end-call function. Never say goodbye twice.`);
+  lines.push(`${5 + flow.objections.length}. Keep going while they're engaged: answer every question, follow up on what they said, and ask one more useful question of your own. The numbered lines are a guide to the topics, not a limit on how many turns the call can last.`);
+  lines.push(`${6 + flow.objections.length}. Before you wrap up, ask "Is there anything else I can help you with?" and wait for the answer.`);
+  lines.push(`${7 + flow.objections.length}. Wrap-up: one short, warm line that says what's agreed and exactly what you're sending them: ${followUp}. For example: "You're all set, ${input.firstName} — ${followUpExample} Any questions, just give us a shout."`);
+  lines.push(`${8 + flow.objections.length}. Goodbye: "${f(flow.goodbye)}" Say it once, right after the wrap-up, then end the call with the end-call function. Never say goodbye twice.`);
+  lines.push("");
+  lines.push("WHEN TO END THE CALL");
+  lines.push("- Only end once ALL of these are true: the customer has said there's nothing else (or clearly said goodbye), you have given the wrap-up with the follow-up, and you have said the goodbye.");
+  lines.push('- A short "yes", "sure", "okay", "I see" or a question is never the end of the call: reply to it and keep the conversation going.');
+  lines.push("- If they ask you to stop calling or say they're not interested, apologise briefly, give the goodbye and end.");
+  lines.push("- Never end the call in the middle of the conversation, and never say only \"Goodbye.\" on its own.");
   lines.push("");
   lines.push("MUST COVER");
   for (const g of flow.goals) lines.push(`- ${f(g)}`);
+  lines.push(`- Tell them what you're sending: ${followUp}.`);
   lines.push("");
   lines.push("STYLE");
   lines.push("- Casual and warm, like a friendly colleague on the phone: contractions, everyday words, no corporate phrases, no lists.");
   lines.push("- Keep every turn to one or two short sentences, under 25 words. One question at a time, then stop and listen.");
   lines.push("- Use the lines above as a guide, in your own words; never read placeholders, brackets, legal or opt-out text aloud.");
   lines.push("- If they ask something off-script, answer in a sentence and steer back.");
-  lines.push("- Don't repeat yourself. When the conversation is done, give the one-line wrap-up, say the goodbye once and end the call.");
+  lines.push("- Don't repeat yourself. When the conversation is truly done, give the one-line wrap-up, say the goodbye once and end the call.");
   return lines.join("\n");
 }
 

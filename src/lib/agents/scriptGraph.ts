@@ -210,9 +210,14 @@ export function buildAgentScript(agent: AgentTemplate, opts: BuildOptions): Scri
   const f1 = followUp("If customer has follow up questions", "If you've just answered a question, ask if that answers it — and don't end on a dead beat.", -400, 480);
   const f2 = followUp("Anything else?", "Ask if there's anything else they'd like to ask you.", -448, 800);
   const f3 = followUp("Push the next step", `Gently push the next step once more: ${fill((f.goals[1] ?? f.goals[0]).toLowerCase())}. Say you appreciate their time.`, -448, 1008);
-  const cF4Any = anyC();
+  // The chain never runs out (Chris, 2026-10-01): a follow-up question, or anything that isn't
+  // a wrap-up or a decline, loops back to "Anything else?" instead of ending the call. The call
+  // only ends when the customer wraps up or declines.
+  const cF4Follow = intentC(dFollowUp);
+  const cF4Wrap = intentC(dWrapUp, WRAP_QUICK);
   const cF4Decline = intentC(dDecline);
-  const f4 = node("Last word", { contentType: "collection", collectionId: COLLECTION, connectors: [cF4Any, cF4Decline], statements: ["Wrap up warmly — thank them, confirm what happens next, and wish them a good day."] }, -464, 1216);
+  const cF4Any = anyC();
+  const f4 = node("Keep the conversation going", { contentType: "collection", collectionId: COLLECTION, connectors: [cF4Follow, cF4Wrap, cF4Decline, cF4Any], statements: [`Answer what they said, then ask if there's anything else you can help with. If they're done, confirm what you're sending them (${f.sms ? "the text message with the details, and an email copy if they'd prefer" : "an email with the details"}) and wish them a good day. Don't end on a dead beat.`] }, -464, 1216);
 
   // Decline route
   const cDecAny = anyC();
@@ -245,7 +250,7 @@ export function buildAgentScript(agent: AgentTemplate, opts: BuildOptions): Scri
   link(f1.n, f1.cs.follow, f2.n); link(f1.n, f1.cs.wrap, endA); link(f1.n, f1.cs.decline, endB);
   link(f2.n, f2.cs.follow, f3.n); link(f2.n, f2.cs.wrap, endA); link(f2.n, f2.cs.decline, endB);
   link(f3.n, f3.cs.follow, f4); link(f3.n, f3.cs.wrap, endA); link(f3.n, f3.cs.decline, endB);
-  link(f4, cF4Any, endA); link(f4, cF4Decline, endB);
+  link(f4, cF4Follow, f2.n); link(f4, cF4Wrap, endA); link(f4, cF4Decline, endB); link(f4, cF4Any, f2.n);
   link(decline, cDecAny, endB);
 
   return {

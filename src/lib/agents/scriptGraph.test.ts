@@ -65,3 +65,17 @@ describe("buildAgentScript", () => {
     expect(spec.handlers.every((h) => h.intent_key.endsWith("_t3"))).toBe(true);
   });
 });
+
+describe("follow-up loop never runs out", () => {
+  it("the last follow-up box loops back instead of ending on any reply", () => {
+    const spec = buildAgentScript(AGENT_CATALOG[1], { company: "Acme", suffix: "t5", uuid: counter() });
+    const last = spec.nodes.find((n) => n.label === "Keep the conversation going")!;
+    const anythingElse = spec.nodes.find((n) => n.label === "Anything else?")!;
+    const cs = last.config.connectors as { id: string; label: string; any?: boolean }[];
+    const target = (c: { id: string }) => spec.edges.find((e) => e.source_node_id === last.id && e.condition.handle === c.id)!.target_node_id;
+    expect(target(cs.find((c) => c.any)!)).toBe(anythingElse.id);
+    expect(target(cs.find((c) => c.label.startsWith("Customer asks a follow"))!)).toBe(anythingElse.id);
+    const ends = spec.nodes.filter((n) => n.config.contentType === "end").map((n) => n.id);
+    expect(cs.filter((c) => !c.any && ends.includes(target(c)))).toHaveLength(2); // wrap-up and decline only
+  });
+});

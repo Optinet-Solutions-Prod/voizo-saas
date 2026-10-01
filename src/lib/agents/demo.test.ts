@@ -67,3 +67,15 @@ describe("demo framing — agents that sell to businesses", () => {
     expect(prompt).toContain("instead of a vague \"our service\"");
   });
 });
+
+describe("demo calls don't end early", () => {
+  it("tells every agent when it may end, and to say what it's sending", () => {
+    for (const a of AGENT_CATALOG) {
+      const p = composeDemoPrompt(a, input);
+      expect(p, a.key).toContain("WHEN TO END THE CALL");
+      expect(p).toContain("is never the end of the call");
+      expect(p).toContain('"Is there anything else I can help you with?"');
+      expect(p).toContain(a.flow.sms ? "a text message with the details" : "an email with the details");
+    }
+  });
+});
