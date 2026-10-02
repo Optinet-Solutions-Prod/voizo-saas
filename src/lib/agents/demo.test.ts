@@ -44,7 +44,16 @@ describe("composeDemoPrompt / composeDemoAssistant", () => {
 });
 
 describe("demo framing — agents that sell to businesses", () => {
-  const leo = AGENT_CATALOG.find((a) => a.key === "lead-qualifier")!;
+  it("Leo calls on behalf of the visitor's business", () => {
+    const real = AGENT_CATALOG.find((a) => a.key === "lead-qualifier")!;
+    expect(real.demo).toBeUndefined();
+    expect(composeDemoAssistant(real, { company: "Barvarian", firstName: "Chris", businessType: "barbershop" }).firstMessage).toBe("Hi, this is Leo from Barvarian.");
+  });
+
+  // No catalog agent uses this framing today (Leo calls FOR the visitor's business, Chris
+  // 2026-10-02); a synthetic copy keeps the mechanism covered.
+  const base = AGENT_CATALOG.find((a) => a.key === "lead-qualifier")!;
+  const leo = { ...base, demo: { calls: "to" as const, seller: "Brightline", sellerAbout: "a studio that builds websites", product: "a new website for {{business}}", tailor: "You are selling Brightline's website service to them. Never speak as if you work for their business." } };
   const barber = { company: "Barvarian", firstName: "Chris", businessType: "barbershop" };
 
   it("Leo works for the seller and calls the visitor's business about a website", () => {

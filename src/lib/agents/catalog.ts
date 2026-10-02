@@ -156,15 +156,6 @@ export const AGENT_CATALOG: AgentTemplate[] = [
       goodbye: "Thanks for your time today. Speak soon.",
     },
     tags: ["sales", "speed-to-lead", "booking"],
-    // Leo sells to businesses: in the demo he calls the visitor's business about a website,
-    // never on its behalf (Chris, 2026-10-01 — Leo told a barbershop "you asked about our service").
-    demo: {
-      calls: "to",
-      seller: "Brightline",
-      sellerAbout: "a studio that builds websites with online booking for small businesses",
-      product: "a new website for {{business}}",
-      tailor: "Talk about what a good website does for a business like theirs: showing their services and prices, taking bookings online, being found on Google, collecting reviews. You are selling Brightline's website service to them. Never offer their own products or services, never book them in as one of their customers, and never speak as if you work for their business.",
-    },
   },
   {
     key: "satisfaction-survey",
